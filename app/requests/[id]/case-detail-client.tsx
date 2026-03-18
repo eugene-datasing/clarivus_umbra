@@ -1,0 +1,352 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { statusConfig, docTypeConfig, type RequestStatus, type DocType } from "@/lib/db/mappers";
+import { workingDaysRemaining, deadlineColor, formatDate, cn, confidenceColor } from "@/lib/utils";
+import {
+  FileText, Mail, Search, Filter, Upload, CheckCircle,
+  XCircle, ChevronRight, ArrowRight,
+} from "lucide-react";
+
+const docStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
+  pending: { label: "Pending", color: "text-gray-600", bg: "bg-gray-100" },
+  processing: { label: "Processing", color: "text-blue-700", bg: "bg-blue-50" },
+  ready: { label: "Ready", color: "text-sky-700", bg: "bg-sky-50" },
+  "in-review": { label: "In Review", color: "text-blue-700", bg: "bg-blue-50" },
+  submitted: { label: "Submitted", color: "text-amber-700", bg: "bg-amber-50" },
+  approved: { label: "Approved", color: "text-green-700", bg: "bg-green-50" },
+  rejected: { label: "Rejected", color: "text-red-700", bg: "bg-red-50" },
+  released: { label: "Released", color: "text-brand-primary", bg: "bg-purple-50" },
+  error: { label: "Error", color: "text-red-700", bg: "bg-red-50" },
+};
+
+function DocTypeIcon({ type }: { type: string }) {
+  if (type === "eml" || type === "msg") return <Mail className="w-4 h-4 text-blue-500" />;
+  if (type === "xlsx") return <FileText className="w-4 h-4 text-green-500" />;
+  if (type === "docx") return <FileText className="w-4 h-4 text-blue-500" />;
+  return <FileText className="w-4 h-4 text-red-500" />;
+}
+
+export interface CaseData {
+  id: string;
+  reference: string;
+  requesterName: string;
+  requesterType: string;
+  dateReceived: string;
+  deadline: string;
+  priority: "standard" | "urgent" | "extended";
+  department: string[];
+  description: string;
+  status: string;
+  documentCount: number;
+  reviewedCount: number;
+  redactionCount: number;
+}
+
+export interface DocumentRow {
+  id: string;
+  requestId: string;
+  name: string;
+  type: string;
+  pageCount: number;
+  sizeKB: number;
+  status: string;
+  detectionCount: number;
+  avgConfidence: number;
+  assignee: string | null;
+  updatedAt: string;
+  duplicateGroup?: string;
+}
+
+interface CaseDetailClientProps {
+  caseData: CaseData;
+  documents: DocumentRow[];
+}
+
+export default function CaseDetailClient({ caseData, documents }: CaseDetailClientProps) {
+  const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const request = caseData;
+  const cfg = statusConfig[request.status as RequestStatus];
+  const days = workingDaysRemaining(request.deadline);
+  const progress = request.documentCount > 0
+    ? Math.round((request.reviewedCount / request.documentCount) * 100)
+    : 0;
+
+  const filteredDocs = documents.filter((doc) => {
+    if (!searchQuery) return true;
+    return doc.name.toLowerCase().includes(searchQuery.toLowerCase());
+  });
+
+  const toggleDoc = (docId: string) => {
+    setSelectedDocs((prev) => {
+      const next = new Set(prev);
+      if (next.has(docId)) {
+        next.delete(docId);
+      } else {
+        next.add(docId);
+      }
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selectedDocs.size === filteredDocs.length) {
+      setSelectedDocs(new Set());
+    } else {
+      setSelectedDocs(new Set(filteredDocs.map((d) => d.id)));
+    }
+  };
+
+  return (
+    <div className="p-6 max-w-[1400px]">
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-1.5 text-sm text-txt-secondary mb-6">
+        <Link href="/requests" className="hover:text-brand-primary transition-colors">
+          Cases
+        </Link>
+        <ChevronRight className="w-3.5 h-3.5" />
+        <span className="text-txt-primary font-medium font-mono">{request.reference}</span>
+      </div>
+
+      {/* Case Header */}
+      <div className="card mb-6">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-xl font-heading font-bold text-txt-primary font-mono">
+                {request.reference}
+              </h1>
+              <span className={cn("badge", cfg.bg, cfg.color)}>{cfg.label}</span>
+              {request.priority === "urgent" && (
+                <span className="badge bg-red-100 text-red-700">Urgent</span>
+              )}
+            </div>
+            <p className="text-sm text-txt-secondary max-w-3xl">{request.description}</p>
+            <div className="flex items-center gap-4 mt-3 text-xs text-txt-secondary">
+              <span>
+                <span className="font-medium text-txt-primary">Requester:</span> {request.requesterName} ({request.requesterType})
+              </span>
+              <span>
+                <span className="font-medium text-txt-primary">Department:</span> {request.department.join(", ")}
+              </span>
+              <span>
+                <span className="font-medium text-txt-primary">Received:</span> {formatDate(request.dateReceived)}
+              </span>
+            </div>
+          </div>
+          <div className="text-right ml-6 flex-shrink-0">
+            <div className={cn("text-lg font-bold", deadlineColor(days))}>
+              {days < 0
+                ? `${Math.abs(days)}d overdue`
+                : days === 0
+                ? "Due today"
+                : `${days}d remaining`}
+            </div>
+            <div className="text-sm text-txt-secondary">{formatDate(request.deadline)}</div>
+          </div>
+        </div>
+        {/* Progress bar */}
+        <div className="flex items-center gap-4">
+          <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-brand-primary rounded-full transition-all"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <span className="text-sm text-txt-secondary whitespace-nowrap">
+            {request.reviewedCount} / {request.documentCount} reviewed ({progress}%)
+          </span>
+        </div>
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="flex items-center gap-1 border-b border-border mb-6">
+        <Link
+          href={`/requests/${request.id}`}
+          className="px-4 py-2.5 text-sm font-medium text-brand-primary border-b-2 border-brand-primary -mb-px"
+        >
+          Documents
+        </Link>
+        <Link
+          href={`/requests/${request.id}/schedule`}
+          className="px-4 py-2.5 text-sm font-medium text-txt-secondary hover:text-txt-primary transition-colors"
+        >
+          Schedule
+        </Link>
+        <Link
+          href={`/requests/${request.id}/audit`}
+          className="px-4 py-2.5 text-sm font-medium text-txt-secondary hover:text-txt-primary transition-colors"
+        >
+          Audit Trail
+        </Link>
+        <Link
+          href={`/requests/${request.id}/export`}
+          className="px-4 py-2.5 text-sm font-medium text-txt-secondary hover:text-txt-primary transition-colors"
+        >
+          Export
+        </Link>
+        <div className="flex-1" />
+        <Link
+          href={`/requests/${request.id}/ingest`}
+          className="btn-primary flex items-center gap-2 text-xs mb-1"
+        >
+          <Upload className="w-3.5 h-3.5" />
+          Upload Documents
+        </Link>
+      </div>
+
+      {/* Search within documents */}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-txt-secondary" />
+          <input
+            type="text"
+            placeholder="Search documents..."
+            className="input-field pl-10"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <button className="btn-secondary flex items-center gap-2">
+          <Filter className="w-4 h-4" />
+          Filter
+        </button>
+      </div>
+
+      {/* Document Table */}
+      <div className="card p-0 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border bg-surface-bg/50">
+              <th className="w-10 px-4 py-3">
+                <input
+                  type="checkbox"
+                  checked={selectedDocs.size === filteredDocs.length && filteredDocs.length > 0}
+                  onChange={toggleAll}
+                  className="rounded border-border text-brand-primary focus:ring-brand-primary/30"
+                />
+              </th>
+              <th className="text-left px-4 py-3 font-medium text-txt-secondary">Name</th>
+              <th className="text-left px-4 py-3 font-medium text-txt-secondary">Type</th>
+              <th className="text-left px-4 py-3 font-medium text-txt-secondary">Status</th>
+              <th className="text-center px-4 py-3 font-medium text-txt-secondary">AI Detections</th>
+              <th className="text-center px-4 py-3 font-medium text-txt-secondary">Avg Confidence</th>
+              <th className="text-left px-4 py-3 font-medium text-txt-secondary">Assignee</th>
+              <th className="text-left px-4 py-3 font-medium text-txt-secondary">Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredDocs.map((doc) => {
+              const dCfg = docStatusConfig[doc.status] || docStatusConfig.pending;
+              const tCfg = docTypeConfig[doc.type.toLowerCase() as DocType] ?? { label: doc.type, color: "text-gray-600 bg-gray-50", icon: "FileText" };
+              const confColor = doc.avgConfidence > 0 ? confidenceColor(doc.avgConfidence) : "";
+              return (
+                <tr
+                  key={doc.id}
+                  className="border-b border-border last:border-0 hover:bg-surface-hover transition-colors cursor-pointer group"
+                >
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedDocs.has(doc.id)}
+                      onChange={() => toggleDoc(doc.id)}
+                      className="rounded border-border text-brand-primary focus:ring-brand-primary/30"
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <Link
+                      href={`/requests/${request.id}/review/${doc.id}`}
+                      className="flex items-center gap-2"
+                    >
+                      <DocTypeIcon type={doc.type} />
+                      <span className="font-medium text-txt-primary group-hover:text-brand-primary transition-colors">
+                        {doc.name}
+                      </span>
+                      <span className="text-xs text-txt-secondary">({doc.pageCount}p)</span>
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Link href={`/requests/${request.id}/review/${doc.id}`}>
+                      <span className={cn("badge text-xs", tCfg.color)}>{tCfg.label}</span>
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Link href={`/requests/${request.id}/review/${doc.id}`}>
+                      <span className={cn("badge", dCfg.bg, dCfg.color)}>{dCfg.label}</span>
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <Link href={`/requests/${request.id}/review/${doc.id}`}>
+                      {doc.detectionCount > 0 ? (
+                        <span className="font-medium text-txt-primary">{doc.detectionCount}</span>
+                      ) : (
+                        <span className="text-txt-secondary">--</span>
+                      )}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <Link href={`/requests/${request.id}/review/${doc.id}`}>
+                      {doc.avgConfidence > 0 ? (
+                        <span className={cn("font-medium text-sm", `text-${confColor}`)}>
+                          {doc.avgConfidence}%
+                        </span>
+                      ) : (
+                        <span className="text-txt-secondary">--</span>
+                      )}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Link href={`/requests/${request.id}/review/${doc.id}`}>
+                      {doc.assignee ? (
+                        <span className="text-txt-primary">{doc.assignee}</span>
+                      ) : (
+                        <span className="text-txt-secondary italic">Unassigned</span>
+                      )}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-txt-secondary">
+                    <Link href={`/requests/${request.id}/review/${doc.id}`}>
+                      {formatDate(doc.updatedAt)}
+                    </Link>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Bulk Action Bar */}
+      {selectedDocs.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 ml-[130px] bg-brand-primary text-white rounded-card shadow-xl px-6 py-3 flex items-center gap-6 z-50">
+          <span className="text-sm font-medium">
+            {selectedDocs.size} document{selectedDocs.size > 1 ? "s" : ""} selected
+          </span>
+          <div className="h-5 w-px bg-white/30" />
+          <button className="text-sm hover:underline flex items-center gap-1.5">
+            <CheckCircle className="w-4 h-4" />
+            Assign Reviewer
+          </button>
+          <button className="text-sm hover:underline flex items-center gap-1.5">
+            <ArrowRight className="w-4 h-4" />
+            Bulk Review
+          </button>
+          <button className="text-sm hover:underline flex items-center gap-1.5">
+            <XCircle className="w-4 h-4" />
+            Mark Excluded
+          </button>
+          <div className="h-5 w-px bg-white/30" />
+          <button
+            onClick={() => setSelectedDocs(new Set())}
+            className="text-sm text-white/70 hover:text-white"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

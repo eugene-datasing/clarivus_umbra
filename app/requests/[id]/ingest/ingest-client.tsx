@@ -1,0 +1,439 @@
+"use client";
+
+import { useState, useCallback, useEffect, useRef } from "react";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
+import {
+  Upload,
+  CheckCircle,
+  Circle,
+  XCircle,
+  Loader,
+  ChevronRight,
+  FileText,
+  ArrowRight,
+} from "lucide-react";
+
+type DocStatus = "queued" | "processing" | "ready" | "error" | "pending" | "in-review" | "submitted" | "approved" | "rejected" | "released" | "complete";
+
+interface DocItem {
+  id: string;
+  name: string;
+  fileType: string;
+  sizeKB: number;
+  status: DocStatus;
+  detectionCount: number;
+  pageCount: number;
+  processingError?: string;
+}
+
+interface IngestClientProps {
+  requestId: string;
+  caseReference: string;
+  existingDocs: DocItem[];
+}
+
+function StatusIcon({ status }: { status: DocStatus }) {
+  switch (status) {
+    case "ready":
+    case "approved":
+    case "released":
+    case "complete":
+      return <CheckCircle className="w-5 h-5 text-green-500" />;
+    case "processing":
+      return <Loader className="w-5 h-5 text-blue-500 animate-spin" />;
+    case "queued":
+    case "pending":
+      return <Circle className="w-5 h-5 text-gray-300" />;
+    case "in-review":
+    case "submitted":
+      return <Loader className="w-5 h-5 text-amber-500" />;
+    case "error":
+    case "rejected":
+      return <XCircle className="w-5 h-5 text-red-500" />;
+    default:
+      return <Circle className="w-5 h-5 text-gray-300" />;
+  }
+}
+
+const statusLabel: Record<string, { text: string; color: string }> = {
+  ready: { text: "Complete", color: "text-green-600" },
+  processing: { text: "Processing", color: "text-blue-600" },
+  queued: { text: "Queued", color: "text-gray-500" },
+  error: { text: "Error", color: "text-red-600" },
+  pending: { text: "Pending", color: "text-gray-500" },
+  "in-review": { text: "In Review", color: "text-blue-600" },
+  submitted: { text: "Submitted", color: "text-amber-600" },
+  approved: { text: "Approved", color: "text-green-600" },
+  rejected: { text: "Rejected", color: "text-red-600" },
+  released: { text: "Released", color: "text-purple-600" },
+  complete: { text: "Complete", color: "text-green-600" },
+};
+
+function formatSize(kb: number): string {
+  if (kb >= 1024) return `${(kb / 1024).toFixed(1)} MB`;
+  return `${kb} KB`;
+}
+
+export default function IngestClient({
+  requestId,
+  caseReference,
+  existingDocs,
+}: IngestClientProps) {
+  const [dragActive, setDragActive] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [documents, setDocuments] = useState<DocItem[]>(existingDocs);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Counts
+  const totalCount = documents.length;
+  const readyCount = documents.filter((d) => d.status === "ready").length;
+  const processingCount = documents.filter(
+    (d) => d.status === "processing"
+  ).length;
+  const queuedCount = documents.filter((d) => d.status === "queued").length;
+  const errorCount = documents.filter((d) => d.status === "error").length;
+  const progressPct =
+    totalCount > 0 ? Math.round((readyCount / totalCount) * 100) : 0;
+
+  // Poll status for documents that are queued or processing
+  const pollStatuses = useCallback(async () => {
+    const pendingDocs = documents.filter(
+      (d) => d.status === "queued" || d.status === "processing"
+    );
+    if (pendingDocs.length === 0) return;
+
+    const updates = await Promise.allSettled(
+      pendingDocs.map(async (doc) => {
+        const res = await fetch(`/api/documents/${doc.id}/status`);
+        if (!res.ok) return null;
+        return res.json();
+      })
+    );
+
+    setDocuments((prev) => {
+      const next = [...prev];
+      updates.forEach((result, i) => {
+        if (result.status !== "fulfilled" || !result.value) return;
+        const data = result.value;
+        const idx = next.findIndex((d) => d.id === pendingDocs[i].id);
+        if (idx === -1) return;
+        next[idx] = {
+          ...next[idx],
+          status: data.status,
+          pageCount: data.pageCount ?? next[idx].pageCount,
+          detectionCount: data.detectionCount ?? next[idx].detectionCount,
+          processingError: data.error ?? undefined,
+        };
+      });
+      return next;
+    });
+  }, [documents]);
+
+  // Start polling when there are pending docs
+  useEffect(() => {
+    const hasPending = documents.some(
+      (d) => d.status === "queued" || d.status === "processing"
+    );
+    if (hasPending) {
+      pollingRef.current = setInterval(pollStatuses, 2000);
+    }
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [documents, pollStatuses]);
+
+  // Upload files and trigger processing
+  const uploadFiles = useCallback(
+    async (files: FileList | File[]) => {
+      setIsUploading(true);
+      setUploadError("");
+
+      try {
+        const formData = new FormData();
+        formData.append("caseId", requestId);
+        Array.from(files).forEach((file) => {
+          formData.append("files", file);
+        });
+
+        const res = await fetch("/api/documents/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "Upload failed");
+        }
+
+        const uploaded: { id: string; name: string; status: string }[] =
+          await res.json();
+
+        // Add uploaded docs to local state
+        const newDocs: DocItem[] = uploaded.map((u) => ({
+          id: u.id,
+          name: u.name,
+          fileType:
+            u.name.split(".").pop()?.toUpperCase() || "UNKNOWN",
+          sizeKB: 0,
+          status: "queued" as const,
+          detectionCount: 0,
+          pageCount: 0,
+        }));
+        setDocuments((prev) => [...newDocs, ...prev]);
+
+        // Trigger processing for each document (fire-and-forget)
+        for (const doc of uploaded) {
+          fetch(`/api/documents/${doc.id}/process`, { method: "POST" }).catch(
+            (err) => console.error(`Failed to trigger processing for ${doc.id}:`, err)
+          );
+        }
+      } catch (err) {
+        setUploadError(
+          err instanceof Error ? err.message : "Upload failed"
+        );
+      } finally {
+        setIsUploading(false);
+      }
+    },
+    [requestId]
+  );
+
+  const handleFileDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragActive(false);
+      if (e.dataTransfer.files.length > 0) {
+        uploadFiles(e.dataTransfer.files);
+      }
+    },
+    [uploadFiles]
+  );
+
+  const handleBrowseClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files.length > 0) {
+        uploadFiles(e.target.files);
+      }
+    },
+    [uploadFiles]
+  );
+
+  return (
+    <div className="p-6 max-w-[1000px]">
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-1.5 text-sm text-txt-secondary mb-6">
+        <Link
+          href="/requests"
+          className="hover:text-brand-primary transition-colors"
+        >
+          Cases
+        </Link>
+        <ChevronRight className="w-3.5 h-3.5" />
+        <Link
+          href={`/requests/${requestId}`}
+          className="hover:text-brand-primary transition-colors font-mono"
+        >
+          {caseReference}
+        </Link>
+        <ChevronRight className="w-3.5 h-3.5" />
+        <span className="text-txt-primary font-medium">Upload Documents</span>
+      </div>
+
+      <div className="mb-6">
+        <h1 className="text-2xl font-heading font-bold text-txt-primary">
+          Document Ingestion
+        </h1>
+        <p className="text-sm text-txt-secondary mt-1">
+          Upload documents for processing, OCR, and AI-powered detection.
+        </p>
+      </div>
+
+      {uploadError && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-card text-sm text-red-700">
+          {uploadError}
+        </div>
+      )}
+
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        accept=".pdf,.docx,.xlsx,.pptx,.eml,.msg,.txt,.png,.jpg,.jpeg,.zip"
+        onChange={handleFileSelect}
+      />
+
+      {/* Upload Zone */}
+      <div
+        className={cn(
+          "card border-2 border-dashed text-center py-16 mb-6 transition-colors cursor-pointer",
+          dragActive
+            ? "border-brand-primary bg-purple-50/50"
+            : "border-border hover:border-brand-primary/40 hover:bg-surface-hover"
+        )}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragActive(true);
+        }}
+        onDragLeave={() => setDragActive(false)}
+        onDrop={handleFileDrop}
+        onClick={handleBrowseClick}
+      >
+        <div className="flex flex-col items-center">
+          <div className="w-16 h-16 rounded-full bg-purple-50 flex items-center justify-center mb-4">
+            {isUploading ? (
+              <Loader className="w-8 h-8 text-brand-primary animate-spin" />
+            ) : (
+              <Upload className="w-8 h-8 text-brand-primary" />
+            )}
+          </div>
+          <h3 className="text-lg font-medium text-txt-primary mb-1">
+            {isUploading
+              ? "Uploading files..."
+              : "Drag and drop files or folders here"}
+          </h3>
+          <p className="text-sm text-txt-secondary mb-4">
+            {isUploading
+              ? "Please wait while files are uploaded"
+              : "or click to browse your computer"}
+          </p>
+          <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs text-txt-secondary">
+            <span className="px-2 py-1 bg-surface-bg rounded-badge">PDF</span>
+            <span className="px-2 py-1 bg-surface-bg rounded-badge">DOCX</span>
+            <span className="px-2 py-1 bg-surface-bg rounded-badge">XLSX</span>
+            <span className="px-2 py-1 bg-surface-bg rounded-badge">PPTX</span>
+            <span className="px-2 py-1 bg-surface-bg rounded-badge">
+              EML / MSG
+            </span>
+            <span className="px-2 py-1 bg-surface-bg rounded-badge">TXT</span>
+            <span className="px-2 py-1 bg-surface-bg rounded-badge">
+              Images
+            </span>
+            <span className="px-2 py-1 bg-surface-bg rounded-badge">ZIP</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Overall Progress (only show when there are documents) */}
+      {totalCount > 0 && (
+        <div className="card mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-heading font-semibold text-txt-primary">
+              Processing Progress
+            </h2>
+            <span className="text-sm font-mono text-txt-primary font-medium">
+              {progressPct}% ({readyCount}/{totalCount})
+            </span>
+          </div>
+          <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-brand-primary rounded-full transition-all"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+          <div className="flex items-center gap-6 mt-3 text-xs text-txt-secondary">
+            <div className="flex items-center gap-1.5">
+              <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+              <span>{readyCount} complete</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Loader className="w-3.5 h-3.5 text-blue-500" />
+              <span>{processingCount} processing</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Circle className="w-3.5 h-3.5 text-gray-300" />
+              <span>{queuedCount} queued</span>
+            </div>
+            {errorCount > 0 && (
+              <div className="flex items-center gap-1.5">
+                <XCircle className="w-3.5 h-3.5 text-red-500" />
+                <span>{errorCount} errors</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Processing Queue */}
+      {totalCount > 0 && (
+        <div className="card mb-6 p-0 overflow-hidden">
+          <div className="px-6 py-4 border-b border-border">
+            <h2 className="text-sm font-heading font-semibold text-txt-primary">
+              Processing Queue
+            </h2>
+          </div>
+          <div className="divide-y divide-border">
+            {documents.map((item) => (
+              <div
+                key={item.id}
+                className={cn(
+                  "flex items-center gap-4 px-6 py-3 transition-colors duration-500",
+                  item.status === "error" && "bg-red-50/50",
+                  item.status === "ready" && "bg-green-50/30"
+                )}
+              >
+                <StatusIcon status={item.status} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-txt-secondary flex-shrink-0" />
+                    <span className="text-sm font-medium text-txt-primary truncate">
+                      {item.name}
+                    </span>
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-surface-bg text-txt-secondary flex-shrink-0">
+                      {item.fileType}
+                    </span>
+                    {item.sizeKB > 0 && (
+                      <span className="text-xs text-txt-secondary flex-shrink-0">
+                        {formatSize(item.sizeKB)}
+                      </span>
+                    )}
+                  </div>
+                  {item.status === "ready" && (
+                    <p className="text-xs mt-0.5 ml-6 text-txt-secondary">
+                      {item.pageCount} pages processed, {item.detectionCount}{" "}
+                      detections found
+                    </p>
+                  )}
+                  {item.status === "error" && item.processingError && (
+                    <p className="text-xs mt-0.5 ml-6 text-red-600">
+                      {item.processingError}
+                    </p>
+                  )}
+                </div>
+                <span
+                  className={cn(
+                    "text-xs font-medium flex-shrink-0",
+                    (statusLabel[item.status] ?? statusLabel.pending).color
+                  )}
+                >
+                  {(statusLabel[item.status] ?? statusLabel.pending).text}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Continue button */}
+      {totalCount > 0 && (
+        <div className="flex items-center justify-end">
+          <Link
+            href={`/requests/${requestId}`}
+            className="btn-primary flex items-center gap-2"
+          >
+            Continue to Review
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}

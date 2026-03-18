@@ -1,0 +1,177 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// MODELS
+// ============================================================
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?  @unique
+  role      String   @default("reviewer")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignedDocuments Document[]   @relation("DocumentAssignee")
+  auditEntries      AuditEntry[]
+
+  @@map("users")
+}
+
+model Case {
+  id             String   @id @default(cuid())
+  reference      String   @unique
+  requesterName  String
+  requesterType  String
+  dateReceived   DateTime
+  deadline       DateTime
+  priority       String   @default("standard")
+  departments    String[]
+  description    String
+  status         String   @default("draft")
+
+  // Denormalized counters
+  documentCount  Int @default(0)
+  reviewedCount  Int @default(0)
+  redactionCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  documents    Document[]
+  auditEntries AuditEntry[]
+
+  @@map("cases")
+}
+
+model Document {
+  id             String  @id @default(cuid())
+  caseId         String
+  name           String
+  fileType       String
+  mimeType       String  @default("application/octet-stream")
+  sizeBytes      Int     @default(0)
+  pageCount      Int     @default(0)
+  status         String  @default("pending")
+  originalPath   String?
+  processingError String?
+
+  // AI results (denormalized for list views)
+  detectionCount Int   @default(0)
+  avgConfidence  Float @default(0)
+
+  // Assignment
+  assigneeId String?
+  assignee   User?  @relation("DocumentAssignee", fields: [assigneeId], references: [id])
+
+  // Duplicate handling
+  duplicateGroup String?
+  contentHash    String?
+
+  // Document content for review (DocParagraph[] as JSON)
+  contentJson Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  case       Case           @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  pages      DocumentPage[]
+  detections Detection[]
+
+  @@index([caseId])
+  @@index([status])
+  @@index([contentHash])
+  @@map("documents")
+}
+
+model DocumentPage {
+  id         String @id @default(cuid())
+  documentId String
+  pageNumber Int
+  text       String
+  layoutJson Json?
+  width      Float?
+  height     Float?
+
+  createdAt DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, pageNumber])
+  @@index([documentId])
+  @@map("document_pages")
+}
+
+model Detection {
+  id              String  @id @default(cuid())
+  documentId      String
+  type            String
+  text            String
+  confidence      Float
+  page            Int
+  posX            Float   @default(0)
+  posY            Float   @default(0)
+  posW            Float   @default(0)
+  posH            Float   @default(0)
+  suggestedGround String?
+  appliedGround   String?
+  status          String  @default("pending")
+  reasoning       String  @default("")
+  piConsideration String  @default("")
+  aiExplanation   String  @default("")
+  source          String  @default("ai")
+
+  reviewedBy String?
+  reviewedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([status])
+  @@map("detections")
+}
+
+model AuditEntry {
+  id            String   @id @default(cuid())
+  timestamp     DateTime @default(now())
+  userId        String?
+  userName      String
+  userRole      String
+  type          String
+  description   String
+  target        String
+  caseId        String?
+  detail        String?
+  previousValue String?
+  newValue      String?
+
+  user User? @relation(fields: [userId], references: [id])
+  case Case? @relation(fields: [caseId], references: [id])
+
+  @@index([caseId])
+  @@index([timestamp])
+  @@index([userId])
+  @@map("audit_entries")
+}
+
+model FileUpload {
+  id         String   @id @default(cuid())
+  filename   String
+  mimeType   String
+  sizeBytes  Int
+  storageKey String   @unique
+  sha256Hash String?
+  createdAt  DateTime @default(now())
+
+  @@map("file_uploads")
+}
