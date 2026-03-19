@@ -65,6 +65,19 @@ export async function processDocument(docId: string): Promise<void> {
     const caseId = doc.caseId;
 
     // ------------------------------------------------------------------
+    // Timing instrumentation (WP13)
+    // ------------------------------------------------------------------
+    const timingStart = Date.now();
+    let extractionMs = 0;
+    let patternDetectionMs = 0;
+    let aiDetectionMs = 0;
+
+    await prisma.document.update({
+      where: { id: docId },
+      data: { processingStartedAt: new Date() },
+    });
+
+    // ------------------------------------------------------------------
     // 2. Download file from storage
     // ------------------------------------------------------------------
     const ext = getExtension(doc.name);
@@ -95,7 +108,9 @@ export async function processDocument(docId: string): Promise<void> {
     // 4. Extract text
     // ------------------------------------------------------------------
     console.log(`[pipeline] Extracting text (type: ${doc.fileType})`);
+    const extractionStart = Date.now();
     const extraction = await extractText(buffer, doc.fileType);
+    extractionMs = Date.now() - extractionStart;
 
     console.log(
       `[pipeline] Extracted ${extraction.pages.length} page(s), ` +
@@ -198,7 +213,9 @@ export async function processDocument(docId: string): Promise<void> {
     // 6. Pattern detection
     // ------------------------------------------------------------------
     console.log("[pipeline] Running pattern detection...");
+    const patternStart = Date.now();
     const patternMatches = detectPatterns(extraction.pages);
+    patternDetectionMs = Date.now() - patternStart;
     console.log(`[pipeline] Found ${patternMatches.length} pattern match(es)`);
 
     // ------------------------------------------------------------------
@@ -208,8 +225,10 @@ export async function processDocument(docId: string): Promise<void> {
 
     try {
       console.log("[pipeline] Running AI detection...");
+      const aiStart = Date.now();
       const patternTexts = patternMatches.map((m) => m.text);
       aiDetections = await detectWithAI(extraction.pages, patternTexts);
+      aiDetectionMs = Date.now() - aiStart;
       console.log(`[pipeline] Found ${aiDetections.length} AI detection(s)`);
     } catch (aiError) {
       // AI detection is non-critical -- log and continue with pattern-only
@@ -304,6 +323,8 @@ export async function processDocument(docId: string): Promise<void> {
           totalDetections
         : 0;
 
+    const totalProcessingMs = Date.now() - timingStart;
+
     await prisma.document.update({
       where: { id: docId },
       data: {
@@ -312,6 +333,11 @@ export async function processDocument(docId: string): Promise<void> {
         avgConfidence: Math.round(avgConfidence * 10) / 10,
         status: "ready",
         processingError: null,
+        processingCompletedAt: new Date(),
+        extractionMs,
+        patternDetectionMs,
+        aiDetectionMs,
+        totalProcessingMs,
       },
     });
 
@@ -343,6 +369,7 @@ export async function processDocument(docId: string): Promise<void> {
         `Pattern detections: ${patternDetectionRecords.length}`,
         `AI detections: ${aiDetectionRecords.length}`,
         `Average confidence: ${Math.round(avgConfidence)}%`,
+        `Processing time: ${(totalProcessingMs / 1000).toFixed(1)}s (extraction: ${(extractionMs / 1000).toFixed(1)}s, patterns: ${patternDetectionMs}ms, AI: ${(aiDetectionMs / 1000).toFixed(1)}s)`,
       ].join("; "),
     });
 

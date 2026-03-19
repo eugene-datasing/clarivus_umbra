@@ -59,6 +59,7 @@ export interface DocumentRow {
   assignee: string | null;
   updatedAt: string;
   duplicateGroup?: string;
+  totalProcessingMs?: number;
 }
 
 interface CaseDetailClientProps {
@@ -238,6 +239,7 @@ export default function CaseDetailClient({ caseData, documents }: CaseDetailClie
               <th className="text-center px-4 py-3 font-medium text-txt-secondary">Avg Confidence</th>
               <th className="text-left px-4 py-3 font-medium text-txt-secondary">Assignee</th>
               <th className="text-left px-4 py-3 font-medium text-txt-secondary">Updated</th>
+              <th className="text-center px-4 py-3 font-medium text-txt-secondary">Processing</th>
             </tr>
           </thead>
           <tbody>
@@ -312,6 +314,15 @@ export default function CaseDetailClient({ caseData, documents }: CaseDetailClie
                   <td className="px-4 py-3 text-xs text-txt-secondary">
                     <Link href={`/requests/${request.id}/review/${doc.id}`}>
                       {formatDate(doc.updatedAt)}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 text-center text-xs text-txt-secondary">
+                    <Link href={`/requests/${request.id}/review/${doc.id}`}>
+                      {doc.totalProcessingMs != null ? (
+                        <span className="font-mono">{(doc.totalProcessingMs / 1000).toFixed(1)}s</span>
+                      ) : (
+                        <span>--</span>
+                      )}
                     </Link>
                   </td>
                 </tr>

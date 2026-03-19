@@ -55,6 +55,22 @@ export async function getGroupedDetectionsForCase(caseId: string) {
   }));
 }
 
+export async function getDetectionHistory(detectionId: string) {
+  const entries = await prisma.detectionHistory.findMany({
+    where: { detectionId },
+    orderBy: { changedAt: "desc" },
+  });
+
+  return entries.map((e) => ({
+    id: e.id,
+    field: e.field,
+    previousValue: e.previousValue,
+    newValue: e.newValue,
+    changedBy: e.changedBy,
+    changedAt: e.changedAt.toISOString(),
+  }));
+}
+
 export async function getWithholdingItems(caseId: string) {
   const acceptedDetections = await prisma.detection.findMany({
     where: {

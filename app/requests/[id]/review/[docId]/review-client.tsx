@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -16,6 +16,8 @@ import {
   FileText,
   Shield,
   Send,
+  Clock,
+  History,
 } from "lucide-react";
 import {
   detectionTypeConfig,
@@ -176,10 +178,42 @@ export default function ReviewClient({
   const [requestChangesReason, setRequestChangesReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSubmitSuccess, setShowSubmitSuccess] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyData, setHistoryData] = useState<
+    { id: string; field: string; previousValue: string | null; newValue: string | null; changedBy: string; changedAt: string }[]
+  >([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   // Refs for scrolling
   const detectionRowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
   const redactionRefs = useRef<Record<string, HTMLSpanElement | null>>({});
+
+  // ----- Fetch detection history on demand -----
+  useEffect(() => {
+    if (!historyOpen || !selectedDetectionId) {
+      setHistoryData([]);
+      return;
+    }
+    let cancelled = false;
+    setHistoryLoading(true);
+    fetch(`/api/detections/${selectedDetectionId}/history`)
+      .then((r) => r.ok ? r.json() : [])
+      .then((data) => {
+        if (!cancelled) setHistoryData(data);
+      })
+      .catch(() => {
+        if (!cancelled) setHistoryData([]);
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [historyOpen, selectedDetectionId]);
+
+  // Reset history when detection selection changes
+  useEffect(() => {
+    setHistoryOpen(false);
+  }, [selectedDetectionId]);
 
   // ----- Prev / Next navigation -----
   const hasPrev = currentDocIndex > 0;
@@ -1045,6 +1079,46 @@ export default function ReviewClient({
                 </span>
               </div>
             )}
+            {/* Change History (WP12) */}
+            <div className="border-t border-border mt-2 pt-2">
+              <button
+                onClick={() => setHistoryOpen((v) => !v)}
+                className="flex items-center gap-1 text-[10px] text-txt-secondary hover:text-txt-primary transition-colors w-full"
+              >
+                <History size={11} />
+                <span className="uppercase tracking-wider font-semibold">Change History</span>
+                <ChevronRight size={10} className={cn("ml-auto transition-transform", historyOpen && "rotate-90")} />
+              </button>
+              {historyOpen && (
+                <div className="mt-1.5 max-h-32 overflow-y-auto">
+                  {historyLoading ? (
+                    <p className="text-[10px] text-txt-secondary py-1">Loading...</p>
+                  ) : historyData.length === 0 ? (
+                    <p className="text-[10px] text-txt-secondary py-1">No changes recorded yet.</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {historyData.map((h) => (
+                        <div key={h.id} className="flex items-start gap-1.5 text-[10px]">
+                          <Clock size={9} className="text-txt-secondary mt-0.5 shrink-0" />
+                          <div>
+                            <span className="font-medium text-txt-primary">{h.changedBy}</span>
+                            <span className="text-txt-secondary"> changed </span>
+                            <span className="font-mono text-brand-primary">{h.field}</span>
+                            {h.previousValue && (
+                              <span className="text-txt-secondary"> from <span className="line-through">{h.previousValue}</span></span>
+                            )}
+                            <span className="text-txt-secondary"> to <span className="font-medium">{h.newValue ?? "none"}</span></span>
+                            <div className="text-txt-secondary/60 text-[9px]">
+                              {new Date(h.changedAt).toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         );
       })()}

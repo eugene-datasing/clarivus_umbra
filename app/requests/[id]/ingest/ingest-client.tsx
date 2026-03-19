@@ -29,6 +29,7 @@ interface DocItem {
   queueStep?: string;
   queueProgress?: number;
   queueAttempt?: number;
+  totalProcessingMs?: number;
 }
 
 interface IngestClientProps {
@@ -450,6 +451,11 @@ export default function IngestClient({
                     <p className="text-xs mt-0.5 ml-6 text-txt-secondary">
                       {item.pageCount} pages processed, {item.detectionCount}{" "}
                       detections found
+                      {item.totalProcessingMs != null && (
+                        <span className="ml-1 font-mono text-txt-secondary/70">
+                          ({(item.totalProcessingMs / 1000).toFixed(1)}s)
+                        </span>
+                      )}
                     </p>
                   )}
                   {item.status === "error" && item.processingError && (

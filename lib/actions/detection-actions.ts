@@ -4,6 +4,23 @@ import { prisma } from "@/lib/db/prisma";
 import { createAuditEntry } from "@/lib/data/audit";
 
 // ---------------------------------------------------------------------------
+// Change tracking (WP12)
+// ---------------------------------------------------------------------------
+
+async function recordHistory(
+  detectionId: string,
+  field: string,
+  previousValue: string | null,
+  newValue: string | null,
+  changedBy: string,
+) {
+  if (previousValue === newValue) return;
+  await prisma.detectionHistory.create({
+    data: { detectionId, field, previousValue, newValue, changedBy },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -200,6 +217,12 @@ export async function acceptDetection(detectionId: string, ground?: string) {
 
   const appliedGround = ground || detection.suggestedGround;
 
+  // Record change history
+  await recordHistory(detectionId, "status", detection.status, "accepted", "K. Williams");
+  if (detection.appliedGround !== appliedGround) {
+    await recordHistory(detectionId, "appliedGround", detection.appliedGround, appliedGround ?? null, "K. Williams");
+  }
+
   await prisma.detection.update({
     where: { id: detectionId },
     data: {
@@ -231,6 +254,11 @@ export async function rejectDetection(detectionId: string, reason?: string) {
   });
   if (!detection) throw new Error("Detection not found");
 
+  await recordHistory(detectionId, "status", detection.status, "rejected", "K. Williams");
+  if (detection.appliedGround) {
+    await recordHistory(detectionId, "appliedGround", detection.appliedGround, null, "K. Williams");
+  }
+
   await prisma.detection.update({
     where: { id: detectionId },
     data: {
@@ -258,8 +286,15 @@ export async function rejectDetection(detectionId: string, reason?: string) {
 export async function revertDetection(detectionId: string) {
   const detection = await prisma.detection.findUnique({
     where: { id: detectionId },
-    select: { documentId: true },
+    select: { documentId: true, status: true, appliedGround: true },
   });
+
+  if (detection) {
+    await recordHistory(detectionId, "status", detection.status, "pending", "K. Williams");
+    if (detection.appliedGround) {
+      await recordHistory(detectionId, "appliedGround", detection.appliedGround, null, "K. Williams");
+    }
+  }
 
   await prisma.detection.update({
     where: { id: detectionId },
@@ -278,6 +313,15 @@ export async function revertDetection(detectionId: string) {
 }
 
 export async function applyGround(detectionId: string, groundId: string) {
+  const detection = await prisma.detection.findUnique({
+    where: { id: detectionId },
+    select: { appliedGround: true },
+  });
+
+  if (detection) {
+    await recordHistory(detectionId, "appliedGround", detection.appliedGround, groundId, "K. Williams");
+  }
+
   await prisma.detection.update({
     where: { id: detectionId },
     data: { appliedGround: groundId },

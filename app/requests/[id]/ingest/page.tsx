@@ -29,6 +29,7 @@ export default async function IngestPage({
         detectionCount: d.detectionCount,
         pageCount: d.pageCount,
         duplicateGroup: d.duplicateGroup,
+        totalProcessingMs: d.totalProcessingMs,
       }))}
     />
   );

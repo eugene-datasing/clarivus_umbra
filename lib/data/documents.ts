@@ -20,6 +20,7 @@ export async function getDocumentsForCase(caseId: string) {
     assignee: d.assignee?.name ?? null,
     updatedAt: d.updatedAt.toISOString(),
     duplicateGroup: d.duplicateGroup ?? undefined,
+    totalProcessingMs: d.totalProcessingMs ?? undefined,
   }));
 }
 
