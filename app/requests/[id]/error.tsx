@@ -1,32 +1,37 @@
 "use client";
 
-import { AlertCircle } from "lucide-react";
+import ErrorDisplay from "@/components/common/error-display";
 
-export default function Error({
+export default function CaseError({
   error,
   reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  // Classify the error to provide helpful suggestions
+  const message = error.message || "An unexpected error occurred while loading this page.";
+  let suggestion: string | undefined;
+
+  if (message.includes("not found") || message.includes("Not found")) {
+    suggestion = "This case may have been deleted or the URL may be incorrect. Check the case reference and try again.";
+  } else if (message.includes("database") || message.includes("prisma") || message.includes("connect")) {
+    suggestion = "There may be a temporary database connection issue. Please wait a moment and try again.";
+  } else if (message.includes("timeout") || message.includes("ETIMEDOUT")) {
+    suggestion = "The request timed out. This may be due to heavy processing load. Please try again.";
+  }
+
   return (
-    <div className="p-6 max-w-lg">
-      <div className="card border-red-200 bg-red-50/50">
-        <div className="flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
-          <div>
-            <h2 className="text-sm font-semibold text-red-700 mb-1">
-              Something went wrong
-            </h2>
-            <p className="text-xs text-red-600 mb-3">
-              {error.message || "An unexpected error occurred while loading this page."}
-            </p>
-            <button onClick={reset} className="btn-secondary text-xs">
-              Try again
-            </button>
-          </div>
-        </div>
-      </div>
+    <div className="p-6">
+      <ErrorDisplay
+        title="Error Loading Case"
+        message={message}
+        suggestion={suggestion}
+        backHref="/requests"
+        backLabel="Back to Cases"
+        onRetry={reset}
+        variant="card"
+      />
     </div>
   );
 }

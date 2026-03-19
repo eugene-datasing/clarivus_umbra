@@ -412,19 +412,37 @@ export async function processDocument(docId: string): Promise<void> {
     console.log(`[pipeline] Document ${docId} processing complete.`);
   } catch (error) {
     // ------------------------------------------------------------------
-    // Error handling
+    // Error handling — classify errors for user-friendly display
     // ------------------------------------------------------------------
-    const errorMessage =
+    const rawMessage =
       error instanceof Error ? error.message : String(error);
 
-    console.error(`[pipeline] Processing failed for ${docId}:`, errorMessage);
+    // Classify the error for user-friendly display
+    let userMessage: string;
+    if (rawMessage.includes("Failed to download")) {
+      userMessage = `File not found in storage. The uploaded file may have been lost. Please re-upload the document.`;
+    } else if (rawMessage.includes("Document not found")) {
+      userMessage = `Document record not found. It may have been deleted.`;
+    } else if (rawMessage.includes("ECONNREFUSED") || rawMessage.includes("ENOTFOUND")) {
+      userMessage = `Cannot connect to external service. Please check network connectivity and try again.`;
+    } else if (rawMessage.includes("429") || rawMessage.includes("rate limit")) {
+      userMessage = `AI service rate limit exceeded. The document will be retried automatically.`;
+    } else if (rawMessage.includes("timeout") || rawMessage.includes("ETIMEDOUT")) {
+      userMessage = `Processing timed out. The document may be too large or the service is under heavy load.`;
+    } else if (rawMessage.includes("unsupported") || rawMessage.includes("Unsupported")) {
+      userMessage = `Unsupported file format. ${rawMessage}`;
+    } else {
+      userMessage = `Processing failed: ${rawMessage.slice(0, 200)}`;
+    }
+
+    console.error(`[pipeline] Processing failed for ${docId}:`, rawMessage);
 
     try {
       await prisma.document.update({
         where: { id: docId },
         data: {
           status: "error",
-          processingError: errorMessage.slice(0, 2000),
+          processingError: userMessage.slice(0, 2000),
         },
       });
     } catch (updateErr) {

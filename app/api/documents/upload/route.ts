@@ -80,6 +80,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate file sizes (100 MB limit per file)
+    const MAX_FILE_SIZE = 100 * 1024 * 1024;
+    for (const file of files) {
+      if (file.size > MAX_FILE_SIZE) {
+        return NextResponse.json(
+          {
+            error: `File "${file.name}" exceeds the 100 MB size limit (${(file.size / 1024 / 1024).toFixed(1)} MB).`,
+            code: "FILE_TOO_LARGE",
+            suggestion: "Split large files or compress them before uploading.",
+          },
+          { status: 400 },
+        );
+      }
+    }
+
     const storage = getStorage();
     const results: { id: string; name: string; status: string }[] = [];
 
@@ -89,7 +104,11 @@ export async function POST(request: NextRequest) {
       // Reject PST files with a clear message
       if (ext === ".pst") {
         return NextResponse.json(
-          { error: `PST archives are not supported. Please export individual emails from "${file.name}" as EML or MSG files before uploading.` },
+          {
+            error: `PST archives are not supported. Please export individual emails from "${file.name}" as EML or MSG files before uploading.`,
+            code: "UNSUPPORTED_FORMAT",
+            suggestion: "Export individual emails as EML or MSG files from your email client, then upload those files.",
+          },
           { status: 400 },
         );
       }
@@ -150,8 +169,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(results, { status: 201 });
   } catch (error) {
     console.error("Upload failed:", error);
+    const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { error: "Upload failed", detail: String(error) },
+      {
+        error: "Upload failed. Please try again.",
+        code: "UPLOAD_ERROR",
+        suggestion: message.includes("storage")
+          ? "There was an issue with file storage. Please try uploading again."
+          : message.includes("database") || message.includes("prisma")
+          ? "There was a database issue. Please try again in a moment."
+          : "An unexpected error occurred during upload. If the problem persists, contact support.",
+      },
       { status: 500 },
     );
   }
