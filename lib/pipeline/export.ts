@@ -14,6 +14,7 @@ import { verifyRedactedPdf, type VerificationResult } from "./verify-redaction";
 import { buildWithholdingSchedule } from "./schedule";
 import { buildCoverLetterPdf } from "./cover-letter";
 import { buildAuditTrailPdf } from "./audit-pdf";
+import { sanitiseMetadata } from "./sanitise-metadata";
 
 export type PackageType = "requester" | "internal" | "ombudsman";
 
@@ -193,13 +194,15 @@ async function doGenerate(
     zipParts.push({ name: `audit_trail.pdf`, data: auditPdf });
   }
 
-  // 5. For ombudsman, include original files
+  // 5. For ombudsman, include original files (with metadata sanitised)
   if (packageType === "ombudsman") {
     for (const doc of documents) {
       if (!doc.originalPath) continue;
       try {
         const originalBuffer = await storage.download(doc.originalPath);
-        zipParts.push({ name: `originals/${doc.name}`, data: originalBuffer });
+        // Strip metadata from Office documents before including (WP15)
+        const sanitised = await sanitiseMetadata(originalBuffer, doc.fileType);
+        zipParts.push({ name: `originals/${doc.name}`, data: sanitised });
       } catch {
         // Skip if original not found
       }
