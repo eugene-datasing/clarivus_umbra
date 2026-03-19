@@ -21,19 +21,21 @@ export interface ScheduleResult {
  */
 export async function buildWithholdingSchedule(
   caseId: string,
-  options: { includeReasoning?: boolean } = {},
+  options: { includeReasoning?: boolean; documentIds?: string[] } = {},
 ): Promise<ScheduleResult> {
-  const { includeReasoning = false } = options;
+  const { includeReasoning = false, documentIds } = options;
 
   const caseData = await prisma.case.findUniqueOrThrow({
     where: { id: caseId },
   });
 
+  // Scope detections to selected documents if provided
+  const documentFilter = documentIds
+    ? { documentId: { in: documentIds }, status: "accepted" as const }
+    : { document: { caseId }, status: "accepted" as const };
+
   const acceptedDetections = await prisma.detection.findMany({
-    where: {
-      document: { caseId },
-      status: "accepted",
-    },
+    where: documentFilter,
     include: { document: { select: { name: true } } },
     orderBy: [{ appliedGround: "asc" }, { document: { name: "asc" } }, { page: "asc" }],
   });

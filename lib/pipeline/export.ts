@@ -51,6 +51,9 @@ function setProgress(exportId: string, update: Partial<ExportProgress>) {
 /**
  * Generate an export package asynchronously.
  * Returns the exportId immediately; use getExportProgress() to poll.
+ *
+ * @param documentIds - Explicit list of document IDs to include. If omitted,
+ *   includes all signed-off documents for the case.
  */
 export async function generateExportPackage(
   caseId: string,
@@ -58,6 +61,7 @@ export async function generateExportPackage(
   options: {
     includeCoverLetter?: boolean;
     includeRightOfReview?: boolean;
+    documentIds?: string[];
   } = {},
 ): Promise<string> {
   const exportId = `exp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -87,11 +91,19 @@ async function doGenerate(
   options: {
     includeCoverLetter?: boolean;
     includeRightOfReview?: boolean;
+    documentIds?: string[];
   },
 ) {
   const caseData = await prisma.case.findUniqueOrThrow({ where: { id: caseId } });
+
+  // If explicit document IDs were provided, use those (already validated by API route).
+  // Otherwise fall back to all signed-off documents for the case.
+  const documentWhere = options.documentIds
+    ? { id: { in: options.documentIds }, caseId }
+    : { caseId, status: { in: ["signed-off", "reviewed"] } };
+
   const documents = await prisma.document.findMany({
-    where: { caseId, status: { in: ["ready", "in-review", "submitted", "complete"] } },
+    where: documentWhere,
     orderBy: { name: "asc" },
   });
 
@@ -125,7 +137,8 @@ async function doGenerate(
     currentStep: "Generating withholding schedule",
   });
   const includeReasoning = packageType === "ombudsman" || packageType === "internal";
-  const schedule = await buildWithholdingSchedule(caseId, { includeReasoning });
+  const selectedDocIds = documents.map((d) => d.id);
+  const schedule = await buildWithholdingSchedule(caseId, { includeReasoning, documentIds: selectedDocIds });
   zipParts.push({ name: `withholding_schedule.pdf`, data: schedule.pdfBytes });
   completed++;
 
@@ -137,6 +150,7 @@ async function doGenerate(
     });
     const coverLetter = await buildCoverLetterPdf(caseId, {
       includeRightOfReview: options.includeRightOfReview !== false,
+      documentIds: selectedDocIds,
     });
     zipParts.push({ name: `covering_letter.pdf`, data: coverLetter });
     completed++;

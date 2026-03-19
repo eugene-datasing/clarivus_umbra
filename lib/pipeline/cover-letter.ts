@@ -7,20 +7,28 @@ import { prisma } from "@/lib/db/prisma";
 
 export async function buildCoverLetterPdf(
   caseId: string,
-  options: { includeRightOfReview?: boolean } = {},
+  options: { includeRightOfReview?: boolean; documentIds?: string[] } = {},
 ): Promise<Uint8Array> {
-  const { includeRightOfReview = true } = options;
+  const { includeRightOfReview = true, documentIds } = options;
 
   const caseData = await prisma.case.findUniqueOrThrow({
     where: { id: caseId },
   });
 
+  // Scope counts to selected documents if provided
+  const detectionFilter = documentIds
+    ? { documentId: { in: documentIds }, status: "accepted" as const }
+    : { document: { caseId }, status: "accepted" as const };
+  const documentFilter = documentIds
+    ? { id: { in: documentIds } }
+    : { caseId, status: { in: ["signed-off", "reviewed"] } };
+
   const acceptedCount = await prisma.detection.count({
-    where: { document: { caseId }, status: "accepted" },
+    where: detectionFilter,
   });
 
   const documentCount = await prisma.document.count({
-    where: { caseId, status: { in: ["ready", "in-review", "submitted", "complete"] } },
+    where: documentFilter,
   });
 
   const pdfDoc = await PDFDocument.create();
