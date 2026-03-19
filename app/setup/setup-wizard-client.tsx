@@ -286,10 +286,8 @@ export default function SetupWizardClient({
     try {
       const result = await seedDefaultDepartments();
       if (result.success && result.seeded && result.seeded > 0) {
-        // Reload page to get the fresh department list
+        // Refresh to get the fresh department list from the server component
         router.refresh();
-        // Optimistically show a message; the refresh will provide actual data
-        window.location.reload();
       }
     } catch {
       setError("Failed to seed departments.");

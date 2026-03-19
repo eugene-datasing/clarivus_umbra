@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { requireUser } from "@/lib/auth/session";
 import {
   getSetupWizardState,
   getOrgIdentity,
@@ -12,6 +13,7 @@ import { getDepartments } from "@/lib/data/departments";
 import SetupWizardClient from "./setup-wizard-client";
 
 export default async function SetupPage() {
+  await requireUser();
   const [
     wizardState,
     orgIdentity,

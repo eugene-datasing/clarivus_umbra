@@ -61,6 +61,7 @@ async function markStepCompleted(stepIndex: number) {
 }
 
 export async function markDepartmentsStepCompleted() {
+  await requireUser();
   await markStepCompleted(1);
   return { success: true };
 }
@@ -75,6 +76,7 @@ export async function completeSetup() {
 }
 
 export async function saveSetupStep(step: number) {
+  await requireUser();
   const state = await getSetupWizardState();
   state.currentStep = step;
   await setSetting(SETTING_KEYS.SETUP_WIZARD_STATE, state, "system");

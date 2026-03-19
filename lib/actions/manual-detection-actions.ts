@@ -27,50 +27,55 @@ export async function createManualDetection(input: CreateManualDetectionInput) {
   });
   if (!doc) throw new Error("Document not found");
 
-  // Create the detection record
-  const detection = await prisma.detection.create({
-    data: {
-      documentId: input.documentId,
-      type: input.type,
-      text: input.text,
-      confidence: 100,
-      page: input.page,
-      suggestedGround: input.ground || null,
-      appliedGround: input.ground || null,
-      status: "accepted",
-      reasoning: input.reasoning || "Manually identified by reviewer",
-      piConsideration: "",
-      aiExplanation: "Manually added by reviewer — this item was not detected by AI.",
-      source: "manual",
-      reviewedBy: user.name,
-      reviewedAt: new Date(),
-    },
-  });
+  // Wrap all DB writes in a transaction for atomicity
+  const detection = await prisma.$transaction(async (tx) => {
+    // Create the detection record
+    const det = await tx.detection.create({
+      data: {
+        documentId: input.documentId,
+        type: input.type,
+        text: input.text,
+        confidence: 100,
+        page: input.page,
+        suggestedGround: input.ground || null,
+        appliedGround: input.ground || null,
+        status: "accepted",
+        reasoning: input.reasoning || "Manually identified by reviewer",
+        piConsideration: "",
+        aiExplanation: "Manually added by reviewer — this item was not detected by AI.",
+        source: "manual",
+        reviewedBy: user.name,
+        reviewedAt: new Date(),
+      },
+    });
 
-  // Create feedback example (for AI learning)
-  await prisma.feedbackExample.create({
-    data: {
-      caseId: doc.caseId,
-      documentId: input.documentId,
-      detectionId: detection.id,
-      type: input.type,
-      text: input.text,
-      ground: input.ground || null,
-      reasoning: input.reasoning || "",
-      createdBy: user.name,
-    },
-  });
+    // Create feedback example (for AI learning)
+    await tx.feedbackExample.create({
+      data: {
+        caseId: doc.caseId,
+        documentId: input.documentId,
+        detectionId: det.id,
+        type: input.type,
+        text: input.text,
+        ground: input.ground || null,
+        reasoning: input.reasoning || "",
+        createdBy: user.name,
+      },
+    });
 
-  // Increment document detection count
-  await prisma.document.update({
-    where: { id: input.documentId },
-    data: { detectionCount: { increment: 1 } },
-  });
+    // Increment document detection count
+    await tx.document.update({
+      where: { id: input.documentId },
+      data: { detectionCount: { increment: 1 } },
+    });
 
-  // Increment case redaction count
-  await prisma.case.update({
-    where: { id: doc.caseId },
-    data: { redactionCount: { increment: 1 } },
+    // Increment case redaction count
+    await tx.case.update({
+      where: { id: doc.caseId },
+      data: { redactionCount: { increment: 1 } },
+    });
+
+    return det;
   });
 
   // Rebuild contentJson to include the new detection in highlighted segments
@@ -100,7 +105,7 @@ export async function deleteManualDetection(detectionId: string) {
 
   const detection = await prisma.detection.findUnique({
     where: { id: detectionId },
-    include: { document: { select: { name: true, caseId: true } } },
+    include: { document: { select: { name: true, caseId: true, detectionCount: true } } },
   });
   if (!detection) throw new Error("Detection not found");
 
@@ -111,31 +116,42 @@ export async function deleteManualDetection(detectionId: string) {
   const documentId = detection.documentId;
   const caseId = detection.document.caseId;
 
-  // Delete the associated feedback example
-  await prisma.feedbackExample.deleteMany({
-    where: { detectionId },
-  });
+  // Wrap all DB writes in a transaction for atomicity
+  await prisma.$transaction(async (tx) => {
+    // Delete the associated feedback example
+    await tx.feedbackExample.deleteMany({
+      where: { detectionId },
+    });
 
-  // Delete detection history
-  await prisma.detectionHistory.deleteMany({
-    where: { detectionId },
-  });
+    // Delete detection history (cascades via schema, but be explicit)
+    await tx.detectionHistory.deleteMany({
+      where: { detectionId },
+    });
 
-  // Delete the detection itself
-  await prisma.detection.delete({
-    where: { id: detectionId },
-  });
+    // Delete the detection itself
+    await tx.detection.delete({
+      where: { id: detectionId },
+    });
 
-  // Decrement document detection count
-  await prisma.document.update({
-    where: { id: documentId },
-    data: { detectionCount: { decrement: 1 } },
-  });
+    // Decrement document detection count (prevent going negative)
+    if (detection.document.detectionCount > 0) {
+      await tx.document.update({
+        where: { id: documentId },
+        data: { detectionCount: { decrement: 1 } },
+      });
+    }
 
-  // Decrement case redaction count
-  await prisma.case.update({
-    where: { id: caseId },
-    data: { redactionCount: { decrement: 1 } },
+    // Decrement case redaction count (prevent going negative)
+    const caseData = await tx.case.findUnique({
+      where: { id: caseId },
+      select: { redactionCount: true },
+    });
+    if (caseData && caseData.redactionCount > 0) {
+      await tx.case.update({
+        where: { id: caseId },
+        data: { redactionCount: { decrement: 1 } },
+      });
+    }
   });
 
   // Rebuild contentJson to remove the deleted detection

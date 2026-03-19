@@ -85,17 +85,20 @@ function buildSegmentsForText(
 
     // Try exact match first, then case-insensitive, then whitespace-normalised
     let idx = text.indexOf(det.text);
+    let matchLen = det.text.length;
     if (idx === -1) {
       idx = text.toLowerCase().indexOf(det.text.toLowerCase());
     }
     if (idx === -1) {
-      idx = normText.indexOf(normalizeWs(det.text).toLowerCase());
+      const normDet = normalizeWs(det.text).toLowerCase();
+      idx = normText.indexOf(normDet);
+      matchLen = normDet.length; // Use normalized length when matched via normalization
     }
 
     if (idx !== -1) {
       markers.push({
         start: idx,
-        end: idx + det.text.length,
+        end: idx + matchLen,
         detectionId: det.id,
       });
     }
