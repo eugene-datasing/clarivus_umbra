@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { createAuditEntry } from "@/lib/data/audit";
 import { createSnapshot } from "@/lib/pipeline/version-snapshot";
+import { requireUser } from "@/lib/auth/session";
 
 // ---------------------------------------------------------------------------
 // Change tracking (WP12)
@@ -84,6 +85,7 @@ async function regressDocumentIfNeeded(documentId: string) {
  * No-ops if the document is already past "ready".
  */
 export async function markDocumentInReview(documentId: string) {
+  const user = await requireUser();
   const doc = await prisma.document.findUnique({
     where: { id: documentId },
     select: { status: true, name: true, caseId: true },
@@ -98,8 +100,8 @@ export async function markDocumentInReview(documentId: string) {
   });
 
   await createAuditEntry({
-    userName: "K. Williams",
-    userRole: "Reviewer",
+    userName: user.name,
+    userRole: user.role,
     type: "status",
     description: `Started review of document: "${doc.name}"`,
     target: doc.name,
@@ -114,6 +116,7 @@ export async function markDocumentInReview(documentId: string) {
  * "reviewed" to "reviewed" (marking it ready for senior sign-off).
  */
 export async function submitForSeniorReview(documentId: string) {
+  const user = await requireUser();
   const doc = await prisma.document.findUnique({
     where: { id: documentId },
     select: { status: true, name: true, caseId: true },
@@ -130,11 +133,11 @@ export async function submitForSeniorReview(documentId: string) {
   });
 
   // Create "draft" snapshot for version comparison (WP5)
-  await createSnapshot(documentId, "draft", "K. Williams");
+  await createSnapshot(documentId, "draft", user.name);
 
   await createAuditEntry({
-    userName: "K. Williams",
-    userRole: "Reviewer",
+    userName: user.name,
+    userRole: user.role,
     type: "status",
     description: `Submitted document for senior review: "${doc.name}"`,
     target: doc.name,
@@ -149,6 +152,7 @@ export async function submitForSeniorReview(documentId: string) {
  * "signed-off".
  */
 export async function signOffDocument(documentId: string) {
+  const user = await requireUser();
   const doc = await prisma.document.findUnique({
     where: { id: documentId },
     select: { status: true, name: true, caseId: true },
@@ -165,11 +169,11 @@ export async function signOffDocument(documentId: string) {
   });
 
   // Create "final" snapshot for version comparison (WP5)
-  await createSnapshot(documentId, "final", "A. Richardson");
+  await createSnapshot(documentId, "final", user.name);
 
   await createAuditEntry({
-    userName: "A. Richardson",
-    userRole: "Senior Reviewer",
+    userName: user.name,
+    userRole: user.role,
     type: "status",
     description: `Signed off document: "${doc.name}"`,
     target: doc.name,
@@ -183,6 +187,7 @@ export async function signOffDocument(documentId: string) {
  * Senior reviewer requests changes — sends a document back to "in-review".
  */
 export async function requestChanges(documentId: string, reason?: string) {
+  const user = await requireUser();
   const doc = await prisma.document.findUnique({
     where: { id: documentId },
     select: { status: true, name: true, caseId: true },
@@ -199,8 +204,8 @@ export async function requestChanges(documentId: string, reason?: string) {
   });
 
   await createAuditEntry({
-    userName: "A. Richardson",
-    userRole: "Senior Reviewer",
+    userName: user.name,
+    userRole: user.role,
     type: "status",
     description: `Requested changes on document: "${doc.name}"`,
     target: doc.name,
@@ -216,6 +221,7 @@ export async function requestChanges(documentId: string, reason?: string) {
 // ---------------------------------------------------------------------------
 
 export async function acceptDetection(detectionId: string, ground?: string) {
+  const user = await requireUser();
   const detection = await prisma.detection.findUnique({
     where: { id: detectionId },
     include: { document: { select: { name: true, caseId: true } } },
@@ -225,9 +231,9 @@ export async function acceptDetection(detectionId: string, ground?: string) {
   const appliedGround = ground || detection.suggestedGround;
 
   // Record change history
-  await recordHistory(detectionId, "status", detection.status, "accepted", "K. Williams");
+  await recordHistory(detectionId, "status", detection.status, "accepted", user.name);
   if (detection.appliedGround !== appliedGround) {
-    await recordHistory(detectionId, "appliedGround", detection.appliedGround, appliedGround ?? null, "K. Williams");
+    await recordHistory(detectionId, "appliedGround", detection.appliedGround, appliedGround ?? null, user.name);
   }
 
   await prisma.detection.update({
@@ -240,8 +246,8 @@ export async function acceptDetection(detectionId: string, ground?: string) {
   });
 
   await createAuditEntry({
-    userName: "K. Williams",
-    userRole: "Reviewer",
+    userName: user.name,
+    userRole: user.role,
     type: "review",
     description: `Accepted detection: "${detection.text.substring(0, 40)}${detection.text.length > 40 ? "..." : ""}"`,
     target: detection.document.name,
@@ -255,15 +261,16 @@ export async function acceptDetection(detectionId: string, ground?: string) {
 }
 
 export async function rejectDetection(detectionId: string, reason?: string) {
+  const user = await requireUser();
   const detection = await prisma.detection.findUnique({
     where: { id: detectionId },
     include: { document: { select: { name: true, caseId: true } } },
   });
   if (!detection) throw new Error("Detection not found");
 
-  await recordHistory(detectionId, "status", detection.status, "rejected", "K. Williams");
+  await recordHistory(detectionId, "status", detection.status, "rejected", user.name);
   if (detection.appliedGround) {
-    await recordHistory(detectionId, "appliedGround", detection.appliedGround, null, "K. Williams");
+    await recordHistory(detectionId, "appliedGround", detection.appliedGround, null, user.name);
   }
 
   await prisma.detection.update({
@@ -276,8 +283,8 @@ export async function rejectDetection(detectionId: string, reason?: string) {
   });
 
   await createAuditEntry({
-    userName: "K. Williams",
-    userRole: "Reviewer",
+    userName: user.name,
+    userRole: user.role,
     type: "review",
     description: `Rejected detection: "${detection.text.substring(0, 40)}${detection.text.length > 40 ? "..." : ""}"`,
     target: detection.document.name,
@@ -291,15 +298,16 @@ export async function rejectDetection(detectionId: string, reason?: string) {
 }
 
 export async function revertDetection(detectionId: string) {
+  const user = await requireUser();
   const detection = await prisma.detection.findUnique({
     where: { id: detectionId },
     select: { documentId: true, status: true, appliedGround: true },
   });
 
   if (detection) {
-    await recordHistory(detectionId, "status", detection.status, "pending", "K. Williams");
+    await recordHistory(detectionId, "status", detection.status, "pending", user.name);
     if (detection.appliedGround) {
-      await recordHistory(detectionId, "appliedGround", detection.appliedGround, null, "K. Williams");
+      await recordHistory(detectionId, "appliedGround", detection.appliedGround, null, user.name);
     }
   }
 
@@ -320,13 +328,14 @@ export async function revertDetection(detectionId: string) {
 }
 
 export async function applyGround(detectionId: string, groundId: string) {
+  const user = await requireUser();
   const detection = await prisma.detection.findUnique({
     where: { id: detectionId },
     select: { appliedGround: true },
   });
 
   if (detection) {
-    await recordHistory(detectionId, "appliedGround", detection.appliedGround, groundId, "K. Williams");
+    await recordHistory(detectionId, "appliedGround", detection.appliedGround, groundId, user.name);
   }
 
   await prisma.detection.update({
@@ -338,6 +347,7 @@ export async function applyGround(detectionId: string, groundId: string) {
 }
 
 export async function bulkAcceptDetections(detectionIds: string[], ground?: string) {
+  const user = await requireUser();
   // Get the document IDs and case info for recomputation + audit
   const detections = await prisma.detection.findMany({
     where: { id: { in: detectionIds } },
@@ -364,8 +374,8 @@ export async function bulkAcceptDetections(detectionIds: string[], ground?: stri
   if (caseId) {
     const sampleText = detections[0]?.text?.substring(0, 40) || "—";
     await createAuditEntry({
-      userName: "K. Williams",
-      userRole: "Reviewer",
+      userName: user.name,
+      userRole: user.role,
       type: "review",
       description: `Bulk accepted ${result.count} detection(s) for "${sampleText}${detections[0]?.text?.length > 40 ? "..." : ""}"`,
       target: "Bulk Review",
@@ -378,6 +388,7 @@ export async function bulkAcceptDetections(detectionIds: string[], ground?: stri
 }
 
 export async function bulkRejectDetections(detectionIds: string[]) {
+  const user = await requireUser();
   const detections = await prisma.detection.findMany({
     where: { id: { in: detectionIds } },
     select: { documentId: true, text: true, document: { select: { caseId: true } } },
@@ -402,8 +413,8 @@ export async function bulkRejectDetections(detectionIds: string[]) {
   if (caseId) {
     const sampleText = detections[0]?.text?.substring(0, 40) || "—";
     await createAuditEntry({
-      userName: "K. Williams",
-      userRole: "Reviewer",
+      userName: user.name,
+      userRole: user.role,
       type: "review",
       description: `Bulk rejected ${result.count} detection(s) for "${sampleText}${detections[0]?.text?.length > 40 ? "..." : ""}"`,
       target: "Bulk Review",

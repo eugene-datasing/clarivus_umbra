@@ -3,11 +3,12 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, FolderOpen, ClipboardList, PlusCircle,
-  Settings2, Brain, FileBarChart, Users, Cog, Bell, ChevronLeft, ChevronRight, Shield,
-  Clock, FileText, CheckCircle, AlertTriangle, X,
+  Settings2, Brain, FileBarChart, Cog, Bell, ChevronLeft, ChevronRight, Shield,
+  Clock, FileText, CheckCircle, AlertTriangle, X, LogOut,
 } from "lucide-react";
 
 const navItems = [
@@ -29,11 +30,31 @@ const notifications = [
   { id: 5, icon: CheckCircle, color: "text-green-600 bg-green-50", text: "Export package verified for LGOIMA-2026-038", time: "3 hr ago" },
 ];
 
+const roleLabels: Record<string, string> = {
+  reviewer: "Reviewer",
+  "senior-reviewer": "Senior Reviewer",
+  admin: "Admin",
+};
+
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
 export function Sidebar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
   const [collapsed, setCollapsed] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+
+  const userName = session?.user?.name ?? "User";
+  const userRole = (session?.user as { role?: string })?.role ?? "reviewer";
+  const initials = getInitials(userName);
 
   // Close notifications when clicking outside
   useEffect(() => {
@@ -149,25 +170,34 @@ export function Sidebar() {
 
         <div className="flex items-center gap-3 px-2 py-2">
           <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0 text-xs font-bold">
-            AR
+            {initials}
           </div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium truncate">A. Richardson</div>
-              <div className="text-xs text-white/50">Request Manager</div>
+              <div className="text-sm font-medium truncate">{userName}</div>
+              <div className="text-xs text-white/50">{roleLabels[userRole] ?? userRole}</div>
             </div>
           )}
           {!collapsed && (
-            <button
-              onClick={() => setShowNotifications(!showNotifications)}
-              className={cn(
-                "relative p-1.5 rounded transition-colors",
-                showNotifications ? "bg-white/20" : "hover:bg-white/10"
-              )}
-            >
-              <Bell className="w-4 h-4" />
-              <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-red-500 rounded-full text-[9px] flex items-center justify-center">3</span>
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setShowNotifications(!showNotifications)}
+                className={cn(
+                  "relative p-1.5 rounded transition-colors",
+                  showNotifications ? "bg-white/20" : "hover:bg-white/10"
+                )}
+              >
+                <Bell className="w-4 h-4" />
+                <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-red-500 rounded-full text-[9px] flex items-center justify-center">3</span>
+              </button>
+              <button
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                className="p-1.5 rounded hover:bg-white/10 transition-colors"
+                title="Sign out"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           )}
         </div>
         <button

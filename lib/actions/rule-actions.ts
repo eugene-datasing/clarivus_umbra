@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { createAuditEntry } from "@/lib/data/audit";
+import { requireUser } from "@/lib/auth/session";
 
 export async function createRule(data: {
   name: string;
@@ -14,6 +15,7 @@ export async function createRule(data: {
   suggestedGround?: string;
   description?: string;
 }) {
+  const user = await requireUser();
   const rule = await prisma.customRule.create({
     data: {
       name: data.name,
@@ -29,8 +31,8 @@ export async function createRule(data: {
   });
 
   await createAuditEntry({
-    userName: "K. Williams",
-    userRole: "Reviewer",
+    userName: user.name,
+    userRole: user.role,
     type: "rule-created",
     description: `Created custom rule: "${data.name}"`,
     target: data.name,
@@ -62,6 +64,7 @@ export async function updateRule(
 }
 
 export async function deleteRule(ruleId: string) {
+  const user = await requireUser();
   const rule = await prisma.customRule.findUnique({
     where: { id: ruleId },
     select: { name: true },
@@ -71,8 +74,8 @@ export async function deleteRule(ruleId: string) {
 
   if (rule) {
     await createAuditEntry({
-      userName: "K. Williams",
-      userRole: "Reviewer",
+      userName: user.name,
+      userRole: user.role,
       type: "rule-deleted",
       description: `Deleted custom rule: "${rule.name}"`,
       target: rule.name,

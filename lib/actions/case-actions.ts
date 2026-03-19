@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { createAuditEntry } from "@/lib/data/audit";
 import { getNextReference } from "@/lib/data/cases";
+import { requireUser } from "@/lib/auth/session";
 
 export async function createCase(data: {
   requesterName: string;
@@ -13,6 +14,7 @@ export async function createCase(data: {
   departments: string[];
   description: string;
 }) {
+  const user = await requireUser();
   const reference = await getNextReference();
 
   const newCase = await prisma.case.create({
@@ -30,8 +32,8 @@ export async function createCase(data: {
   });
 
   await createAuditEntry({
-    userName: "A. Richardson",
-    userRole: "Request Manager",
+    userName: user.name,
+    userRole: user.role,
     type: "admin",
     description: "Created LGOIMA request case",
     target: reference,
