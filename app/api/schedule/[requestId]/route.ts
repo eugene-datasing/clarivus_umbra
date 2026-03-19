@@ -12,7 +12,7 @@ export async function GET(
       includeReasoning: true,
     });
 
-    return new NextResponse(result.pdfBytes, {
+    return new NextResponse(Buffer.from(result.pdfBytes), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `inline; filename="withholding-schedule.pdf"`,
