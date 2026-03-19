@@ -20,6 +20,7 @@ import { extractText } from "./extract";
 import { detectPatterns } from "./patterns";
 import { detectWithAI } from "./ai-detect";
 import { detectDuplicates } from "./duplicate-detect";
+import { executeCustomRules } from "./custom-rules";
 import { buildContent } from "./content-builder";
 import { createAuditEntry } from "@/lib/data/audit";
 import path from "path";
@@ -219,6 +220,18 @@ export async function processDocument(docId: string): Promise<void> {
     console.log(`[pipeline] Found ${patternMatches.length} pattern match(es)`);
 
     // ------------------------------------------------------------------
+    // 6.5 Custom rules detection (WP8)
+    // ------------------------------------------------------------------
+    let customRuleMatches: Awaited<ReturnType<typeof executeCustomRules>> = [];
+    try {
+      console.log("[pipeline] Running custom rules...");
+      customRuleMatches = await executeCustomRules(extraction.pages);
+      console.log(`[pipeline] Found ${customRuleMatches.length} custom rule match(es)`);
+    } catch (rulesError) {
+      console.error("[pipeline] Custom rules failed, continuing:", rulesError);
+    }
+
+    // ------------------------------------------------------------------
     // 7. AI detection
     // ------------------------------------------------------------------
     let aiDetections: Awaited<ReturnType<typeof detectWithAI>> = [];
@@ -286,16 +299,38 @@ export async function processDocument(docId: string): Promise<void> {
       aiDetectionRecords.push(record);
     }
 
+    // Store custom rule detections
+    const customRuleRecords = [];
+    for (const crm of customRuleMatches) {
+      const record = await prisma.detection.create({
+        data: {
+          documentId: docId,
+          type: crm.type,
+          text: crm.text,
+          confidence: crm.confidence,
+          page: crm.page,
+          suggestedGround: crm.suggestedGround,
+          reasoning: crm.reasoning,
+          piConsideration: "",
+          aiExplanation: `Custom rule: ${crm.ruleName}. ${crm.reasoning}`,
+          source: "custom-rule",
+          status: "pending",
+        },
+      });
+      customRuleRecords.push(record);
+    }
+
     const allDetectionRecords = [
       ...patternDetectionRecords,
       ...aiDetectionRecords,
+      ...customRuleRecords,
     ];
 
     const totalDetections = allDetectionRecords.length;
 
     console.log(
       `[pipeline] Stored ${totalDetections} detection(s) ` +
-        `(${patternDetectionRecords.length} pattern + ${aiDetectionRecords.length} AI)`,
+        `(${patternDetectionRecords.length} pattern + ${aiDetectionRecords.length} AI + ${customRuleRecords.length} custom)`,
     );
 
     // ------------------------------------------------------------------
@@ -368,6 +403,7 @@ export async function processDocument(docId: string): Promise<void> {
         `Pages: ${extraction.pages.length}`,
         `Pattern detections: ${patternDetectionRecords.length}`,
         `AI detections: ${aiDetectionRecords.length}`,
+        `Custom rule detections: ${customRuleRecords.length}`,
         `Average confidence: ${Math.round(avgConfidence)}%`,
         `Processing time: ${(totalProcessingMs / 1000).toFixed(1)}s (extraction: ${(extractionMs / 1000).toFixed(1)}s, patterns: ${patternDetectionMs}ms, AI: ${(aiDetectionMs / 1000).toFixed(1)}s)`,
       ].join("; "),
