@@ -1,7 +1,7 @@
 /**
  * NextAuth v5 configuration — WP16
  *
- * Credentials-based auth against the User table.
+ * Full auth config with credentials provider (requires Node.js runtime).
  * For the POC, passwords are SHA-256 hashed (not bcrypt) for simplicity.
  * Production would use Azure AD / Entra ID for SSO.
  */
@@ -10,12 +10,14 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { createHash } from "crypto";
 import { prisma } from "@/lib/db/prisma";
+import { authConfig } from "./auth.config";
 
 function hashPassword(password: string): string {
   return createHash("sha256").update(password).digest("hex");
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
   providers: [
     Credentials({
       name: "Veil Login",
@@ -47,27 +49,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-  callbacks: {
-    jwt({ token, user }) {
-      if (user) {
-        token.role = (user as { role?: string }).role ?? "reviewer";
-        token.userId = (user as { id?: string }).id;
-      }
-      return token;
-    },
-    session({ session, token }) {
-      if (session.user) {
-        (session.user as { role?: string }).role = token.role as string;
-        (session.user as { id?: string }).id = token.userId as string;
-      }
-      return session;
-    },
-  },
-  pages: {
-    signIn: "/login",
-  },
-  session: {
-    strategy: "jwt",
-  },
-  secret: process.env.AUTH_SECRET ?? "veil-dev-secret-change-in-production",
 });

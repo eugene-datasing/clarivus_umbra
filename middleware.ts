@@ -1,44 +1,16 @@
 /**
  * NextAuth v5 middleware — WP16
  *
- * Protects routes based on authentication and role.
- * - Public: /login, /api/auth
- * - Admin-only: /admin/*
- * - Senior-reviewer+: /admin/ai-governance, sign-off actions
- * - All other routes: require authenticated session
+ * Uses the lightweight auth.config (no Node.js deps) so it runs in
+ * Edge runtime without pulling in crypto or prisma.
  */
 
-import { auth } from "@/lib/auth/auth-options";
-import { NextResponse } from "next/server";
+import NextAuth from "next-auth";
+import { authConfig } from "@/lib/auth/auth.config";
 
-const publicPaths = ["/login", "/api/auth"];
+export const { auth: middleware } = NextAuth(authConfig);
 
-const adminPaths = ["/admin"];
-
-export default auth((req) => {
-  const { pathname } = req.nextUrl;
-
-  // Allow public paths
-  if (publicPaths.some((p) => pathname.startsWith(p))) {
-    return NextResponse.next();
-  }
-
-  // Require auth for everything else
-  if (!req.auth) {
-    const loginUrl = new URL("/login", req.url);
-    loginUrl.searchParams.set("callbackUrl", pathname);
-    return NextResponse.redirect(loginUrl);
-  }
-
-  // Role-based protection for admin routes
-  const role = (req.auth.user as { role?: string })?.role;
-  if (pathname.startsWith("/admin") && role !== "admin" && role !== "senior-reviewer") {
-    // Redirect non-admin users away from admin pages
-    return NextResponse.redirect(new URL("/", req.url));
-  }
-
-  return NextResponse.next();
-});
+export default middleware;
 
 export const config = {
   matcher: [
