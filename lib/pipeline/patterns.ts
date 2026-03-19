@@ -76,7 +76,7 @@ const PATTERNS: PatternDef[] = [
   {
     type: "address",
     regex:
-      /\b\d{1,5}\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:Street|St|Road|Rd|Avenue|Ave|Drive|Dr|Place|Pl|Terrace|Tce|Crescent|Cres|Lane|Ln|Way|Close|Cl|Court|Ct)\b/gi,
+      /\b\d{1,5}[ \t]+[A-Z][a-z]{2,}(?:[ \t]+[A-Z][a-z]{2,})*[ \t]+(?:Street|Road|Avenue|Drive|Place|Terrace|Crescent|Lane|Way|Close|Court|St|Rd|Ave|Dr|Pl|Tce|Cres|Ln|Cl|Ct)\b/gi,
     suggestedGround: "s7(2)(a)",
     reasoning:
       "Matches a New Zealand street address. Personal residential addresses should be withheld to protect privacy.",

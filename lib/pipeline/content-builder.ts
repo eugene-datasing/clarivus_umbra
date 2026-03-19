@@ -73,14 +73,23 @@ function buildSegmentsForText(
 
   const markers: Marker[] = [];
 
+  // Normalize whitespace (non-breaking spaces, etc.) for matching purposes.
+  // Both the paragraph text and detection text are normalized for comparison,
+  // but we use the original text positions for slicing so the output preserves
+  // the source content exactly.
+  const normalizeWs = (s: string) => s.replace(/[\u00A0\u2007\u202F\u2060]/g, " ");
+  const normText = normalizeWs(text).toLowerCase();
+
   for (const det of detections) {
     if (!det.text) continue;
 
-    // Find the detection text in the paragraph (case-insensitive search,
-    // but prefer exact match)
+    // Try exact match first, then case-insensitive, then whitespace-normalised
     let idx = text.indexOf(det.text);
     if (idx === -1) {
       idx = text.toLowerCase().indexOf(det.text.toLowerCase());
+    }
+    if (idx === -1) {
+      idx = normText.indexOf(normalizeWs(det.text).toLowerCase());
     }
 
     if (idx !== -1) {
