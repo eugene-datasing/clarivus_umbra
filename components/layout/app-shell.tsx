@@ -9,9 +9,9 @@ import { Sidebar } from "@/components/layout/sidebar";
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isLoginPage = pathname === "/login";
+  const isFullScreenRoute = pathname === "/login" || pathname.startsWith("/setup");
 
-  if (isLoginPage) {
+  if (isFullScreenRoute) {
     return <>{children}</>;
   }
 

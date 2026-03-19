@@ -20,6 +20,7 @@ export async function getDetectionsForDocument(documentId: string) {
     piConsideration: d.piConsideration,
     status: d.status,
     aiExplanation: d.aiExplanation,
+    source: d.source,
   }));
 }
 

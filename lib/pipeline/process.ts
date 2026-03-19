@@ -22,6 +22,7 @@ import { detectWithAI } from "./ai-detect";
 import { detectDuplicates } from "./duplicate-detect";
 import { executeCustomRules } from "./custom-rules";
 import { buildContent } from "./content-builder";
+import { buildFeedbackPromptSection } from "./feedback-examples";
 import { createAuditEntry } from "@/lib/data/audit";
 import path from "path";
 
@@ -240,7 +241,8 @@ export async function processDocument(docId: string): Promise<void> {
       console.log("[pipeline] Running AI detection...");
       const aiStart = Date.now();
       const patternTexts = patternMatches.map((m) => m.text);
-      aiDetections = await detectWithAI(extraction.pages, patternTexts);
+      const feedbackPrompt = await buildFeedbackPromptSection();
+      aiDetections = await detectWithAI(extraction.pages, patternTexts, feedbackPrompt || undefined);
       aiDetectionMs = Date.now() - aiStart;
       console.log(`[pipeline] Found ${aiDetections.length} AI detection(s)`);
     } catch (aiError) {

@@ -17,13 +17,30 @@ model User {
   email        String?  @unique
   passwordHash String?
   role         String   @default("reviewer")
+  departmentId String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  department        Department?  @relation(fields: [departmentId], references: [id])
   assignedDocuments Document[]   @relation("DocumentAssignee")
   auditEntries      AuditEntry[]
 
   @@map("users")
+}
+
+model Department {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  contactEmail String?
+  headName     String?
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  users User[]
+
+  @@map("departments")
 }
 
 model Case {
@@ -243,4 +260,21 @@ model DetectionSnapshot {
 
   @@index([documentId])
   @@map("detection_snapshots")
+}
+
+model FeedbackExample {
+  id          String   @id @default(cuid())
+  caseId      String?
+  documentId  String
+  detectionId String   @unique
+  type        String   // Detection type: "personal-name", "phone", etc.
+  text        String   // The missed text that was manually detected
+  ground      String?  // LGOIMA withholding ground
+  reasoning   String   @default("")
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  @@index([type])
+  @@index([createdAt])
+  @@map("feedback_examples")
 }

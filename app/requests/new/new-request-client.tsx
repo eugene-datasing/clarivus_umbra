@@ -6,17 +6,6 @@ import Link from "next/link";
 import { ChevronRight, CheckCircle, Loader } from "lucide-react";
 import { createCase } from "@/lib/actions/case-actions";
 
-const departments = [
-  "Infrastructure",
-  "Planning",
-  "Property",
-  "Legal",
-  "Community Services",
-  "Regulatory",
-  "Environmental",
-  "Water",
-];
-
 function addWorkingDays(start: Date, days: number): Date {
   const result = new Date(start);
   let added = 0;
@@ -30,8 +19,10 @@ function addWorkingDays(start: Date, days: number): Date {
 
 export default function NewRequestClient({
   nextReference,
+  departments,
 }: {
   nextReference: string;
+  departments: string[];
 }) {
   const router = useRouter();
   const today = new Date().toISOString().split("T")[0];

@@ -4,6 +4,7 @@
 
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { prisma } from "@/lib/db/prisma";
+import { getOrgIdentity, getOrgSignatory, getOrgOmbudsman } from "@/lib/data/org-config";
 
 export async function buildCoverLetterPdf(
   caseId: string,
@@ -31,6 +32,16 @@ export async function buildCoverLetterPdf(
     where: documentFilter,
   });
 
+  // Fetch org config
+  const [orgIdentity, orgSignatory, orgOmbudsman] = await Promise.all([
+    getOrgIdentity(),
+    getOrgSignatory(),
+    getOrgOmbudsman(),
+  ]);
+
+  const orgName = orgIdentity.name || "NEW PLYMOUTH DISTRICT COUNCIL";
+  const orgMaoriName = orgIdentity.maoriName || "Te Kaunihera-a-Rohe o Ngamotu";
+
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -42,7 +53,7 @@ export async function buildCoverLetterPdf(
   let yPos = pageHeight - margin;
 
   // Council header
-  page.drawText("NEW PLYMOUTH DISTRICT COUNCIL", {
+  page.drawText(orgName.toUpperCase(), {
     x: margin,
     y: yPos,
     size: 14,
@@ -50,13 +61,15 @@ export async function buildCoverLetterPdf(
     color: rgb(0.2, 0.2, 0.4),
   });
   yPos -= 16;
-  page.drawText("Te Kaunihera-a-Rohe o Ngamotu", {
-    x: margin,
-    y: yPos,
-    size: 9,
-    font,
-    color: rgb(0.4, 0.4, 0.4),
-  });
+  if (orgMaoriName) {
+    page.drawText(orgMaoriName, {
+      x: margin,
+      y: yPos,
+      size: 9,
+      font,
+      color: rgb(0.4, 0.4, 0.4),
+    });
+  }
 
   yPos -= 40;
 
@@ -114,11 +127,11 @@ export async function buildCoverLetterPdf(
       "",
       "If you are not satisfied with this response, you have the right to make a complaint to the Ombudsman under section 27(3) of LGOIMA. You can contact the Ombudsman at:",
       "",
-      "  Office of the Ombudsman",
-      "  PO Box 10152",
-      "  Wellington 6143",
-      "  Phone: 0800 802 602",
-      "  Email: info@ombudsman.parliament.nz",
+      `  ${orgOmbudsman.line1}`,
+      `  ${orgOmbudsman.line2}`,
+      `  ${orgOmbudsman.city}`,
+      `  Phone: ${orgOmbudsman.phone}`,
+      `  Email: ${orgOmbudsman.email}`,
     );
   }
 
@@ -128,8 +141,8 @@ export async function buildCoverLetterPdf(
     "",
     "",
     "________________________________________",
-    "Information and Privacy Officer",
-    "New Plymouth District Council",
+    orgSignatory.name || orgSignatory.title || "Information and Privacy Officer",
+    orgSignatory.department || orgName,
   );
 
   for (const para of paragraphs) {

@@ -1,8 +1,9 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Brain, Shield } from "lucide-react";
+import { Brain, Shield, AlertTriangle } from "lucide-react";
 import type { AIMetrics } from "@/lib/data/ai-metrics";
+import type { FalseNegativeMetrics } from "@/lib/pipeline/feedback-examples";
 
 /* ------------------------------------------------------------------ */
 /*  Mock fallback data (used when <10 reviewed detections)            */
@@ -61,9 +62,10 @@ function f1ColorStr(f1: string): string {
 
 interface Props {
   metrics: AIMetrics;
+  fnMetrics: FalseNegativeMetrics;
 }
 
-export default function AIGovernanceClient({ metrics }: Props) {
+export default function AIGovernanceClient({ metrics, fnMetrics }: Props) {
   const useMock = !metrics.hasSufficientData;
 
   const overallStats = useMock
@@ -181,6 +183,75 @@ export default function AIGovernanceClient({ metrics }: Props) {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* False Negative Rate (WP22) */}
+      <div className="card mb-8">
+        <div className="flex items-center gap-2 mb-4">
+          <AlertTriangle className="w-5 h-5 text-amber-500" />
+          <h2 className="text-lg font-heading font-semibold text-txt-primary">
+            AI Miss Analysis (False Negatives)
+          </h2>
+        </div>
+
+        {fnMetrics.totalManual === 0 ? (
+          <p className="text-sm text-txt-secondary">
+            No manual detections recorded yet. When reviewers add detections the AI missed,
+            false negative metrics will appear here.
+          </p>
+        ) : (
+          <>
+            {/* Overall FN rate */}
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="text-center p-4 bg-amber-50 rounded-card">
+                <p className="text-sm text-txt-secondary mb-1">False Negative Rate</p>
+                <p className="text-3xl font-bold font-mono text-amber-700">
+                  {pct(fnMetrics.falseNegativeRate)}
+                </p>
+              </div>
+              <div className="text-center p-4 bg-surface-bg rounded-card">
+                <p className="text-sm text-txt-secondary mb-1">Manual Detections</p>
+                <p className="text-3xl font-bold font-mono text-txt-primary">
+                  {fnMetrics.totalManual}
+                </p>
+              </div>
+              <div className="text-center p-4 bg-surface-bg rounded-card">
+                <p className="text-sm text-txt-secondary mb-1">AI Detections (Accepted)</p>
+                <p className="text-3xl font-bold font-mono text-txt-primary">
+                  {fnMetrics.totalAI}
+                </p>
+              </div>
+            </div>
+
+            {/* Per-type miss breakdown */}
+            {fnMetrics.byType.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-txt-primary mb-3">Miss Rate by Entity Type</h3>
+                <div className="space-y-2">
+                  {fnMetrics.byType.map((row) => (
+                    <div key={row.type} className="flex items-center gap-3">
+                      <div className="w-32 text-xs font-medium text-txt-primary truncate">{row.type}</div>
+                      <div className="flex-1">
+                        <div className="h-4 bg-gray-100 rounded overflow-hidden">
+                          <div
+                            className="h-full rounded bg-amber-400 transition-all"
+                            style={{ width: `${Math.max(row.missRate * 100, 2)}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div className="w-16 text-right text-xs font-mono text-txt-secondary">
+                        {pct(row.missRate)}
+                      </div>
+                      <div className="w-20 text-right text-[10px] text-txt-secondary">
+                        {row.manual} manual / {row.ai} AI
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* Model Info Card */}

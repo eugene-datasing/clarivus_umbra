@@ -17,6 +17,7 @@ import {
   ToggleRight,
   Save,
   Loader2,
+  Building2,
 } from "lucide-react";
 import {
   saveDetectionToggles,
@@ -27,15 +28,19 @@ import type {
   DetectionToggle,
   WorkflowConfig,
   NotificationPref,
+  OrgIdentity,
+  ConfidenceThresholds,
 } from "@/lib/data/settings";
 
 /* ------------------------------------------------------------------ */
 /*  Tab configuration                                                 */
 /* ------------------------------------------------------------------ */
 
-type TabId = "users" | "detection" | "workflow" | "notifications" | "health";
+type TabId = "organisation" | "departments" | "users" | "detection" | "workflow" | "notifications" | "health";
 
 const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
+  { id: "organisation", label: "Organisation", icon: Building2 },
+  { id: "departments", label: "Departments", icon: Users },
   { id: "users", label: "Users & Roles", icon: Users },
   { id: "detection", label: "Detection Settings", icon: Brain },
   { id: "workflow", label: "Workflow", icon: Settings2 },
@@ -85,10 +90,22 @@ const services: ServiceStatus[] = [
 /*  Props from server component                                       */
 /* ------------------------------------------------------------------ */
 
+interface SettingsDepartment {
+  id: string;
+  name: string;
+  contactEmail: string | null;
+  headName: string | null;
+  isActive: boolean;
+  userCount: number;
+}
+
 interface SettingsClientProps {
   initialDetectionToggles: DetectionToggle[];
   initialWorkflowConfig: WorkflowConfig;
   initialNotificationPrefs: NotificationPref[];
+  orgIdentity: OrgIdentity;
+  thresholds: ConfidenceThresholds;
+  departments: SettingsDepartment[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -99,8 +116,11 @@ export default function SettingsClient({
   initialDetectionToggles,
   initialWorkflowConfig,
   initialNotificationPrefs,
+  orgIdentity,
+  thresholds,
+  departments,
 }: SettingsClientProps) {
-  const [activeTab, setActiveTab] = useState<TabId>("users");
+  const [activeTab, setActiveTab] = useState<TabId>("organisation");
   const [detectionToggles, setDetectionToggles] = useState(initialDetectionToggles);
   const [notifications, setNotifications] = useState(initialNotificationPrefs);
   const [seniorReview, setSeniorReview] = useState(initialWorkflowConfig.seniorReview);
@@ -212,6 +232,99 @@ export default function SettingsClient({
         })}
       </div>
 
+      {/* TAB: Organisation */}
+      {activeTab === "organisation" && (
+        <div className="space-y-6">
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-heading font-semibold text-txt-primary">Organisation Identity</h2>
+              <a href="/setup" className="btn-secondary text-xs">Edit in Setup Wizard</a>
+            </div>
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+              <div>
+                <dt className="text-txt-secondary">Name</dt>
+                <dd className="font-medium text-txt-primary">{orgIdentity.name || "--"}</dd>
+              </div>
+              <div>
+                <dt className="text-txt-secondary">Te Reo Maori Name</dt>
+                <dd className="font-medium text-txt-primary">{orgIdentity.maoriName || "--"}</dd>
+              </div>
+              <div>
+                <dt className="text-txt-secondary">Abbreviation</dt>
+                <dd className="font-medium text-txt-primary">{orgIdentity.abbreviation || "--"}</dd>
+              </div>
+              <div>
+                <dt className="text-txt-secondary">Type</dt>
+                <dd className="font-medium text-txt-primary">{orgIdentity.orgType}</dd>
+              </div>
+              <div>
+                <dt className="text-txt-secondary">Phone</dt>
+                <dd className="font-medium text-txt-primary">{orgIdentity.phone || "--"}</dd>
+              </div>
+              <div>
+                <dt className="text-txt-secondary">Email</dt>
+                <dd className="font-medium text-txt-primary">{orgIdentity.email || "--"}</dd>
+              </div>
+              <div className="col-span-2">
+                <dt className="text-txt-secondary">Address</dt>
+                <dd className="font-medium text-txt-primary">{orgIdentity.address || "--"}</dd>
+              </div>
+              <div className="col-span-2">
+                <dt className="text-txt-secondary">Website</dt>
+                <dd className="font-medium text-txt-primary">{orgIdentity.website || "--"}</dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: Departments */}
+      {activeTab === "departments" && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm text-txt-secondary">
+              <span className="font-medium text-txt-primary">{departments.length}</span> departments configured
+            </p>
+            <a href="/setup" className="btn-secondary text-xs">Manage in Setup Wizard</a>
+          </div>
+          <div className="card p-0 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-surface-bg">
+                  <th className="text-left px-6 py-3 font-medium text-txt-secondary">Name</th>
+                  <th className="text-left px-6 py-3 font-medium text-txt-secondary">Contact Email</th>
+                  <th className="text-left px-6 py-3 font-medium text-txt-secondary">Head Person</th>
+                  <th className="text-center px-6 py-3 font-medium text-txt-secondary">Users</th>
+                  <th className="text-center px-6 py-3 font-medium text-txt-secondary">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {departments.map((dept) => (
+                  <tr key={dept.id} className="border-b border-border last:border-0 hover:bg-surface-hover transition-colors">
+                    <td className="px-6 py-3.5 font-medium text-txt-primary">{dept.name}</td>
+                    <td className="px-6 py-3.5 text-txt-secondary font-mono text-xs">{dept.contactEmail || "--"}</td>
+                    <td className="px-6 py-3.5 text-txt-secondary">{dept.headName || "--"}</td>
+                    <td className="px-6 py-3.5 text-center text-txt-secondary">{dept.userCount}</td>
+                    <td className="px-6 py-3.5 text-center">
+                      <span className={cn("badge", dept.isActive ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500")}>
+                        {dept.isActive ? "Active" : "Inactive"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+                {departments.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-txt-secondary">
+                      No departments configured. Use the Setup Wizard to add departments.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* TAB 1: Users & Roles */}
       {activeTab === "users" && (
         <div>
@@ -272,25 +385,25 @@ export default function SettingsClient({
                     <div className="h-full bg-green-500 rounded-full" style={{ width: "100%" }} />
                   </div>
                 </div>
-                <div className="w-20 text-right text-sm font-mono text-green-700 font-medium">&ge; 85%</div>
+                <div className="w-20 text-right text-sm font-mono text-green-700 font-medium">&ge; {thresholds.high}%</div>
               </div>
               <div className="flex items-center gap-4">
                 <div className="w-40 text-sm font-medium text-txt-primary">Medium Confidence</div>
                 <div className="flex-1">
                   <div className="h-3 rounded-full bg-gray-100 overflow-hidden">
-                    <div className="h-full bg-amber-400 rounded-full" style={{ width: "84%" }} />
+                    <div className="h-full bg-amber-400 rounded-full" style={{ width: `${thresholds.high - 1}%` }} />
                   </div>
                 </div>
-                <div className="w-20 text-right text-sm font-mono text-amber-600 font-medium">50 &ndash; 84%</div>
+                <div className="w-20 text-right text-sm font-mono text-amber-600 font-medium">{thresholds.medium} &ndash; {thresholds.high - 1}%</div>
               </div>
               <div className="flex items-center gap-4">
                 <div className="w-40 text-sm font-medium text-txt-primary">Low Confidence</div>
                 <div className="flex-1">
                   <div className="h-3 rounded-full bg-gray-100 overflow-hidden">
-                    <div className="h-full bg-red-400 rounded-full" style={{ width: "49%" }} />
+                    <div className="h-full bg-red-400 rounded-full" style={{ width: `${thresholds.medium - 1}%` }} />
                   </div>
                 </div>
-                <div className="w-20 text-right text-sm font-mono text-red-600 font-medium">&lt; 50%</div>
+                <div className="w-20 text-right text-sm font-mono text-red-600 font-medium">&lt; {thresholds.medium}%</div>
               </div>
             </div>
           </div>

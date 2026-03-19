@@ -8,10 +8,15 @@ import {
   type WorkflowConfig,
   type NotificationPref,
 } from "@/lib/data/settings";
+import {
+  getOrgIdentity,
+  getConfidenceThresholds,
+} from "@/lib/data/org-config";
+import { getAllDepartments } from "@/lib/data/departments";
 import SettingsClient from "./settings-client";
 
 export default async function SettingsPage() {
-  const [detectionToggles, workflowConfig, notificationPrefs] =
+  const [detectionToggles, workflowConfig, notificationPrefs, orgIdentity, thresholds, departments] =
     await Promise.all([
       getSetting<DetectionToggle[]>(
         SETTING_KEYS.DETECTION_TOGGLES,
@@ -25,6 +30,9 @@ export default async function SettingsPage() {
         SETTING_KEYS.NOTIFICATION_PREFS,
         DEFAULT_NOTIFICATION_PREFS,
       ),
+      getOrgIdentity(),
+      getConfidenceThresholds(),
+      getAllDepartments(),
     ]);
 
   return (
@@ -32,6 +40,16 @@ export default async function SettingsPage() {
       initialDetectionToggles={detectionToggles}
       initialWorkflowConfig={workflowConfig}
       initialNotificationPrefs={notificationPrefs}
+      orgIdentity={orgIdentity}
+      thresholds={thresholds}
+      departments={departments.map((d) => ({
+        id: d.id,
+        name: d.name,
+        contactEmail: d.contactEmail,
+        headName: d.headName,
+        isActive: d.isActive,
+        userCount: d._count.users,
+      }))}
     />
   );
 }

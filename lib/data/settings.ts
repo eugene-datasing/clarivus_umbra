@@ -10,6 +10,13 @@ export const SETTING_KEYS = {
   DETECTION_TOGGLES: "detection_toggles",
   WORKFLOW_CONFIG: "workflow_config",
   NOTIFICATION_PREFS: "notification_prefs",
+  ORG_IDENTITY: "org_identity",
+  ORG_BRANDING: "org_branding",
+  ORG_SIGNATORY: "org_signatory",
+  ORG_OMBUDSMAN: "org_ombudsman",
+  LGOIMA_CONFIG: "lgoima_config",
+  CONFIDENCE_THRESHOLDS: "confidence_thresholds",
+  SETUP_WIZARD_STATE: "setup_wizard_state",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
@@ -101,3 +108,100 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPref[] = [
   { event: "Processing complete", inApp: true, email: false },
   { event: "Export ready", inApp: true, email: false },
 ];
+
+// ---------------------------------------------------------------------------
+// Organisation settings (WP21)
+// ---------------------------------------------------------------------------
+
+export interface OrgIdentity {
+  name: string;
+  maoriName: string;
+  abbreviation: string;
+  orgType: string;
+  address: string;
+  phone: string;
+  email: string;
+  website: string;
+}
+
+export const DEFAULT_ORG_IDENTITY: OrgIdentity = {
+  name: "",
+  maoriName: "",
+  abbreviation: "",
+  orgType: "District Council",
+  address: "",
+  phone: "",
+  email: "",
+  website: "",
+};
+
+export interface OrgBranding {
+  logoStorageKey: string;
+  footerText: string;
+}
+
+export const DEFAULT_ORG_BRANDING: OrgBranding = {
+  logoStorageKey: "",
+  footerText: "",
+};
+
+export interface OrgSignatory {
+  name: string;
+  title: string;
+  department: string;
+}
+
+export const DEFAULT_ORG_SIGNATORY: OrgSignatory = {
+  name: "",
+  title: "Information and Privacy Officer",
+  department: "",
+};
+
+export interface OrgOmbudsman {
+  line1: string;
+  line2: string;
+  city: string;
+  phone: string;
+  email: string;
+}
+
+export const DEFAULT_ORG_OMBUDSMAN: OrgOmbudsman = {
+  line1: "Office of the Ombudsman",
+  line2: "PO Box 10152",
+  city: "Wellington 6143",
+  phone: "0800 802 602",
+  email: "info@ombudsman.parliament.nz",
+};
+
+export interface LGOIMAConfig {
+  defaultResponseDays: number;
+  extensionMaxDays: number;
+  escalationThresholdDays: number;
+}
+
+export const DEFAULT_LGOIMA_CONFIG: LGOIMAConfig = {
+  defaultResponseDays: 20,
+  extensionMaxDays: 40,
+  escalationThresholdDays: 15,
+};
+
+export interface ConfidenceThresholds {
+  high: number;
+  medium: number;
+}
+
+export const DEFAULT_CONFIDENCE_THRESHOLDS: ConfidenceThresholds = {
+  high: 85,
+  medium: 50,
+};
+
+export interface SetupWizardState {
+  currentStep: number;
+  completedSteps: number[];
+  completedAt?: string;
+}
+
+export const DEFAULT_SETUP_WIZARD_STATE: SetupWizardState = {
+  currentStep: 0,
+  completedSteps: [],
+};

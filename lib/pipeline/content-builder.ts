@@ -209,7 +209,7 @@ export function buildContent(
         pageDetections,
       );
 
-      const para: DocParagraph = { segments };
+      const para: DocParagraph = { segments, page: page.pageNumber };
       if (heading) {
         para.heading = heading;
       }

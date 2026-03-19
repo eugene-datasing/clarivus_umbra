@@ -74,5 +74,6 @@ export interface DocSegment {
 
 export interface DocParagraph {
   heading?: string;
+  page?: number;
   segments: DocSegment[];
 }

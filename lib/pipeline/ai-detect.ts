@@ -160,6 +160,7 @@ function validateDetection(raw: unknown): AIDetection | null {
 export async function detectWithAI(
   pages: ExtractedPage[],
   existingPatternTexts: string[],
+  feedbackPrompt?: string,
 ): Promise<AIDetection[]> {
   const client = getClient();
   const allDetections: AIDetection[] = [];
@@ -184,10 +185,14 @@ export async function detectWithAI(
     }
 
     try {
+      const systemContent = feedbackPrompt
+        ? SYSTEM_PROMPT + feedbackPrompt
+        : SYSTEM_PROMPT;
+
       const response = await client.chat.completions.create({
         model: process.env.AZURE_OPENAI_DEPLOYMENT || "gpt-4o",
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: systemContent },
           { role: "user", content: userContent },
         ],
         temperature: 0.1,

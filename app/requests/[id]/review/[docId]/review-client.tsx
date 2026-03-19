@@ -34,6 +34,9 @@ import {
   signOffDocument,
   requestChanges,
 } from "@/lib/actions/detection-actions";
+import { createManualDetection, deleteManualDetection } from "@/lib/actions/manual-detection-actions";
+import ManualDetectionPopover from "@/components/review/manual-detection-popover";
+import AILearningPanel from "@/components/review/ai-learning-panel";
 import { lgoimaGrounds } from "@/lib/lgoima-grounds";
 import { cn } from "@/lib/utils";
 
@@ -63,10 +66,12 @@ export interface Detection {
   reasoning: string;
   piConsideration: string;
   aiExplanation: string;
+  source: string;
 }
 
 export interface ReviewClientProps {
   requestId: string;
+  caseId: string;
   docId: string;
   docName: string;
   docStatus: string;
@@ -149,6 +154,7 @@ function GroundSelector({
 
 export default function ReviewClient({
   requestId,
+  caseId,
   docId,
   docName,
   docStatus: initialDocStatus,
@@ -184,6 +190,17 @@ export default function ReviewClient({
     { id: string; field: string; previousValue: string | null; newValue: string | null; changedBy: string; changedAt: string }[]
   >([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Manual detection state (WP22)
+  const [manualPopover, setManualPopover] = useState<{
+    text: string;
+    page: number;
+    position: { x: number; y: number };
+  } | null>(null);
+  const [aiLearningDetection, setAiLearningDetection] = useState<{
+    id: string;
+    text: string;
+  } | null>(null);
 
   // Refs for scrolling
   const detectionRowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
@@ -368,6 +385,66 @@ export default function ReviewClient({
     }
   }, []);
 
+  // ----- Text selection handler for manual detection (WP22) -----
+  const handleTextSelection = useCallback((e: React.MouseEvent) => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !selection.toString().trim()) return;
+
+    const selectedText = selection.toString().trim();
+    if (selectedText.length < 2) return;
+
+    // Walk up from anchor node to find the paragraph with a data-page attribute
+    let node: Node | null = selection.anchorNode;
+    let page = 1;
+    while (node) {
+      if (node instanceof HTMLElement && node.dataset.page) {
+        page = parseInt(node.dataset.page, 10);
+        break;
+      }
+      node = node.parentNode;
+    }
+
+    setManualPopover({
+      text: selectedText,
+      page,
+      position: { x: e.clientX, y: e.clientY },
+    });
+  }, []);
+
+  const handleManualDetectionSubmit = useCallback(
+    async (data: { text: string; type: string; page: number; ground?: string; reasoning?: string }) => {
+      try {
+        const result = await createManualDetection({
+          documentId: docId,
+          ...data,
+        });
+        setManualPopover(null);
+        window.getSelection()?.removeAllRanges();
+        // Show AI learning panel
+        if (result.detectionId) {
+          setAiLearningDetection({ id: result.detectionId, text: data.text });
+        }
+        // Refresh page to show new detection
+        router.refresh();
+      } catch (err) {
+        console.error("Failed to create manual detection:", err);
+      }
+    },
+    [docId, router],
+  );
+
+  const handleDeleteManualDetection = useCallback(
+    async (detectionId: string) => {
+      try {
+        await deleteManualDetection(detectionId);
+        router.refresh();
+      } catch (err) {
+        console.error("Failed to delete manual detection:", err);
+      }
+    },
+    [router],
+  );
+
   // ----- Confidence colour helpers -----
   function confBgClass(score: number): string {
     if (score >= 85) return "bg-confidence-high/20 border-confidence-high/40";
@@ -428,7 +505,7 @@ export default function ReviewClient({
   /** Render paragraph segments -- redacted view with highlights */
   function renderRedactedParagraph(para: DocParagraph, idx: number) {
     return (
-      <div key={idx} className={para.heading ? "mt-5" : "mt-3"}>
+      <div key={idx} className={para.heading ? "mt-5" : "mt-3"} data-page={para.page ?? 1}>
         {para.heading && (
           <h3 className="font-heading text-sm font-bold text-txt-primary mb-1 leading-snug">
             {para.heading}
@@ -776,7 +853,7 @@ export default function ReviewClient({
                 </span>
               </span>
             </div>
-            <div className="flex-1 overflow-y-auto bg-gray-50/50">
+            <div className="flex-1 overflow-y-auto bg-gray-50/50" onMouseUp={handleTextSelection}>
               <div className="max-w-[640px] mx-auto px-8 py-6">
                 <div className="bg-white border border-gray-200 rounded shadow-sm px-10 py-8 min-h-[600px]">
                   {/* Document header bar */}
@@ -900,14 +977,21 @@ export default function ReviewClient({
 
                       {/* Entity */}
                       <td className="px-2 py-2">
-                        <span
-                          className={cn(
-                            "font-medium",
-                            isRejected && "line-through text-txt-secondary"
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={cn(
+                              "font-medium",
+                              isRejected && "line-through text-txt-secondary"
+                            )}
+                          >
+                            {det.text.length > 60 ? det.text.slice(0, 60) + "..." : det.text}
+                          </span>
+                          {det.source === "manual" && (
+                            <span className="badge bg-gray-100 text-gray-600 text-[9px] shrink-0">
+                              Manual
+                            </span>
                           )}
-                        >
-                          {det.text.length > 60 ? det.text.slice(0, 60) + "..." : det.text}
-                        </span>
+                        </div>
                       </td>
 
                       {/* Type */}
@@ -970,13 +1054,25 @@ export default function ReviewClient({
                           onClick={(e) => e.stopPropagation()}
                         >
                           {isAccepted || isRejected ? (
-                            <button
-                              onClick={() => handleRevert(det.id)}
-                              className="btn-ghost text-[10px] px-2 py-1"
-                              title="Revert to pending"
-                            >
-                              Undo
-                            </button>
+                            <>
+                              <button
+                                onClick={() => handleRevert(det.id)}
+                                className="btn-ghost text-[10px] px-2 py-1"
+                                title="Revert to pending"
+                              >
+                                Undo
+                              </button>
+                              {det.source === "manual" && (
+                                <button
+                                  onClick={() => handleDeleteManualDetection(det.id)}
+                                  className="flex items-center gap-0.5 px-2 py-1 rounded-input text-[10px] font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                                  title="Delete manual detection"
+                                >
+                                  <X size={11} />
+                                  Delete
+                                </button>
+                              )}
+                            </>
                           ) : (
                             <>
                               <button
@@ -1047,6 +1143,31 @@ export default function ReviewClient({
             )}
           </div>
         </div>
+      )}
+
+      {/* ===== Manual Detection Popover (WP22) ===== */}
+      {manualPopover && (
+        <ManualDetectionPopover
+          selectedText={manualPopover.text}
+          page={manualPopover.page}
+          position={manualPopover.position}
+          onSubmit={handleManualDetectionSubmit}
+          onCancel={() => {
+            setManualPopover(null);
+            window.getSelection()?.removeAllRanges();
+          }}
+        />
+      )}
+
+      {/* ===== AI Learning Panel (WP22) ===== */}
+      {aiLearningDetection && !selectedDetectionId && (
+        <AILearningPanel
+          detectionId={aiLearningDetection.id}
+          detectionText={aiLearningDetection.text}
+          caseId={caseId}
+          onClose={() => setAiLearningDetection(null)}
+          onCrossDocCreated={() => router.refresh()}
+        />
       )}
 
       {/* ===== AI Explanation Popover (when a detection is selected) ===== */}

@@ -43,6 +43,7 @@ export default async function ReviewPage({
   return (
     <ReviewClient
       requestId={id}
+      caseId={id}
       docId={docId}
       docName={doc.name}
       docStatus={docStatus}
