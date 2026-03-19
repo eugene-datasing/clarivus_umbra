@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { createAuditEntry } from "@/lib/data/audit";
+import { createSnapshot } from "@/lib/pipeline/version-snapshot";
 
 // ---------------------------------------------------------------------------
 // Change tracking (WP12)
@@ -128,6 +129,9 @@ export async function submitForSeniorReview(documentId: string) {
     data: { status: "reviewed" },
   });
 
+  // Create "draft" snapshot for version comparison (WP5)
+  await createSnapshot(documentId, "draft", "K. Williams");
+
   await createAuditEntry({
     userName: "K. Williams",
     userRole: "Reviewer",
@@ -159,6 +163,9 @@ export async function signOffDocument(documentId: string) {
     where: { id: documentId },
     data: { status: "signed-off" },
   });
+
+  // Create "final" snapshot for version comparison (WP5)
+  await createSnapshot(documentId, "final", "A. Richardson");
 
   await createAuditEntry({
     userName: "A. Richardson",

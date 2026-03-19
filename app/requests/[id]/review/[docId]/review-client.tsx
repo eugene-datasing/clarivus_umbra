@@ -18,6 +18,7 @@ import {
   Send,
   Clock,
   History,
+  GitCompare,
 } from "lucide-react";
 import {
   detectionTypeConfig,
@@ -501,6 +502,14 @@ export default function ReviewClient({
           <span className="badge bg-gray-100 text-txt-secondary text-[10px] shrink-0">
             {currentDocIndex + 1} of {documentIds.length}
           </span>
+          <Link
+            href={`/requests/${requestId}/review/${docId}/compare`}
+            className="btn-ghost flex items-center gap-1 text-[10px] shrink-0"
+            title="Compare version snapshots"
+          >
+            <GitCompare size={12} />
+            <span className="hidden xl:inline">Compare</span>
+          </Link>
         </div>
 
         {/* Center: Prev / Next */}

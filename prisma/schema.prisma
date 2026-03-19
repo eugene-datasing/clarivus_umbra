@@ -89,9 +89,10 @@ model Document {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  case       Case           @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  case       Case              @relation(fields: [caseId], references: [id], onDelete: Cascade)
   pages      DocumentPage[]
   detections Detection[]
+  snapshots  DetectionSnapshot[]
 
   @@index([caseId])
   @@index([status])
@@ -208,4 +209,18 @@ model DetectionHistory {
 
   @@index([detectionId])
   @@map("detection_history")
+}
+
+model DetectionSnapshot {
+  id             String   @id @default(cuid())
+  documentId     String
+  snapshotType   String   // "draft" | "final"
+  createdBy      String
+  detectionsJson Json     // Array of detection states at snapshot time
+  createdAt      DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@map("detection_snapshots")
 }
