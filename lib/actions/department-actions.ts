@@ -3,6 +3,15 @@
 import { prisma } from "@/lib/db/prisma";
 import { requireUser } from "@/lib/auth/session";
 
+function isPrismaUniqueConstraintError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code: string }).code === "P2002"
+  );
+}
+
 export async function createDepartment(data: {
   name: string;
   contactEmail?: string;
@@ -10,19 +19,28 @@ export async function createDepartment(data: {
 }) {
   await requireUser();
 
-  const maxSort = await prisma.department.aggregate({ _max: { sortOrder: true } });
-  const nextSort = (maxSort._max.sortOrder ?? 0) + 1;
+  try {
+    const dept = await prisma.$transaction(async (tx) => {
+      const maxSort = await tx.department.aggregate({ _max: { sortOrder: true } });
+      const nextSort = (maxSort._max.sortOrder ?? 0) + 1;
 
-  const dept = await prisma.department.create({
-    data: {
-      name: data.name,
-      contactEmail: data.contactEmail || null,
-      headName: data.headName || null,
-      sortOrder: nextSort,
-    },
-  });
+      return tx.department.create({
+        data: {
+          name: data.name,
+          contactEmail: data.contactEmail || null,
+          headName: data.headName || null,
+          sortOrder: nextSort,
+        },
+      });
+    });
 
-  return { success: true, id: dept.id };
+    return { success: true, id: dept.id };
+  } catch (err: unknown) {
+    if (isPrismaUniqueConstraintError(err)) {
+      return { success: false, error: "A department with this name already exists." };
+    }
+    throw err;
+  }
 }
 
 export async function updateDepartment(
@@ -31,17 +49,24 @@ export async function updateDepartment(
 ) {
   await requireUser();
 
-  await prisma.department.update({
-    where: { id },
-    data: {
-      ...(data.name !== undefined && { name: data.name }),
-      ...(data.contactEmail !== undefined && { contactEmail: data.contactEmail || null }),
-      ...(data.headName !== undefined && { headName: data.headName || null }),
-      ...(data.isActive !== undefined && { isActive: data.isActive }),
-    },
-  });
+  try {
+    await prisma.department.update({
+      where: { id },
+      data: {
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.contactEmail !== undefined && { contactEmail: data.contactEmail || null }),
+        ...(data.headName !== undefined && { headName: data.headName || null }),
+        ...(data.isActive !== undefined && { isActive: data.isActive }),
+      },
+    });
 
-  return { success: true };
+    return { success: true };
+  } catch (err: unknown) {
+    if (isPrismaUniqueConstraintError(err)) {
+      return { success: false, error: "A department with this name already exists." };
+    }
+    throw err;
+  }
 }
 
 export async function deleteDepartment(id: string) {

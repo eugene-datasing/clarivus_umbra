@@ -62,6 +62,12 @@ export default function NewRequestClient({
     setIsSubmitting(true);
     setError("");
 
+    if (selectedDepartments.length === 0) {
+      setError("Please select at least one department.");
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       const result = await createCase({
         requesterName,

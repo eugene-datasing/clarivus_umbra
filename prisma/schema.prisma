@@ -63,8 +63,9 @@ model Case {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  documents    Document[]
-  auditEntries AuditEntry[]
+  documents        Document[]
+  auditEntries     AuditEntry[]
+  feedbackExamples FeedbackExample[]
 
   @@map("cases")
 }
@@ -107,10 +108,11 @@ model Document {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  case       Case              @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  pages      DocumentPage[]
-  detections Detection[]
-  snapshots  DetectionSnapshot[]
+  case             Case              @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  pages            DocumentPage[]
+  detections       Detection[]
+  snapshots        DetectionSnapshot[]
+  feedbackExamples FeedbackExample[]
 
   @@index([caseId])
   @@index([status])
@@ -161,8 +163,9 @@ model Detection {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  history  DetectionHistory[]
+  document        Document          @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  history         DetectionHistory[]
+  feedbackExample FeedbackExample?
 
   @@index([documentId])
   @@index([status])
@@ -273,6 +276,10 @@ model FeedbackExample {
   reasoning   String   @default("")
   createdBy   String
   createdAt   DateTime @default(now())
+
+  case      Case?     @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  document  Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  detection Detection @relation(fields: [detectionId], references: [id], onDelete: Cascade)
 
   @@index([type])
   @@index([createdAt])

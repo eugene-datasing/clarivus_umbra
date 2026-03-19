@@ -394,19 +394,27 @@ export default function ReviewClient({
     if (selectedText.length < 2) return;
 
     // Walk up from anchor node to find the paragraph with a data-page attribute
-    let node: Node | null = selection.anchorNode;
-    let page = 1;
-    while (node) {
-      if (node instanceof HTMLElement && node.dataset.page) {
-        page = parseInt(node.dataset.page, 10);
-        break;
+    const findPage = (n: Node | null): number | null => {
+      while (n) {
+        if (n instanceof HTMLElement && n.dataset.page) {
+          return parseInt(n.dataset.page, 10);
+        }
+        n = n.parentNode;
       }
-      node = node.parentNode;
+      return null;
+    };
+
+    const anchorPage = findPage(selection.anchorNode);
+    const focusPage = findPage(selection.focusNode);
+
+    // Reject cross-page selections — detection must belong to a single page
+    if (anchorPage === null || focusPage === null || anchorPage !== focusPage) {
+      return;
     }
 
     setManualPopover({
       text: selectedText,
-      page,
+      page: anchorPage,
       position: { x: e.clientX, y: e.clientY },
     });
   }, []);
