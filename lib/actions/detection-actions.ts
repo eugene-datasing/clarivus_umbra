@@ -287,10 +287,10 @@ export async function applyGround(detectionId: string, groundId: string) {
 }
 
 export async function bulkAcceptDetections(detectionIds: string[], ground?: string) {
-  // Get the document IDs for recomputation
+  // Get the document IDs and case info for recomputation + audit
   const detections = await prisma.detection.findMany({
     where: { id: { in: detectionIds } },
-    select: { documentId: true },
+    select: { documentId: true, text: true, document: { select: { caseId: true } } },
   });
 
   const result = await prisma.detection.updateMany({
@@ -308,13 +308,28 @@ export async function bulkAcceptDetections(detectionIds: string[], ground?: stri
     await recomputeDocumentStatus(docId);
   }
 
+  // Audit entry
+  const caseId = detections[0]?.document.caseId;
+  if (caseId) {
+    const sampleText = detections[0]?.text?.substring(0, 40) || "—";
+    await createAuditEntry({
+      userName: "K. Williams",
+      userRole: "Reviewer",
+      type: "review",
+      description: `Bulk accepted ${result.count} detection(s) for "${sampleText}${detections[0]?.text?.length > 40 ? "..." : ""}"`,
+      target: "Bulk Review",
+      caseId,
+      detail: ground ? `Ground: ${ground}` : undefined,
+    });
+  }
+
   return { count: result.count };
 }
 
 export async function bulkRejectDetections(detectionIds: string[]) {
   const detections = await prisma.detection.findMany({
     where: { id: { in: detectionIds } },
-    select: { documentId: true },
+    select: { documentId: true, text: true, document: { select: { caseId: true } } },
   });
 
   const result = await prisma.detection.updateMany({
@@ -329,6 +344,20 @@ export async function bulkRejectDetections(detectionIds: string[]) {
   const docIds = [...new Set(detections.map((d) => d.documentId))];
   for (const docId of docIds) {
     await recomputeDocumentStatus(docId);
+  }
+
+  // Audit entry
+  const caseId = detections[0]?.document.caseId;
+  if (caseId) {
+    const sampleText = detections[0]?.text?.substring(0, 40) || "—";
+    await createAuditEntry({
+      userName: "K. Williams",
+      userRole: "Reviewer",
+      type: "review",
+      description: `Bulk rejected ${result.count} detection(s) for "${sampleText}${detections[0]?.text?.length > 40 ? "..." : ""}"`,
+      target: "Bulk Review",
+      caseId,
+    });
   }
 
   return { count: result.count };

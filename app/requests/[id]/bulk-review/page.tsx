@@ -89,6 +89,7 @@ export default async function BulkReviewPage({
           dets.reduce((sum, d) => sum + d.confidence, 0) / dets.length
         ),
         snippets,
+        detectionIds: dets.map((d) => d.id),
       };
     }
   );

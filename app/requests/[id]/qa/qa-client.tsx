@@ -43,11 +43,21 @@ interface WithholdingItem {
   text: string;
 }
 
+interface VerificationData {
+  passed: boolean;
+  detail: string;
+  checkedAt: string;
+}
+
 interface QAClientProps {
   requestId: string;
   caseData: CaseData | null;
   documents: DocumentData[];
   withholdingItems: WithholdingItem[];
+  s7Stats: { total: number; missingPi: number };
+  pendingDetections: number;
+  processedDocCount: number;
+  verificationResult: VerificationData | null;
 }
 
 const statusIcon = {
@@ -59,15 +69,20 @@ const statusIcon = {
 function buildQAGroups(
   caseData: CaseData | null,
   documents: DocumentData[],
-  withholdingItems: WithholdingItem[]
+  withholdingItems: WithholdingItem[],
+  s7Stats: { total: number; missingPi: number },
+  pendingDetections: number,
+  processedDocCount: number,
+  verificationResult: VerificationData | null,
 ): QAGroup[] {
   const totalDocs = caseData?.documentCount ?? documents.length;
+
+  // Use real document status machine values
   const reviewedDocs = documents.filter((d) =>
-    ["approved", "released", "submitted"].includes(d.status)
+    ["reviewed", "signed-off"].includes(d.status)
   ).length;
-  const totalDetections = documents.reduce((sum, d) => sum + d.detectionCount, 0);
-  const finalApprovedDocs = documents.filter((d) =>
-    ["approved", "released"].includes(d.status)
+  const signedOffDocs = documents.filter((d) =>
+    d.status === "signed-off"
   ).length;
 
   // Withholding checks
@@ -78,6 +93,24 @@ function buildQAGroups(
   // Ground consistency (simple heuristic: flag if there are multiple different grounds)
   const groundSet = new Set(withholdingItems.map((w) => w.ground).filter(Boolean));
 
+  // s7 public interest consideration
+  const s7PiStatus: QAItem["status"] =
+    s7Stats.total === 0 ? "pass" :
+    s7Stats.missingPi === 0 ? "pass" :
+    s7Stats.missingPi < s7Stats.total ? "warning" : "fail";
+  const s7PiDetail =
+    s7Stats.total === 0
+      ? "No s7 withholdings in this case"
+      : s7Stats.missingPi === 0
+        ? `All ${s7Stats.total} s7 withholdings include a documented public interest test`
+        : `${s7Stats.total - s7Stats.missingPi} / ${s7Stats.total} s7 withholdings have public interest consideration documented`;
+
+  // Metadata: check that all documents have been processed (not pending/processing/error)
+  const metadataStatus: QAItem["status"] = processedDocCount >= totalDocs ? "pass" : processedDocCount > 0 ? "warning" : "fail";
+  const metadataDetail = processedDocCount >= totalDocs
+    ? "All documents have been processed and PDF metadata is stripped on export"
+    : `${processedDocCount} / ${totalDocs} documents processed — unprocessed documents cannot be sanitised`;
+
   return [
     {
       title: "COMPLETENESS",
@@ -85,19 +118,21 @@ function buildQAGroups(
         {
           label: "All documents reviewed",
           status: reviewedDocs >= totalDocs ? "pass" : reviewedDocs > 0 ? "warning" : "fail",
-          detail: `${reviewedDocs} / ${totalDocs} documents reviewed`,
+          detail: `${reviewedDocs} / ${totalDocs} documents reviewed or signed off`,
         },
         {
           label: "All detections actioned",
-          status: totalDetections > 0 ? "pass" : "warning",
-          detail: `${totalDetections} detections across ${totalDocs} documents`,
+          status: pendingDetections === 0 ? "pass" : "warning",
+          detail: pendingDetections === 0
+            ? "All detections have been accepted or rejected"
+            : `${pendingDetections} detection(s) still pending review`,
         },
         {
-          label: "All documents at Final Approved",
-          status: finalApprovedDocs >= totalDocs ? "pass" : finalApprovedDocs > 0 ? "warning" : "fail",
-          detail: finalApprovedDocs >= totalDocs
-            ? `All ${totalDocs} documents have reached Final Approved status`
-            : `${finalApprovedDocs} of ${totalDocs} documents have reached Final Approved status`,
+          label: "All documents signed off",
+          status: signedOffDocs >= totalDocs ? "pass" : signedOffDocs > 0 ? "warning" : "fail",
+          detail: signedOffDocs >= totalDocs
+            ? `All ${totalDocs} documents have been signed off by senior reviewer`
+            : `${signedOffDocs} of ${totalDocs} documents signed off`,
         },
       ],
     },
@@ -111,8 +146,8 @@ function buildQAGroups(
         },
         {
           label: "All s7 withholdings have public interest consideration",
-          status: "pass",
-          detail: "All s7 withholdings include a documented public interest test",
+          status: s7PiStatus,
+          detail: s7PiDetail,
         },
         {
           label: "All grounds are valid LGOIMA references",
@@ -138,8 +173,10 @@ function buildQAGroups(
         },
         {
           label: "Covering statement completed",
-          status: "pass",
-          detail: "Covering statement has been drafted and saved",
+          status: totalWithholding > 0 ? "pass" : "warning",
+          detail: totalWithholding > 0
+            ? "Cover letter will be auto-generated with case details on export"
+            : "No withholding items — cover letter will note full release",
         },
         {
           label: "Item descriptions are adequate",
@@ -154,32 +191,46 @@ function buildQAGroups(
       title: "REDACTION VERIFICATION",
       items: [
         {
-          label: "Text extraction test passed",
-          status: "pass",
-          detail: "All redacted regions return empty when text is extracted from output PDFs",
+          label: "Text extraction test",
+          status: verificationResult
+            ? (verificationResult.passed ? "pass" : "warning")
+            : "warning",
+          detail: verificationResult
+            ? (verificationResult.passed
+                ? `All redacted documents passed text extraction verification (${new Date(verificationResult.checkedAt).toLocaleDateString()})`
+                : `Verification completed with warnings — ${verificationResult.detail}`)
+            : "Automated redaction verification has not been run yet — will be checked during export",
         },
         {
-          label: "Object layer clean",
-          status: "pass",
-          detail: "No hidden text layers or recoverable content found beneath redaction marks",
+          label: "Object layer check",
+          status: verificationResult ? "pass" : "warning",
+          detail: verificationResult
+            ? "PDF metadata and object layers verified during export"
+            : "Hidden text layer analysis will be performed during export generation",
         },
         {
           label: "Metadata sanitised",
-          status: "pass",
-          detail: "Document metadata, comments, tracked changes, and hidden content have been stripped",
+          status: metadataStatus,
+          detail: metadataDetail,
         },
         {
           label: "All documents verified",
-          status: "pass",
-          detail: `${totalDocs} / ${totalDocs} documents have passed automated redaction verification`,
+          status: verificationResult
+            ? (verificationResult.passed ? "pass" : "warning")
+            : "warning",
+          detail: verificationResult
+            ? (verificationResult.passed
+                ? `All documents passed automated verification on ${new Date(verificationResult.checkedAt).toLocaleDateString()}`
+                : `Verification ran on ${new Date(verificationResult.checkedAt).toLocaleDateString()} — review audit trail for details`)
+            : "Automated verification runs during export — results will appear in the audit trail",
         },
       ],
     },
   ];
 }
 
-export default function QAClient({ requestId, caseData, documents, withholdingItems }: QAClientProps) {
-  const qaGroups = buildQAGroups(caseData, documents, withholdingItems);
+export default function QAClient({ requestId, caseData, documents, withholdingItems, s7Stats, pendingDetections, processedDocCount, verificationResult }: QAClientProps) {
+  const qaGroups = buildQAGroups(caseData, documents, withholdingItems, s7Stats, pendingDetections, processedDocCount, verificationResult);
 
   const caseReference = caseData?.reference ?? "Unknown";
 

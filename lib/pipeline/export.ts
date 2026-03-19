@@ -10,6 +10,7 @@ import { createHash } from "crypto";
 import { prisma } from "@/lib/db/prisma";
 import { getStorage } from "@/lib/storage";
 import { buildRedactedPdf } from "./redact-pdf";
+import { verifyRedactedPdf, type VerificationResult } from "./verify-redaction";
 import { buildWithholdingSchedule } from "./schedule";
 import { buildCoverLetterPdf } from "./cover-letter";
 import { buildAuditTrailPdf } from "./audit-pdf";
@@ -112,8 +113,9 @@ async function doGenerate(
 
   const storage = getStorage();
   const zipParts: { name: string; data: Buffer | Uint8Array }[] = [];
+  const verificationResults: Array<{ docName: string; result: VerificationResult }> = [];
 
-  // 1. Generate redacted PDFs for each document
+  // 1. Generate redacted PDFs for each document + verify
   for (const doc of documents) {
     setProgress(exportId, {
       progress: Math.round((completed / totalSteps) * 80),
@@ -124,6 +126,31 @@ async function doGenerate(
       const result = await buildRedactedPdf(doc.id);
       const pdfName = doc.name.replace(/\.[^.]+$/, "") + "_redacted.pdf";
       zipParts.push({ name: `documents/${pdfName}`, data: result.pdfBytes });
+
+      // Post-redaction verification
+      setProgress(exportId, {
+        currentStep: `Verifying: ${doc.name}`,
+      });
+
+      const acceptedDetections = await prisma.detection.findMany({
+        where: { documentId: doc.id, status: "accepted" },
+        select: { text: true, page: true },
+      });
+
+      const verification = await verifyRedactedPdf(
+        Buffer.from(result.pdfBytes),
+        acceptedDetections,
+      );
+      verificationResults.push({ docName: doc.name, result: verification });
+
+      if (!verification.passed) {
+        console.warn(
+          `[export] Redaction verification warning for ${doc.name}: ${verification.leaksFound} issue(s) found`,
+        );
+        for (const detail of verification.details.filter((d) => d.leaked)) {
+          console.warn(`  - ${detail.detectionText}: ${detail.note}`);
+        }
+      }
     } catch (err) {
       console.error(`Failed to redact ${doc.name}:`, err);
       // Continue with other documents
@@ -179,7 +206,55 @@ async function doGenerate(
     }
   }
 
-  // 6. Assemble ZIP
+  // 6. Add verification report
+  if (verificationResults.length > 0) {
+    const allPassed = verificationResults.every((v) => v.result.passed);
+    const verifyLines: string[] = [
+      `Redaction Verification Report`,
+      `Generated: ${new Date().toISOString()}`,
+      `Case: ${caseData.reference}`,
+      `Overall: ${allPassed ? "PASSED" : "WARNINGS FOUND"}`,
+      ``,
+    ];
+
+    for (const { docName, result } of verificationResults) {
+      verifyLines.push(`--- ${docName} ---`);
+      verifyLines.push(`  Status: ${result.passed ? "PASS" : "WARNING"}`);
+      verifyLines.push(`  Detections checked: ${result.totalChecked}`);
+      if (result.leaksFound > 0) {
+        verifyLines.push(`  Issues: ${result.leaksFound}`);
+      }
+      for (const detail of result.details) {
+        const icon = detail.leaked ? "[!]" : "[OK]";
+        verifyLines.push(`  ${icon} ${detail.detectionText} — ${detail.note}`);
+      }
+      verifyLines.push(``);
+    }
+
+    zipParts.push({
+      name: `verification_report.txt`,
+      data: Buffer.from(verifyLines.join("\n"), "utf-8"),
+    });
+
+    // Create verification audit entry
+    await prisma.auditEntry.create({
+      data: {
+        userName: "Veil AI",
+        userRole: "system",
+        type: "redaction-verification",
+        description: allPassed
+          ? `Redaction verification passed for ${verificationResults.length} document(s)`
+          : `Redaction verification completed with warnings for ${verificationResults.filter((v) => !v.result.passed).length} of ${verificationResults.length} document(s)`,
+        target: caseData.reference,
+        caseId,
+        detail: verificationResults
+          .map((v) => `${v.docName}: ${v.result.passed ? "PASS" : `${v.result.leaksFound} issue(s)`}`)
+          .join("; "),
+      },
+    });
+  }
+
+  // 7. Assemble ZIP
   setProgress(exportId, {
     status: "verifying",
     progress: 85,
@@ -188,19 +263,19 @@ async function doGenerate(
 
   const zipBuffer = await assembleZip(zipParts);
 
-  // 7. Compute SHA-256
+  // 8. Compute SHA-256
   setProgress(exportId, {
     progress: 95,
     currentStep: "Computing integrity hash",
   });
   const sha256 = createHash("sha256").update(zipBuffer).digest("hex");
 
-  // 8. Store the ZIP
+  // 9. Store the ZIP
   const filename = `${caseData.reference}_${packageType}_${new Date().toISOString().split("T")[0]}.zip`;
   const storageKey = `exports/${caseId}/${exportId}/${filename}`;
   await storage.upload(storageKey, zipBuffer, "application/zip");
 
-  // 9. Audit entry
+  // 10. Audit entry
   await prisma.auditEntry.create({
     data: {
       userName: "System",

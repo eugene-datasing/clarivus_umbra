@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { processDocument } from "@/lib/pipeline/process";
+import { getProcessingQueue } from "@/lib/queue/job-queue";
 
 export async function POST(
   _request: NextRequest,
@@ -20,20 +20,15 @@ export async function POST(
       );
     }
 
-    // Update status to processing
-    await prisma.document.update({
-      where: { id: docId },
-      data: { status: "processing" },
-    });
-
-    // Fire-and-forget: kick off processing without blocking the response
-    processDocument(docId).catch((err) =>
-      console.error(`Processing failed for ${docId}:`, err),
-    );
+    // Enqueue the document for processing via the managed queue
+    const queue = getProcessingQueue();
+    const job = queue.enqueue(docId);
 
     return NextResponse.json({
       id: docId,
-      status: "processing",
+      status: job.status,
+      step: job.step,
+      queuePosition: queue.getStats().queued,
     });
   } catch (error) {
     console.error("Process trigger failed:", error);

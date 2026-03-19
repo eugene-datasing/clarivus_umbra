@@ -25,9 +25,10 @@ export default async function IngestPage({
         name: d.name,
         fileType: d.type,
         sizeKB: d.sizeKB,
-        status: d.status,
+        status: d.status as "ready" | "processing" | "queued" | "error",
         detectionCount: d.detectionCount,
         pageCount: d.pageCount,
+        duplicateGroup: d.duplicateGroup,
       }))}
     />
   );

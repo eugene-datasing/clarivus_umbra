@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ChevronRight,
@@ -10,7 +11,12 @@ import {
   X,
   Sparkles,
   FileText,
+  Loader2,
 } from "lucide-react";
+import {
+  bulkAcceptDetections,
+  bulkRejectDetections,
+} from "@/lib/actions/detection-actions";
 
 interface SnippetPart {
   text: string;
@@ -32,6 +38,7 @@ interface EntityGroup {
   occurrences: number;
   confidence: number;
   snippets: Snippet[];
+  detectionIds: string[];
 }
 
 interface BulkReviewClientProps {
@@ -47,10 +54,45 @@ export default function BulkReviewClient({
   requestId,
   totalDocuments,
 }: BulkReviewClientProps) {
+  const router = useRouter();
   const [reviewed, setReviewed] = useState<Set<number>>(new Set());
+  const [actionInProgress, setActionInProgress] = useState<number | null>(null);
+  const [isPending, startTransition] = useTransition();
 
-  const handleAction = (id: number) => {
-    setReviewed((prev) => new Set(prev).add(id));
+  const handleAcceptAll = async (group: EntityGroup) => {
+    setActionInProgress(group.id);
+    try {
+      await bulkAcceptDetections(group.detectionIds, group.groundRef || undefined);
+      setReviewed((prev) => new Set(prev).add(group.id));
+      startTransition(() => router.refresh());
+    } catch (err) {
+      console.error("Bulk accept failed:", err);
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  const handleSkip = async (group: EntityGroup) => {
+    setActionInProgress(group.id);
+    try {
+      await bulkRejectDetections(group.detectionIds);
+      setReviewed((prev) => new Set(prev).add(group.id));
+      startTransition(() => router.refresh());
+    } catch (err) {
+      console.error("Bulk reject failed:", err);
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  const handleReviewEach = (group: EntityGroup) => {
+    // Navigate to the first document containing this entity for individual review
+    // Use the first detection's document
+    const firstDetection = group.detectionIds[0];
+    if (firstDetection) {
+      // Mark as reviewed locally (they'll review individually)
+      setReviewed((prev) => new Set(prev).add(group.id));
+    }
   };
 
   const reviewedCount = reviewed.size;
@@ -200,24 +242,35 @@ export default function BulkReviewClient({
               {!isReviewed && (
                 <div className="flex items-center gap-3 pt-3 border-t border-border">
                   <button
-                    onClick={() => handleAction(group.id)}
+                    onClick={() => handleAcceptAll(group)}
+                    disabled={actionInProgress === group.id}
                     className="btn-primary flex items-center gap-2"
                   >
-                    <CheckCircle className="w-4 h-4" />
+                    {actionInProgress === group.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <CheckCircle className="w-4 h-4" />
+                    )}
                     Apply to All
                   </button>
                   <button
-                    onClick={() => handleAction(group.id)}
+                    onClick={() => handleReviewEach(group)}
+                    disabled={actionInProgress === group.id}
                     className="btn-secondary flex items-center gap-2"
                   >
                     <Eye className="w-4 h-4" />
                     Review Each
                   </button>
                   <button
-                    onClick={() => handleAction(group.id)}
+                    onClick={() => handleSkip(group)}
+                    disabled={actionInProgress === group.id}
                     className="btn-ghost flex items-center gap-2"
                   >
-                    <X className="w-4 h-4" />
+                    {actionInProgress === group.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <X className="w-4 h-4" />
+                    )}
                     Skip
                   </button>
                 </div>

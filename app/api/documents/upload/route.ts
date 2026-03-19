@@ -84,8 +84,17 @@ export async function POST(request: NextRequest) {
     const results: { id: string; name: string; status: string }[] = [];
 
     for (const file of files) {
-      const { fileType, mimeType } = getFileTypeInfo(file.name);
       const ext = path.extname(file.name).toLowerCase() || ".bin";
+
+      // Reject PST files with a clear message
+      if (ext === ".pst") {
+        return NextResponse.json(
+          { error: `PST archives are not supported. Please export individual emails from "${file.name}" as EML or MSG files before uploading.` },
+          { status: 400 },
+        );
+      }
+
+      const { fileType, mimeType } = getFileTypeInfo(file.name);
       const buffer = Buffer.from(await file.arrayBuffer());
 
       // Create the document record first to get a Prisma-generated ID

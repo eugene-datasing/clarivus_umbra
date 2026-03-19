@@ -19,6 +19,7 @@ import { getStorage } from "@/lib/storage";
 import { extractText } from "./extract";
 import { detectPatterns } from "./patterns";
 import { detectWithAI } from "./ai-detect";
+import { detectDuplicates } from "./duplicate-detect";
 import { buildContent } from "./content-builder";
 import { createAuditEntry } from "@/lib/data/audit";
 import path from "path";
@@ -102,6 +103,58 @@ export async function processDocument(docId: string): Promise<void> {
     );
 
     // ------------------------------------------------------------------
+    // 4.5 Handle email attachments (create child documents)
+    // ------------------------------------------------------------------
+    if (extraction.attachments && extraction.attachments.length > 0) {
+      console.log(
+        `[pipeline] Email has ${extraction.attachments.length} attachment(s), creating child documents...`,
+      );
+      for (const att of extraction.attachments) {
+        const attExt = path.extname(att.filename).toLowerCase();
+        const fileTypeMap: Record<string, string> = {
+          ".pdf": "PDF", ".docx": "DOCX", ".xlsx": "XLSX", ".txt": "TXT",
+          ".eml": "EML", ".msg": "MSG", ".png": "PNG", ".jpg": "JPG",
+          ".jpeg": "JPG", ".pptx": "PPTX",
+        };
+        const attFileType = fileTypeMap[attExt] || "TXT";
+
+        // Store attachment to storage
+        const attDoc = await prisma.document.create({
+          data: {
+            caseId,
+            name: att.filename,
+            fileType: attFileType,
+            mimeType: att.contentType,
+            sizeBytes: att.size,
+            status: "queued",
+          },
+        });
+
+        const attStorageKey = `${caseId}/${attDoc.id}/original${attExt || ".bin"}`;
+        await storage.upload(attStorageKey, att.content, att.contentType);
+        await prisma.document.update({
+          where: { id: attDoc.id },
+          data: { originalPath: attStorageKey },
+        });
+
+        // Update case document count
+        await prisma.case.update({
+          where: { id: caseId },
+          data: { documentCount: { increment: 1 } },
+        });
+
+        // Fire-and-forget processing of the attachment
+        processDocument(attDoc.id).catch((err) =>
+          console.error(`[pipeline] Failed to process attachment ${att.filename}:`, err),
+        );
+
+        console.log(
+          `[pipeline] Created child document for attachment: ${att.filename} (${attDoc.id})`,
+        );
+      }
+    }
+
+    // ------------------------------------------------------------------
     // 5. Store pages in DocumentPage table
     // ------------------------------------------------------------------
     // Delete any existing pages first (in case of reprocessing)
@@ -127,6 +180,19 @@ export async function processDocument(docId: string): Promise<void> {
       where: { id: docId },
       data: { pageCount: extraction.pages.length },
     });
+
+    // ------------------------------------------------------------------
+    // 5.5 Duplicate detection
+    // ------------------------------------------------------------------
+    console.log("[pipeline] Checking for duplicates...");
+    const dupResult = await detectDuplicates(docId, caseId, extraction.totalText);
+    if (dupResult.isExactDuplicate) {
+      console.log(`[pipeline] Exact duplicate detected (group: ${dupResult.duplicateGroup})`);
+    } else if (dupResult.nearDuplicateOf) {
+      console.log(
+        `[pipeline] Near-duplicate detected (${Math.round((dupResult.nearDuplicateSimilarity ?? 0) * 100)}% similarity)`,
+      );
+    }
 
     // ------------------------------------------------------------------
     // 6. Pattern detection

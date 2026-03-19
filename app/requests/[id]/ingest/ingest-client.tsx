@@ -14,7 +14,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 
-type DocStatus = "queued" | "processing" | "ready" | "error" | "pending" | "in-review" | "submitted" | "approved" | "rejected" | "released" | "complete";
+type DocStatus = "queued" | "processing" | "ready" | "error" | "pending" | "in-review" | "submitted" | "approved" | "rejected" | "released" | "complete" | "signed-off" | "reviewed";
 
 interface DocItem {
   id: string;
@@ -25,6 +25,10 @@ interface DocItem {
   detectionCount: number;
   pageCount: number;
   processingError?: string;
+  duplicateGroup?: string | null;
+  queueStep?: string;
+  queueProgress?: number;
+  queueAttempt?: number;
 }
 
 interface IngestClientProps {
@@ -109,27 +113,48 @@ export default function IngestClient({
     );
     if (pendingDocs.length === 0) return;
 
-    const updates = await Promise.allSettled(
-      pendingDocs.map(async (doc) => {
-        const res = await fetch(`/api/documents/${doc.id}/status`);
-        if (!res.ok) return null;
-        return res.json();
-      })
-    );
+    // Batch poll: fetch queue status + individual DB statuses
+    const ids = pendingDocs.map((d) => d.id).join(",");
+    const [queueRes, ...statusResults] = await Promise.allSettled([
+      fetch(`/api/documents/queue-status?ids=${ids}`).then((r) =>
+        r.ok ? r.json() : null
+      ),
+      ...pendingDocs.map((doc) =>
+        fetch(`/api/documents/${doc.id}/status`).then((r) =>
+          r.ok ? r.json() : null
+        )
+      ),
+    ]);
+
+    // Build a map of queue jobs by docId
+    const queueJobs = new Map<string, { step: string; progress: number; attempt: number }>();
+    if (queueRes.status === "fulfilled" && queueRes.value?.jobs) {
+      for (const job of queueRes.value.jobs) {
+        queueJobs.set(job.docId, {
+          step: job.step,
+          progress: job.progress,
+          attempt: job.attempt,
+        });
+      }
+    }
 
     setDocuments((prev) => {
       const next = [...prev];
-      updates.forEach((result, i) => {
+      statusResults.forEach((result, i) => {
         if (result.status !== "fulfilled" || !result.value) return;
         const data = result.value;
         const idx = next.findIndex((d) => d.id === pendingDocs[i].id);
         if (idx === -1) return;
+        const queueInfo = queueJobs.get(pendingDocs[i].id);
         next[idx] = {
           ...next[idx],
           status: data.status,
           pageCount: data.pageCount ?? next[idx].pageCount,
           detectionCount: data.detectionCount ?? next[idx].detectionCount,
           processingError: data.error ?? undefined,
+          queueStep: queueInfo?.step,
+          queueProgress: queueInfo?.progress,
+          queueAttempt: queueInfo?.attempt,
         };
       });
       return next;
@@ -394,12 +419,33 @@ export default function IngestClient({
                     <span className="text-xs px-1.5 py-0.5 rounded bg-surface-bg text-txt-secondary flex-shrink-0">
                       {item.fileType}
                     </span>
+                    {item.duplicateGroup && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-medium flex-shrink-0">
+                        Duplicate
+                      </span>
+                    )}
                     {item.sizeKB > 0 && (
                       <span className="text-xs text-txt-secondary flex-shrink-0">
                         {formatSize(item.sizeKB)}
                       </span>
                     )}
                   </div>
+                  {item.status === "processing" && item.queueStep && (
+                    <div className="mt-1 ml-6">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden max-w-[200px]">
+                          <div
+                            className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                            style={{ width: `${item.queueProgress ?? 0}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-txt-secondary">
+                          {item.queueStep}
+                          {(item.queueAttempt ?? 0) > 1 && ` (attempt ${item.queueAttempt})`}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                   {item.status === "ready" && (
                     <p className="text-xs mt-0.5 ml-6 text-txt-secondary">
                       {item.pageCount} pages processed, {item.detectionCount}{" "}

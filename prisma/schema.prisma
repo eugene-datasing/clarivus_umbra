@@ -175,3 +175,13 @@ model FileUpload {
 
   @@map("file_uploads")
 }
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+  updatedBy String   @default("system")
+
+  @@map("system_settings")
+}
