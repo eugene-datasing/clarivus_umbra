@@ -5,20 +5,28 @@
 
 ## Pre-Demo Setup
 
-1. Run `npm run dev` from the `veil-prototype/` directory
-2. Open http://localhost:3000 in Edge or Chrome (full-screen, no bookmarks bar)
-3. Ensure sidebar is expanded (not collapsed)
-4. Have this script on a second screen or printed
+1. Ensure Docker is running: `docker compose up -d`
+2. Run `npm run dev` from the `veil-prototype/` directory
+3. Open http://localhost:3000 in Edge or Chrome (full-screen, no bookmarks bar)
+4. Ensure sidebar is expanded (not collapsed)
+5. Have a test document ready (PDF or DOCX with some PII) for the live upload demo
+6. Have this script on a second screen or printed
+
+**Pre-demo data reset (optional):**
+```bash
+DATABASE_URL="postgresql://veil:veil_dev@localhost:5434/veil" npx prisma migrate reset
+```
 
 **Talking points to weave throughout:**
 - NZ-hosted (Azure NZ North) — data never leaves NZ/AU
 - Purpose-built for LGOIMA, not generic redaction
 - Immutable audit trail for Ombudsman defensibility
 - AI assists, humans decide — every action is accountable
+- Real database, real AI, real PDF redaction — this is a working system
 
 ---
 
-## [0:00–2:00] Dashboard — The Command Centre
+## [0:00-2:00] Dashboard — The Command Centre
 
 **Navigate to:** `/` (loads by default)
 
@@ -26,7 +34,7 @@
 > "This is Veil's dashboard — the operational hub for your LGOIMA team. At a glance, you can see active cases, documents pending review, upcoming deadlines, and any overdue items."
 
 ### What to highlight:
-- **4 stat cards** at the top: Active Cases (4), Docs Pending (489), Due This Week (2), Overdue (0)
+- **Stat cards** at the top: Active Cases, Docs Pending, Due This Week, Overdue
 - **Active Cases list** — each case shows:
   - LGOIMA reference number (e.g., LGOIMA-2026-042)
   - Status badge (In Review, Ingestion, etc.)
@@ -41,12 +49,12 @@
 
 ---
 
-## [2:00–4:00] New Request Intake
+## [2:00-4:00] New Request Intake
 
 **Navigate to:** Click **"New Case"** in the sidebar
 
 ### What to say:
-> "When a new LGOIMA request arrives, the officer creates a case in Veil. The form captures all the details needed for tracking, compliance, and audit."
+> "When a new LGOIMA request arrives, the officer creates a case in Veil. This form creates a real database record — the case is immediately available across the system."
 
 ### What to highlight:
 - **Auto-generated reference** number (LGOIMA-2026-XXX)
@@ -56,190 +64,211 @@
 - Requester details (name, organisation, email)
 
 ### What to click:
-- Fill in some sample values (or note they're pre-populated for demo)
-- Point out the deadline calculation: "Veil automatically calculates the 20-working-day statutory deadline — no manual counting required"
-- Click the sidebar **"Cases"** link to move on
+- Fill in sample values and submit — the case is created in the database
+- Point out the deadline calculation: "Veil automatically calculates the 20-working-day statutory deadline"
+- Navigate to the newly created case
 
 ---
 
-## [4:00–7:00] Document Ingestion & Case Overview
+## [4:00-7:00] Document Upload & Live Processing
 
-**Navigate to:** `/requests` → click the **"Coastal Walkway Extension"** case → click the **Ingest** action or navigate to `/requests/req-001/ingest`
-
-### What to say:
-> "Once a case is created, officers upload the relevant document set. Veil handles bulk ingestion — thousands of documents at a time — with automatic OCR, duplicate detection, and metadata extraction."
-
-### What to highlight on Ingestion screen:
-- **Drag-and-drop upload zone** — supports PDF, Word, Excel, email formats (PST, MSG, EML)
-- **Processing progress** — simulated progress bars showing OCR, duplicate detection, metadata extraction
-- **Duplicate detection results** — show how Veil identifies exact and near-duplicate documents
-- **Format statistics** — breakdown by file type
-
-### Then navigate to Case Detail: `/requests/req-001`
+**Navigate to:** The new case's ingest page, or `/requests/[case-id]/ingest`
 
 ### What to say:
-> "After ingestion, the case detail view shows every document in the set. Officers can see which documents have been reviewed, which have AI detections pending, and filter by status."
+> "Once a case is created, officers upload the relevant document set. Watch what happens — this is live processing, not a simulation."
+
+### Live demo:
+1. **Drag and drop** a real PDF or DOCX into the upload zone
+2. **Watch the processing pipeline** in real time:
+   - File uploads to the server
+   - Status shows "Processing"
+   - Azure Document Intelligence extracts text (OCR)
+   - Regex patterns detect structured PII (IRD numbers, phones, emails)
+   - GPT-4o analyses text for contextual detections (names, commercial content)
+   - Status changes to "Ready for Review"
+3. Point out: "That entire pipeline — OCR, pattern matching, and AI analysis — just ran against real Azure services. The detections are now stored in the database."
+
+### Then navigate to Case Detail: `/requests/[case-id]`
 
 ### What to highlight:
-- **Document table** with columns: name, type, pages, detections, status, reviewer
-- **Status indicators** — Pending, In Review, Approved, Flagged
-- **Bulk action bar** — select multiple documents, assign reviewer, change status
-- **Progress bar** at top showing overall case progress
-- Detection count per document: "This document has 12 AI detections that need human review"
-
-### What to click:
-- Click on **"NPDC-CW-001 Council Report.pdf"** (or first document) to enter Document Review
+- **Document table** showing the uploaded document with:
+  - Detection count from real AI analysis
+  - Status: "Ready for Review" (amber badge)
+  - File type, page count
+- "Each document moves through a defined workflow: Ready, In Review, Reviewed, Signed Off"
 
 ---
 
-## [7:00–12:00] Document Review — The Centrepiece
+## [7:00-12:00] Document Review — The Centrepiece
 
-**Navigate to:** `/requests/req-001/review/doc-001`
+**Navigate to:** Click the uploaded document to enter review
 
 > **This is the most important screen. Spend the most time here.**
 
 ### What to say:
-> "This is the heart of Veil — the document review screen. On the left, you see the original document. On the right, a redacted preview showing what the released version will look like. Below, the AI detections panel lists every item Veil has flagged."
+> "This is the heart of Veil — the document review screen. When I opened this document, its status automatically changed from 'Ready' to 'In Review'. Every state transition is tracked."
 
 ### What to highlight:
 
 **Split-panel view:**
-- **Left panel (Original)** — full document content with colour-coded highlights:
-  - Purple highlights = personal information
-  - Blue highlights = commercially sensitive
-  - Amber highlights = legal privilege
+- **Left panel (Original)** — full document content as extracted by OCR
+- **Right panel (Redacted)** — same document with colour-coded highlights showing AI detections:
+  - Green highlights = high confidence (>= 85%)
+  - Amber highlights = medium confidence (50-84%)
+  - Red highlights = low confidence (< 50%)
   - Each highlighted entity is clickable
-- **Right panel (Redacted)** — same document with black redaction bars replacing accepted items
-  - "This is what the requester will receive"
 
-**Detection indicators:**
-- Confidence scores with colour coding (High ≥85% green, Medium 50–84% amber, Low <50% red)
-- Detection type badges (Personal, Commercial, Legal Privilege, Financial)
+**Detection panel (bottom):**
+- Tabbed view: All | Personal | Commercial | Other
+- Each detection shows: entity text, type, confidence score, page, suggested ground
+- Click a row to scroll to the detection in the document view
 
 ### What to click (detailed walkthrough):
 
-1. **Click a highlighted entity** in the document (e.g., "John Smith")
-   - Show the detection detail popover with AI explanation
-   - "Veil explains *why* it flagged this — 'Personal name detected in context of employment relationship'"
+1. **Click a highlighted entity** (e.g., a personal name)
+   - Show the detection in the bottom panel
+   - "Veil shows the AI's reasoning — why it flagged this text and what ground it suggests"
 
 2. **Accept a detection** — click the green checkmark
    - Show the statutory ground selector appearing
-   - "When you accept a redaction, Veil requires you to link it to a specific LGOIMA ground. This isn't optional — it's what makes your withholding schedule defensible."
+   - "When you accept a redaction, Veil requires you to link it to a specific LGOIMA ground. This is what makes your withholding schedule defensible."
    - Select **s7(2)(a) — Privacy of natural persons**
-   - Enter reasoning: "Name identifies a private individual in the context of council correspondence"
-   - "For Section 7 grounds, Veil also prompts for the public interest consideration — because s7(1) requires the officer to weigh whether disclosure is outweighed"
-   - Click **Apply Ground**
+   - "This decision is immediately saved to the database and recorded in the audit trail"
 
-3. **Reject a detection** — click the red X on a low-confidence item
-   - "Not every AI detection is correct. Here, Veil flagged 'Bell Block' as a potential personal name, but it's actually a suburb. The reviewer rejects this — and that decision is logged in the audit trail."
+3. **Reject a detection** — click the red X on an item
+   - "Not every AI detection is correct. The reviewer rejects this — and that decision is also logged."
 
-4. **Show the detection table** below
-   - Point out the **tabs**: All (12), Personal (5), Commercial (3), Other (4)
-   - "Officers can filter by detection type and work through systematically"
-   - Click different tabs to filter
+4. **Accept all remaining detections** to show the workflow progression
+   - "Notice the stats in the header update: accepted, rejected, pending counts"
+   - When all detections are actioned, point out: "The document status has automatically moved to 'Reviewed'"
 
-5. **AI explanation**
-   - Click the Brain icon on a detection
-   - "Every AI suggestion includes an explanation — what was detected, why, and what ground might apply"
+5. **Submit to Senior Review**
+   - Click the "Submit to Senior Review" button
+   - "The initial reviewer has completed their work. Now it goes to the senior reviewer for sign-off."
 
-6. **Submit to Senior Review**
-   - Point to the "Submit to Senior Review" button
-   - "Once the reviewer is satisfied, they submit to the next tier. Veil supports tiered review — Reviewer, Senior Reviewer, Final Approver — matching your existing governance structure."
+6. **Show the Senior Review workflow**
+   - The button area now shows "Awaiting Senior Review" with two options:
+   - **Sign Off** (green) — "The senior reviewer approves all decisions"
+   - **Request Changes** — "Or they can send it back with a reason, which moves it back to 'In Review'"
+   - Click **Sign Off** to demonstrate
+   - "The document is now 'Signed Off' — this is recorded in the audit trail with the senior reviewer's identity"
 
 ---
 
-## [12:00–15:00] Withholding Schedule
+## [12:00-15:00] Withholding Schedule
 
-**Navigate to:** `/requests/req-001/schedule`
+**Navigate to:** `/requests/[case-id]/schedule`
 
 ### What to say:
-> "The withholding schedule is generated automatically from the review decisions. Every redaction links back to its statutory ground, the reviewer's reasoning, and the public interest consideration where applicable."
+> "The withholding schedule is generated automatically from the review decisions. Every redaction links back to its statutory ground."
 
 ### What to highlight:
 - **Covering statement** — editable text block for the response letter
 - **Schedule items table** — each row shows:
-  - Page/section reference
+  - Document name
+  - Page reference
   - Description of what was withheld
-  - LGOIMA ground (e.g., s7(2)(a), s6(a))
-  - Reviewer's reasoning
-  - Whether it's been reviewed/approved
-- **Right-of-review notice** — standard text informing the requester of their right to complain to the Ombudsman
+  - LGOIMA ground (e.g., s7(2)(a))
+  - Expandable reasoning
 - **Ground summary** — count of items by ground
-
-### What to say:
-> "This schedule can be exported as a PDF to accompany the disclosed documents. If the Ombudsman investigates, every decision is traceable back to the individual detection, the reviewer who made the call, and the reasoning at the time."
+- **Right-of-review notice** — standard Ombudsman text
 
 ### What to click:
-- Scroll through the schedule items
-- Point to **"Preview as PDF"** button
-- Point to **"Mark as Reviewed"** to show the approval workflow
+- Click **"Preview as PDF"** — this generates a real PDF from the database
+  - "This PDF is generated live from the accepted detections — it's not a template, it's computed from the actual review decisions"
+- Point out: "If the Ombudsman investigates, every decision is traceable back to the individual detection, the reviewer who made the call, and the reasoning at the time"
 
 ---
 
-## [15:00–17:00] Audit Trail
+## [15:00-17:00] Audit Trail
 
-**Navigate to:** `/requests/req-001/audit`
+**Navigate to:** `/requests/[case-id]/audit`
 
 ### What to say:
 > "Everything in Veil is auditable. The audit trail is immutable — write-once, read-many. No one can edit or delete entries, not even administrators."
 
 ### What to highlight:
-- **WORM banner** at top — "Immutable Audit Trail — Write-Once, Read-Many"
+- **WORM banner** at top — "Immutable Audit Trail"
 - **Timeline entries** — each shows:
   - Timestamp
-  - User who performed the action
-  - Action type (with colour-coded icons)
+  - User who performed the action (and their role)
+  - Action type with colour-coded icons
   - Details of what changed
-- **Change tracking** — where applicable, shows previous → new values
-- **Filter and search** — filter by action type, user, date range
-
-### What to say:
-> "This trail satisfies the Public Records Act requirements and provides the defensibility the Ombudsman expects. Every AI detection, every human decision, every status change — all recorded with user ID and timestamp."
+- Point out the real entries from the demo: "These are the actual actions we just performed — the case creation, the document upload, each detection we accepted and rejected, the sign-off. All real, all timestamped."
 
 ### What to click:
-- Scroll through the audit entries
-- Point out the different action types: ingestion, detection, review, approval
-- Use the type filter to show only "Review" actions
+- Scroll through entries
+- Use the type filter to show only "Review" or "Status" actions
 
 ---
 
-## [17:00–18:30] Export & Release
+## [17:00-18:30] Export & Release
 
-**Navigate to:** `/requests/req-001/export`
+**Navigate to:** `/requests/[case-id]/export`
 
 ### What to say:
-> "When all documents are reviewed and approved, Veil generates the final release package. Redactions are burned into the documents permanently and verified as irreversible."
+> "When all documents are reviewed and signed off, Veil generates the final release package with real PDF redaction."
 
 ### What to highlight:
-- **Export checklist** — all required steps before release:
-  - All documents reviewed ✓
-  - Withholding schedule approved ✓
-  - Senior review complete ✓
-  - Redactions verified as permanent ✓
-- **Export options** — PDF package, withholding schedule, audit report, cover letter
-- **Verification** — automated check confirming redactions cannot be reversed
+- **Three export types:**
+  - **Requester** — Redacted documents + withholding schedule + cover letter
+  - **Internal** — Adds full audit trail
+  - **Ombudsman** — Adds original unredacted documents
+- **Export process:**
+  - Click to generate
+  - Real PDF redaction: permanent black rectangles with LGOIMA ground labels
+  - Metadata stripped from all PDFs
+  - ZIP package assembled for download
 
 ### What to say:
-> "The export package includes everything NPDC needs: the redacted documents, the withholding schedule, and a full audit report. This is what goes to the requester."
+> "The redaction is permanent — the original text is removed from the PDF, not just covered. And each redaction bar shows the withholding ground reference, so the requester knows which section of the Act applies."
 
 ---
 
-## [18:30–20:00] Admin & AI Governance
+## [18:30-20:00] Admin & AI Governance
 
 **Navigate to:** `/admin/ai-governance`
 
 ### What to say:
-> "Finally, Veil provides full transparency into AI performance. This dashboard shows precision, recall, and accuracy metrics by detection type — so your team always knows how well the AI is performing."
+> "Finally, Veil provides full transparency into AI performance. This dashboard shows precision, recall, and accuracy metrics by detection type."
 
 ### What to highlight:
-- **Accuracy metrics** — Precision 94.2%, Recall 91.8%, F1 Score 93.0%
+- **Accuracy metrics** — Precision, Recall, F1 Score
 - **Per-entity breakdown** — accuracy varies by type (names vs. IRD numbers vs. addresses)
-- **Model governance** — which model is in use, when it was last updated, data residency confirmation
-
-**Optionally show:** `/admin/rules` for custom rules, `/admin/settings` for system configuration
+- **Model governance** — which model is in use, data residency confirmation
 
 ### Closing statement:
-> "Veil is purpose-built for LGOIMA. It's not a generic redaction tool adapted for New Zealand — it understands your statutory grounds, your workflow, and your compliance requirements. Built on Azure NZ North, your data never leaves New Zealand. Every AI suggestion is transparent, every human decision is auditable, and your Ombudsman responses are defensible from day one."
+> "Veil is purpose-built for LGOIMA. It understands your statutory grounds, your workflow, and your compliance requirements. Built on Azure NZ North, your data never leaves New Zealand. Every AI suggestion is transparent, every human decision is auditable, and your Ombudsman responses are defensible from day one."
+
+---
+
+## Organisational Workflow Summary
+
+Show this diagram if questions arise about how Veil fits into a council's operations:
+
+```
+ROLES:
+  Coordinator  →  Creates cases, assigns work, manages deadlines
+  Reviewer     →  Reviews AI detections, assigns LGOIMA grounds
+  Senior       →  Signs off or requests changes
+  Approver     →  Final sign-off on complete response package
+
+WORKFLOW PER REQUEST:
+  1. INTAKE       →  Case created, deadline set (20 working days)
+  2. GATHER       →  Documents uploaded to Veil
+  3. PROCESS      →  OCR → Pattern detection → AI detection
+  4. REVIEW       →  Accept/reject detections with grounds
+  5. SIGN-OFF     →  Senior reviewer approves or sends back
+  6. QA           →  Automated compliance checks
+  7. EXPORT       →  Redacted PDFs + schedule + cover letter
+  8. RELEASE      →  Sent to requester, audit trail preserved
+
+DOCUMENT STATUSES:
+  Ready → In Review → Reviewed (Initial) → Signed Off
+                ↑            |
+                +-- Request --+
+                    Changes
+```
 
 ---
 
@@ -247,18 +276,20 @@
 
 | Theme | Message |
 |-------|---------|
+| **Working system** | This is a real POC — real database, real AI, real PDF redaction |
 | **LGOIMA-native** | Built specifically for LGOIMA s6, s7, s17 — not adapted from generic redaction |
 | **AI + Human** | AI assists, humans decide — every action is accountable |
+| **Tiered review** | Reviewer → Senior Reviewer → sign-off matches council governance |
 | **Defensible** | Immutable audit trail, statutory ground linkage, reasoning capture |
 | **NZ Data Sovereignty** | Azure NZ North region, data never leaves NZ/AU |
-| **Scale** | Handles 1,000–10,000+ documents per request |
-| **Workflow** | Tiered review matches council governance structures |
+| **Scale** | Handles 1,000-10,000+ documents per request |
 
 ---
 
 ## Troubleshooting
 
+- **Database not running:** Run `docker compose up -d` and wait 5 seconds
+- **Azure services not configured:** Check `.env` has valid endpoints and keys; without them, upload works but AI detection will fail
 - **Sidebar obscuring content:** Click the collapse arrow at the bottom of the sidebar
-- **Screen too small:** Demo should be run at 1920×1080 minimum
-- **Slow load:** First load after `npm run dev` may take a moment for compilation
-- **Navigation:** If you lose your place, the sidebar always shows your current location highlighted
+- **Screen too small:** Demo should be run at 1920x1080 minimum
+- **Slow first load:** First page load after `npm run dev` compiles on-demand — allow a few seconds

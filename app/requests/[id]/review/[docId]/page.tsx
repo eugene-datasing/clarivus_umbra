@@ -3,6 +3,7 @@ import { getCase } from "@/lib/data/cases";
 import { getDocument, getDocumentIdsForCase } from "@/lib/data/documents";
 import { getDetectionsForDocument } from "@/lib/data/detections";
 import { getDocumentContent, documentHeaders } from "@/lib/data/document-content";
+import { markDocumentInReview } from "@/lib/actions/detection-actions";
 import ReviewClient from "./review-client";
 
 export default async function ReviewPage({
@@ -25,6 +26,9 @@ export default async function ReviewPage({
     notFound();
   }
 
+  // Transition document from "ready" → "in-review" on first open
+  await markDocumentInReview(docId);
+
   const header = documentHeaders[docId] ?? {
     title: "New Plymouth District Council",
     subtitle: "Te Kaunihera-a-Rohe o Ngamotu",
@@ -33,11 +37,15 @@ export default async function ReviewPage({
 
   const currentDocIndex = documentIds.indexOf(docId);
 
+  // Determine effective doc status after potential transition
+  const docStatus = doc.status === "ready" ? "in-review" : doc.status;
+
   return (
     <ReviewClient
       requestId={id}
       docId={docId}
       docName={doc.name}
+      docStatus={docStatus}
       documentContent={content ?? []}
       header={header}
       detections={detections}

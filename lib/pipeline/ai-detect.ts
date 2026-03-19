@@ -75,6 +75,8 @@ Important context:
 - Consider both individual privacy and the public interest in disclosure
 - Names of elected officials, chief executives, and senior managers acting in their official capacity should NOT be flagged
 - Focus on identifying personal names of private individuals, submitters, complainants, and junior staff
+- Do NOT flag headings, labels, field names, or column headers that merely describe a category of information without containing actual personal data (e.g. "Registered Office Address", "Email Address", "Phone Number", "Contact Details")
+- Only flag text that IS the actual sensitive data, not text that DESCRIBES or LABELS where such data would appear
 
 Respond with a JSON object containing a "detections" array. Each detection must have:
 {

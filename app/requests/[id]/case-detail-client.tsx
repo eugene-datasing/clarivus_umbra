@@ -12,8 +12,10 @@ import {
 const docStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
   pending: { label: "Pending", color: "text-gray-600", bg: "bg-gray-100" },
   processing: { label: "Processing", color: "text-blue-700", bg: "bg-blue-50" },
-  ready: { label: "Ready", color: "text-sky-700", bg: "bg-sky-50" },
+  ready: { label: "Ready for Review", color: "text-amber-600", bg: "bg-amber-50" },
   "in-review": { label: "In Review", color: "text-blue-700", bg: "bg-blue-50" },
+  reviewed: { label: "Reviewed (Initial)", color: "text-purple-600", bg: "bg-purple-50" },
+  "signed-off": { label: "Signed Off", color: "text-green-700", bg: "bg-green-50" },
   submitted: { label: "Submitted", color: "text-amber-700", bg: "bg-amber-50" },
   approved: { label: "Approved", color: "text-green-700", bg: "bg-green-50" },
   rejected: { label: "Rejected", color: "text-red-700", bg: "bg-red-50" },

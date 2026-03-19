@@ -27,6 +27,9 @@ import {
   rejectDetection,
   revertDetection,
   applyGround,
+  submitForSeniorReview,
+  signOffDocument,
+  requestChanges,
 } from "@/lib/actions/detection-actions";
 import { lgoimaGrounds } from "@/lib/lgoima-grounds";
 import { cn } from "@/lib/utils";
@@ -63,6 +66,7 @@ export interface ReviewClientProps {
   requestId: string;
   docId: string;
   docName: string;
+  docStatus: string;
   documentContent: DocParagraph[];
   header: { title: string; subtitle: string; date: string };
   detections: Detection[];
@@ -144,6 +148,7 @@ export default function ReviewClient({
   requestId,
   docId,
   docName,
+  docStatus: initialDocStatus,
   documentContent,
   header,
   detections,
@@ -161,10 +166,14 @@ export default function ReviewClient({
     return init;
   });
 
+  const [docStatus, setDocStatus] = useState(initialDocStatus);
   const [selectedDetectionId, setSelectedDetectionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabFilter>("all");
   const [groundSelectorId, setGroundSelectorId] = useState<string | null>(null);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  const [showSignOffConfirm, setShowSignOffConfirm] = useState(false);
+  const [showRequestChanges, setShowRequestChanges] = useState(false);
+  const [requestChangesReason, setRequestChangesReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSubmitSuccess, setShowSubmitSuccess] = useState(false);
 
@@ -503,51 +512,162 @@ export default function ReviewClient({
               {stats.pending}
             </span>
           </div>
-          <div className="relative">
-            <button
-              onClick={() => setShowSubmitConfirm((v) => !v)}
-              className="btn-primary flex items-center gap-1.5"
-            >
-              <Send size={14} />
-              <span className="hidden sm:inline">Submit to Senior Review</span>
-            </button>
-            {showSubmitConfirm && (
-              <div className="absolute right-0 top-full mt-2 w-72 bg-surface-card border border-border rounded-card shadow-lg p-4 z-50">
-                <div className="flex items-start gap-2 mb-3">
-                  <Shield size={16} className="text-brand-primary mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium text-txt-primary">Confirm Submission</p>
-                    <p className="text-xs text-txt-secondary mt-1">
-                      {stats.pending > 0
-                        ? `${stats.pending} detection(s) are still pending review. Are you sure you want to submit?`
-                        : "All detections reviewed. Ready to submit for senior review."}
-                    </p>
+          {/* Status-aware action buttons */}
+          {(docStatus === "in-review" || docStatus === "ready") && (
+            <div className="relative">
+              <button
+                onClick={() => setShowSubmitConfirm((v) => !v)}
+                className="btn-primary flex items-center gap-1.5"
+                disabled={isSubmitting}
+              >
+                <Send size={14} />
+                <span className="hidden sm:inline">Submit to Senior Review</span>
+              </button>
+              {showSubmitConfirm && (
+                <div className="absolute right-0 top-full mt-2 w-72 bg-surface-card border border-border rounded-card shadow-lg p-4 z-50">
+                  <div className="flex items-start gap-2 mb-3">
+                    <Shield size={16} className="text-brand-primary mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium text-txt-primary">Confirm Submission</p>
+                      <p className="text-xs text-txt-secondary mt-1">
+                        {stats.pending > 0
+                          ? `${stats.pending} detection(s) are still pending review. Are you sure you want to submit?`
+                          : "All detections reviewed. Ready to submit for senior review."}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => setShowSubmitConfirm(false)} className="btn-ghost text-xs">
+                      Cancel
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setShowSubmitConfirm(false);
+                        setIsSubmitting(true);
+                        try {
+                          await submitForSeniorReview(docId);
+                          setDocStatus("reviewed");
+                          setShowSubmitSuccess(true);
+                          setTimeout(() => setShowSubmitSuccess(false), 3000);
+                        } catch (e) {
+                          console.error("Submit failed:", e);
+                        } finally {
+                          setIsSubmitting(false);
+                        }
+                      }}
+                      className="btn-primary text-xs"
+                    >
+                      Submit
+                    </button>
                   </div>
                 </div>
-                <div className="flex gap-2 justify-end">
-                  <button onClick={() => setShowSubmitConfirm(false)} className="btn-ghost text-xs">
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowSubmitConfirm(false);
-                      setIsSubmitting(true);
-                      setTimeout(() => {
-                        setIsSubmitting(false);
-                        setShowSubmitSuccess(true);
-                        setTimeout(() => {
-                          router.push(`/requests/${requestId}/schedule`);
-                        }, 1500);
-                      }, 1000);
-                    }}
-                    className="btn-primary text-xs"
-                  >
-                    Submit
-                  </button>
-                </div>
+              )}
+            </div>
+          )}
+          {docStatus === "reviewed" && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-purple-600 font-medium bg-purple-50 px-2 py-1 rounded hidden lg:inline">
+                Awaiting Senior Review
+              </span>
+              <div className="relative">
+                <button
+                  onClick={() => { setShowRequestChanges((v) => !v); setShowSignOffConfirm(false); }}
+                  className="btn-ghost text-xs flex items-center gap-1 text-amber-600 border-amber-200 hover:bg-amber-50"
+                  disabled={isSubmitting}
+                >
+                  <ArrowLeft size={12} />
+                  Request Changes
+                </button>
+                {showRequestChanges && (
+                  <div className="absolute right-0 top-full mt-2 w-80 bg-surface-card border border-border rounded-card shadow-lg p-4 z-50">
+                    <p className="text-sm font-medium text-txt-primary mb-2">Request Changes</p>
+                    <textarea
+                      className="input-field text-xs min-h-[60px] mb-3"
+                      placeholder="Reason for requesting changes (optional)..."
+                      value={requestChangesReason}
+                      onChange={(e) => setRequestChangesReason(e.target.value)}
+                    />
+                    <div className="flex gap-2 justify-end">
+                      <button onClick={() => { setShowRequestChanges(false); setRequestChangesReason(""); }} className="btn-ghost text-xs">
+                        Cancel
+                      </button>
+                      <button
+                        onClick={async () => {
+                          setIsSubmitting(true);
+                          try {
+                            await requestChanges(docId, requestChangesReason || undefined);
+                            setDocStatus("in-review");
+                            setShowRequestChanges(false);
+                            setRequestChangesReason("");
+                          } catch (e) {
+                            console.error("Request changes failed:", e);
+                          } finally {
+                            setIsSubmitting(false);
+                          }
+                        }}
+                        className="btn-primary text-xs bg-amber-600 hover:bg-amber-700"
+                      >
+                        Send Back
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+              <div className="relative">
+                <button
+                  onClick={() => { setShowSignOffConfirm((v) => !v); setShowRequestChanges(false); }}
+                  className="btn-primary flex items-center gap-1.5 bg-green-600 hover:bg-green-700"
+                  disabled={isSubmitting}
+                >
+                  <Check size={14} />
+                  <span className="hidden sm:inline">Sign Off</span>
+                </button>
+                {showSignOffConfirm && (
+                  <div className="absolute right-0 top-full mt-2 w-72 bg-surface-card border border-border rounded-card shadow-lg p-4 z-50">
+                    <div className="flex items-start gap-2 mb-3">
+                      <Shield size={16} className="text-green-600 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-txt-primary">Confirm Sign-Off</p>
+                        <p className="text-xs text-txt-secondary mt-1">
+                          This confirms all redaction decisions for this document are approved. This action will be recorded in the audit trail.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <button onClick={() => setShowSignOffConfirm(false)} className="btn-ghost text-xs">
+                        Cancel
+                      </button>
+                      <button
+                        onClick={async () => {
+                          setShowSignOffConfirm(false);
+                          setIsSubmitting(true);
+                          try {
+                            await signOffDocument(docId);
+                            setDocStatus("signed-off");
+                            setShowSubmitSuccess(true);
+                            setTimeout(() => setShowSubmitSuccess(false), 3000);
+                          } catch (e) {
+                            console.error("Sign-off failed:", e);
+                          } finally {
+                            setIsSubmitting(false);
+                          }
+                        }}
+                        className="btn-primary text-xs bg-green-600 hover:bg-green-700"
+                      >
+                        Confirm Sign-Off
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {docStatus === "signed-off" && (
+            <span className="text-xs text-green-600 font-semibold bg-green-50 px-3 py-1.5 rounded flex items-center gap-1.5">
+              <Check size={14} />
+              Signed Off
+            </span>
+          )}
         </div>
       </header>
 

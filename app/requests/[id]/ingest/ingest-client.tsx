@@ -39,6 +39,7 @@ function StatusIcon({ status }: { status: DocStatus }) {
     case "approved":
     case "released":
     case "complete":
+    case "signed-off":
       return <CheckCircle className="w-5 h-5 text-green-500" />;
     case "processing":
       return <Loader className="w-5 h-5 text-blue-500 animate-spin" />;
@@ -47,6 +48,7 @@ function StatusIcon({ status }: { status: DocStatus }) {
       return <Circle className="w-5 h-5 text-gray-300" />;
     case "in-review":
     case "submitted":
+    case "reviewed":
       return <Loader className="w-5 h-5 text-amber-500" />;
     case "error":
     case "rejected":
@@ -57,12 +59,14 @@ function StatusIcon({ status }: { status: DocStatus }) {
 }
 
 const statusLabel: Record<string, { text: string; color: string }> = {
-  ready: { text: "Complete", color: "text-green-600" },
+  ready: { text: "Ready for Review", color: "text-amber-600" },
   processing: { text: "Processing", color: "text-blue-600" },
   queued: { text: "Queued", color: "text-gray-500" },
   error: { text: "Error", color: "text-red-600" },
   pending: { text: "Pending", color: "text-gray-500" },
   "in-review": { text: "In Review", color: "text-blue-600" },
+  reviewed: { text: "Reviewed (Initial)", color: "text-purple-600" },
+  "signed-off": { text: "Signed Off", color: "text-green-600" },
   submitted: { text: "Submitted", color: "text-amber-600" },
   approved: { text: "Approved", color: "text-green-600" },
   rejected: { text: "Rejected", color: "text-red-600" },

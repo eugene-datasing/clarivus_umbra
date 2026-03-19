@@ -273,7 +273,12 @@ The reasons for each withholding are set out in the schedule below.`
 
       {/* Action buttons */}
       <div className="flex items-center gap-3">
-        <button className="btn-secondary flex items-center gap-2">
+        <button
+          className="btn-secondary flex items-center gap-2"
+          onClick={() => {
+            window.open(`/api/schedule/${requestId}`, "_blank");
+          }}
+        >
           <Eye className="w-4 h-4" />
           Preview as PDF
         </button>

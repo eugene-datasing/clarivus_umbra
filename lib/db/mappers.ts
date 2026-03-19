@@ -19,7 +19,21 @@ export const statusConfig: Record<RequestStatus, { label: string; color: string;
 };
 
 // --- Document status ---
-export type DocStatus = "pending" | "processing" | "ready" | "in-review" | "submitted" | "approved" | "rejected" | "released" | "error";
+export type DocStatus = "pending" | "processing" | "ready" | "in-review" | "reviewed" | "signed-off" | "submitted" | "approved" | "rejected" | "released" | "error";
+
+export const docStatusConfig: Record<DocStatus, { label: string; color: string; bg: string }> = {
+  pending: { label: "Pending", color: "text-gray-600", bg: "bg-gray-100" },
+  processing: { label: "Processing", color: "text-blue-600", bg: "bg-blue-50" },
+  ready: { label: "Ready for Review", color: "text-amber-600", bg: "bg-amber-50" },
+  "in-review": { label: "In Review", color: "text-blue-600", bg: "bg-blue-50" },
+  reviewed: { label: "Reviewed (Initial)", color: "text-purple-600", bg: "bg-purple-50" },
+  "signed-off": { label: "Signed Off", color: "text-green-600", bg: "bg-green-50" },
+  submitted: { label: "Submitted", color: "text-amber-600", bg: "bg-amber-50" },
+  approved: { label: "Approved", color: "text-green-600", bg: "bg-green-50" },
+  rejected: { label: "Rejected", color: "text-red-600", bg: "bg-red-50" },
+  released: { label: "Released", color: "text-brand-primary", bg: "bg-purple-50" },
+  error: { label: "Error", color: "text-red-600", bg: "bg-red-50" },
+};
 
 // --- Document type ---
 export type DocType = "pdf" | "docx" | "xlsx" | "pptx" | "eml" | "msg" | "txt" | "img";
