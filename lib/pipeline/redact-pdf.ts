@@ -1,13 +1,22 @@
 /**
- * Redaction engine — applies permanent redaction boxes to PDF documents
- * using pdf-lib. For non-PDF sources, generates a text-based PDF with
- * redaction markers applied.
+ * Redaction engine — applies permanent redaction to PDF documents.
+ *
+ * For PDF originals: calls PyMuPDF (via Python subprocess) which uses
+ * add_redact_annot + apply_redactions to genuinely remove text from
+ * the PDF content stream. This is true, defensible redaction.
+ *
+ * For non-PDF originals: generates a new text-based PDF with redaction
+ * markers applied (original text never enters the output).
  */
 
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { prisma } from "@/lib/db/prisma";
 import { getStorage } from "@/lib/storage";
 import { getGroundById } from "@/lib/lgoima-grounds";
+import { execFile } from "child_process";
+import { promises as fs } from "fs";
+import path from "path";
+import os from "os";
 
 interface RedactedResult {
   pdfBytes: Uint8Array;
@@ -44,7 +53,7 @@ export async function buildRedactedPdf(documentId: string): Promise<RedactedResu
 }
 
 // ---------------------------------------------------------------------------
-// PDF originals — overlay black boxes on existing pages
+// PDF originals — true redaction via PyMuPDF subprocess
 // ---------------------------------------------------------------------------
 
 async function redactOriginalPdf(
@@ -65,66 +74,64 @@ async function redactOriginalPdf(
   const storage = getStorage();
   const buffer = await storage.download(doc.originalPath);
 
-  const pdfDoc = await PDFDocument.load(buffer);
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const pages = pdfDoc.getPages();
+  // Prepare redaction data for the Python script
+  const redactions = detections.map((det) => {
+    const groundId = det.appliedGround || det.suggestedGround;
+    const ground = groundId ? getGroundById(groundId) : null;
+    return {
+      page: det.page,
+      posX: det.posX,
+      posY: det.posY,
+      posW: det.posW,
+      posH: det.posH,
+      label: ground ? ground.reference : (groundId || ""),
+    };
+  });
 
-  for (const det of detections) {
-    const pageIndex = det.page - 1;
-    if (pageIndex < 0 || pageIndex >= pages.length) continue;
+  // Write input PDF and redaction JSON to temp files
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "veil-redact-"));
+  const inputPath = path.join(tmpDir, "input.pdf");
+  const outputPath = path.join(tmpDir, "output.pdf");
+  const jsonPath = path.join(tmpDir, "redactions.json");
+  const scriptPath = path.resolve(process.cwd(), "lib/pipeline/redact_pdf_pymupdf.py");
 
-    const page = pages[pageIndex];
-    const { height } = page.getSize();
+  try {
+    await fs.writeFile(inputPath, buffer);
+    await fs.writeFile(jsonPath, JSON.stringify(redactions));
 
-    // Detection positions are stored as percentages (0-100) of page dimensions
-    const x = (det.posX / 100) * page.getSize().width;
-    const w = (det.posW / 100) * page.getSize().width;
-    const h = (det.posH / 100) * height;
-    // posY is from top; pdf-lib draws from bottom
-    const y = height - ((det.posY / 100) * height) - h;
-
-    // Draw black redaction rectangle
-    page.drawRectangle({
-      x,
-      y,
-      width: w,
-      height: h,
-      color: rgb(0, 0, 0),
+    // Call PyMuPDF via subprocess
+    await new Promise<void>((resolve, reject) => {
+      execFile(
+        "python3",
+        [scriptPath, inputPath, outputPath, jsonPath],
+        { timeout: 120_000 },
+        (error, stdout, stderr) => {
+          if (error) {
+            console.error("[redact-pdf] PyMuPDF stderr:", stderr);
+            reject(new Error(`PyMuPDF redaction failed: ${error.message}`));
+          } else {
+            console.log("[redact-pdf] PyMuPDF result:", stdout.trim());
+            resolve();
+          }
+        },
+      );
     });
 
-    // Overlay ground reference in white text if available
-    const groundId = det.appliedGround || det.suggestedGround;
-    if (groundId) {
-      const ground = getGroundById(groundId);
-      const label = ground ? ground.reference : groundId;
-      const fontSize = Math.min(7, h * 0.7);
-      if (fontSize >= 4) {
-        page.drawText(label, {
-          x: x + 2,
-          y: y + (h - fontSize) / 2,
-          size: fontSize,
-          font,
-          color: rgb(1, 1, 1),
-        });
-      }
-    }
+    const pdfBytes = await fs.readFile(outputPath);
+
+    // Count pages from the output
+    const pdfDoc = await PDFDocument.load(pdfBytes);
+    const pageCount = pdfDoc.getPageCount();
+
+    return {
+      pdfBytes: new Uint8Array(pdfBytes),
+      redactionCount: detections.length,
+      pageCount,
+    };
+  } finally {
+    // Clean up temp files
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
   }
-
-  // Strip metadata
-  pdfDoc.setTitle("");
-  pdfDoc.setAuthor("");
-  pdfDoc.setSubject("");
-  pdfDoc.setKeywords([]);
-  pdfDoc.setCreator("Veil LGOIMA Disclosure Platform");
-  pdfDoc.setProducer("Veil by DataSing");
-
-  const pdfBytes = await pdfDoc.save();
-
-  return {
-    pdfBytes,
-    redactionCount: detections.length,
-    pageCount: pages.length,
-  };
 }
 
 // ---------------------------------------------------------------------------
