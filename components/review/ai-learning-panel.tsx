@@ -23,6 +23,7 @@ interface AILearningPanelProps {
   caseId: string;
   onClose: () => void;
   onCrossDocCreated?: (count: number) => void;
+  panelHeight?: number;
 }
 
 interface CrossDocMatch {
@@ -38,6 +39,7 @@ export default function AILearningPanel({
   caseId,
   onClose,
   onCrossDocCreated,
+  panelHeight = 280,
 }: AILearningPanelProps) {
   // Rule suggestion
   const [ruleStatus, setRuleStatus] = useState<"idle" | "loading" | "done">("idle");
@@ -106,7 +108,7 @@ export default function AILearningPanel({
   };
 
   return (
-    <div className="fixed bottom-[290px] right-6 w-[340px] bg-surface-card border border-border rounded-card shadow-xl z-40">
+    <div style={{ bottom: panelHeight + 16 }} className="fixed right-6 w-[340px] bg-surface-card border border-border rounded-card shadow-xl z-40">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div className="flex items-center gap-2">

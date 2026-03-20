@@ -7,7 +7,7 @@ import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, FolderOpen, ClipboardList, PlusCircle,
-  Settings2, Brain, FileBarChart, Cog, Bell, ChevronLeft, ChevronRight, Shield,
+  Settings2, Brain, FileBarChart, Cog, Bell, ChevronLeft, ChevronRight, EyeOff,
   Clock, FileText, CheckCircle, AlertTriangle, X, LogOut,
 } from "lucide-react";
 
@@ -94,7 +94,7 @@ export function Sidebar() {
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-white/10">
         <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
-          <Shield className="w-5 h-5 text-white" />
+          <EyeOff className="w-5 h-5 text-white" />
         </div>
         {!collapsed && (
           <div>

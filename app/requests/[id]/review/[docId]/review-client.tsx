@@ -175,6 +175,28 @@ export default function ReviewClient({
     return init;
   });
 
+  // Sync new detections into state when props update (e.g. after router.refresh)
+  useEffect(() => {
+    setDetectionStates((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const d of detections) {
+        if (!next[d.id]) {
+          next[d.id] = { status: d.status as DetectionStatus, appliedGround: d.appliedGround };
+          changed = true;
+        }
+      }
+      // Remove detections that no longer exist (e.g. deleted manual detection)
+      for (const id of Object.keys(next)) {
+        if (!detections.some((d) => d.id === id)) {
+          delete next[id];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [detections]);
+
   const [docStatus, setDocStatus] = useState(initialDocStatus);
   const [selectedDetectionId, setSelectedDetectionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabFilter>("all");
@@ -203,6 +225,9 @@ export default function ReviewClient({
   } | null>(null);
 
   // Refs for scrolling
+  const [panelHeight, setPanelHeight] = useState(280);
+  const panelDragRef = useRef<{ startY: number; startH: number } | null>(null);
+
   const detectionRowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
   const redactionRefs = useRef<Record<string, HTMLSpanElement | null>>({});
 
@@ -232,6 +257,34 @@ export default function ReviewClient({
   useEffect(() => {
     setHistoryOpen(false);
   }, [selectedDetectionId]);
+
+  // ----- Panel resize drag handling -----
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!panelDragRef.current) return;
+      const delta = panelDragRef.current.startY - e.clientY;
+      const newH = Math.max(120, Math.min(window.innerHeight * 0.7, panelDragRef.current.startH + delta));
+      setPanelHeight(newH);
+    };
+    const onMouseUp = () => {
+      panelDragRef.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, []);
+
+  const onResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    panelDragRef.current = { startY: e.clientY, startH: panelHeight };
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+  }, [panelHeight]);
 
   // ----- Prev / Next navigation -----
   const hasPrev = currentDocIndex > 0;
@@ -889,8 +942,16 @@ export default function ReviewClient({
           </div>
         </div>
 
+        {/* --- Resize Handle --- */}
+        <div
+          onMouseDown={onResizeStart}
+          className="shrink-0 h-1.5 border-t border-border bg-surface-card cursor-row-resize hover:bg-brand-primary/10 active:bg-brand-primary/20 transition-colors flex items-center justify-center"
+        >
+          <div className="w-8 h-0.5 rounded-full bg-txt-secondary/30" />
+        </div>
+
         {/* --- Bottom Detection Panel --- */}
-        <div className="shrink-0 h-[280px] border-t border-border bg-surface-card flex flex-col">
+        <div style={{ height: panelHeight }} className="shrink-0 border-t border-border bg-surface-card flex flex-col">
           {/* Tab bar */}
           <div className="shrink-0 flex items-center gap-0 border-b border-border px-4">
             {(
@@ -1175,6 +1236,7 @@ export default function ReviewClient({
           caseId={caseId}
           onClose={() => setAiLearningDetection(null)}
           onCrossDocCreated={() => router.refresh()}
+          panelHeight={panelHeight}
         />
       )}
 
@@ -1185,7 +1247,7 @@ export default function ReviewClient({
         const state = detectionStates[det.id];
         const typeConf = detectionTypeConfig[det.type as keyof typeof detectionTypeConfig];
         return (
-          <div className="fixed bottom-[290px] right-6 w-80 bg-surface-card border border-border rounded-card shadow-lg p-4 z-40">
+          <div style={{ bottom: panelHeight + 16 }} className="fixed right-6 w-80 bg-surface-card border border-border rounded-card shadow-lg p-4 z-40">
             <div className="flex items-start justify-between mb-2">
               <div className="flex items-center gap-1.5">
                 <AlertCircle size={13} className="text-brand-primary" />

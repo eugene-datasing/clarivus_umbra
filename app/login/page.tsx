@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Shield, LogIn } from "lucide-react";
+import { EyeOff, LogIn } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -42,7 +42,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="w-14 h-14 rounded-full bg-brand-primary flex items-center justify-center mx-auto mb-4">
-            <Shield className="w-7 h-7 text-white" />
+            <EyeOff className="w-7 h-7 text-white" />
           </div>
           <h1 className="text-2xl font-heading font-bold text-txt-primary">Veil</h1>
           <p className="text-sm text-txt-secondary mt-1">
