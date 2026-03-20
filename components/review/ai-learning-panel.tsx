@@ -9,7 +9,9 @@ import {
   Loader2,
   Plus,
   BookOpen,
+  ExternalLink,
 } from "lucide-react";
+import Link from "next/link";
 import {
   suggestCustomRule,
   scanCrossDocument,
@@ -162,9 +164,19 @@ export default function AILearningPanel({
             <div className="flex items-center gap-2 text-xs">
               <CheckCircle size={12} className="text-confidence-high shrink-0" />
               <span className="text-txt-primary">
-                {ruleResult.alreadyExists
-                  ? "A similar rule already exists"
-                  : "Draft rule created — activate in Admin > Rules"}
+                {ruleResult.alreadyExists ? (
+                  "A similar rule already exists"
+                ) : (
+                  <>
+                    Draft rule created —{" "}
+                    <Link
+                      href="/admin/rules"
+                      className="inline-flex items-center gap-0.5 text-brand-primary hover:underline font-medium"
+                    >
+                      activate in Custom Rules <ExternalLink size={10} />
+                    </Link>
+                  </>
+                )}
               </span>
             </div>
           )}

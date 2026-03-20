@@ -1060,6 +1060,11 @@ export default function ReviewClient({
                               Manual
                             </span>
                           )}
+                          {det.source === "custom-rule" && (
+                            <span className="badge bg-teal-50 text-teal-700 text-[9px] shrink-0">
+                              Rule
+                            </span>
+                          )}
                         </div>
                       </td>
 
@@ -1264,6 +1269,9 @@ export default function ReviewClient({
               <span className={cn("badge text-[10px]", typeConf?.color ?? "bg-gray-100 text-gray-700")}>
                 {typeConf?.label ?? det.type}
               </span>
+              {det.source === "custom-rule" && (
+                <span className="badge bg-teal-50 text-teal-700 text-[10px] ml-1">Rule</span>
+              )}
               <span className={cn("ml-2 text-[11px] font-mono font-medium", confTextClass(det.confidence))}>
                 {det.confidence}% confidence
               </span>

@@ -67,7 +67,6 @@ export default function RulesClient({ rules }: RulesClientProps) {
   const [newType, setNewType] = useState<string>("Keyword");
   const [newMatchMode, setNewMatchMode] = useState("Exact");
   const [newKeywords, setNewKeywords] = useState("");
-  const [newScope, setNewScope] = useState("All Documents");
   const [newPriority, setNewPriority] = useState("Medium");
   const [newDescription, setNewDescription] = useState("");
 
@@ -76,7 +75,6 @@ export default function RulesClient({ rules }: RulesClientProps) {
   const [editType, setEditType] = useState("");
   const [editMatchMode, setEditMatchMode] = useState("");
   const [editKeywords, setEditKeywords] = useState("");
-  const [editScope, setEditScope] = useState("");
   const [editPriority, setEditPriority] = useState("");
   const [editDescription, setEditDescription] = useState("");
 
@@ -91,7 +89,6 @@ export default function RulesClient({ rules }: RulesClientProps) {
     setEditType(rule.type);
     setEditMatchMode(rule.matchMode);
     setEditKeywords(rule.keywords);
-    setEditScope(rule.scope);
     setEditPriority(rule.priority);
     setEditDescription(rule.description);
   }
@@ -106,7 +103,7 @@ export default function RulesClient({ rules }: RulesClientProps) {
         status,
         matchMode: newMatchMode,
         keywords: newKeywords,
-        scope: newScope,
+        scope: "All Documents",
         priority: newPriority,
         description: newDescription,
       });
@@ -128,7 +125,7 @@ export default function RulesClient({ rules }: RulesClientProps) {
         type: editType,
         matchMode: editMatchMode,
         keywords: editKeywords,
-        scope: editScope,
+        scope: "All Documents",
         priority: editPriority,
         description: editDescription,
         ...(status ? { status } : {}),
@@ -264,39 +261,20 @@ export default function RulesClient({ rules }: RulesClientProps) {
                 placeholder="Enter keywords (comma-separated) or regex pattern..."
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-txt-primary mb-1.5">
-                  Scope
-                </label>
-                <select
-                  className="input-field"
-                  value={newScope}
-                  onChange={(e) => setNewScope(e.target.value)}
-                >
-                  <option>All Documents</option>
-                  <option>Resource Consent Documents</option>
-                  <option>Consents</option>
-                  <option>Consultation Documents</option>
-                  <option>Correspondence</option>
-                  <option>Internal Reports</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-txt-primary mb-1.5">
-                  Priority
-                </label>
-                <select
-                  className="input-field"
-                  value={newPriority}
-                  onChange={(e) => setNewPriority(e.target.value)}
-                >
-                  <option>Critical</option>
-                  <option>High</option>
-                  <option>Medium</option>
-                  <option>Low</option>
-                </select>
-              </div>
+            <div className="w-48">
+              <label className="block text-sm font-medium text-txt-primary mb-1.5">
+                Priority
+              </label>
+              <select
+                className="input-field"
+                value={newPriority}
+                onChange={(e) => setNewPriority(e.target.value)}
+              >
+                <option>Critical</option>
+                <option>High</option>
+                <option>Medium</option>
+                <option>Low</option>
+              </select>
             </div>
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
               <button
@@ -514,39 +492,20 @@ export default function RulesClient({ rules }: RulesClientProps) {
                 pattern-type rules.
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-txt-primary mb-1.5">
-                  Scope
-                </label>
-                <select
-                  className="input-field"
-                  value={editScope}
-                  onChange={(e) => setEditScope(e.target.value)}
-                >
-                  <option>All Documents</option>
-                  <option>Resource Consent Documents</option>
-                  <option>Consents</option>
-                  <option>Consultation Documents</option>
-                  <option>Correspondence</option>
-                  <option>Internal Reports</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-txt-primary mb-1.5">
-                  Priority
-                </label>
-                <select
-                  className="input-field"
-                  value={editPriority}
-                  onChange={(e) => setEditPriority(e.target.value)}
-                >
-                  <option>Critical</option>
-                  <option>High</option>
-                  <option>Medium</option>
-                  <option>Low</option>
-                </select>
-              </div>
+            <div className="w-48">
+              <label className="block text-sm font-medium text-txt-primary mb-1.5">
+                Priority
+              </label>
+              <select
+                className="input-field"
+                value={editPriority}
+                onChange={(e) => setEditPriority(e.target.value)}
+              >
+                <option>Critical</option>
+                <option>High</option>
+                <option>Medium</option>
+                <option>Low</option>
+              </select>
             </div>
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
               <button

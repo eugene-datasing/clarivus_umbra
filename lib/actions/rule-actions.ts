@@ -102,10 +102,19 @@ export async function toggleRuleStatus(ruleId: string) {
   });
   if (!rule) throw new Error("Rule not found");
 
+  // Active → Disabled; Draft or Disabled → Active
   const newStatus = rule.status === "Active" ? "Disabled" : "Active";
   await prisma.customRule.update({
     where: { id: ruleId },
     data: { status: newStatus },
+  });
+
+  await createAuditEntry({
+    userName: user.name,
+    userRole: user.role,
+    type: "rule-toggled",
+    description: `${rule.status} → ${newStatus}: "${rule.name}"`,
+    target: rule.name,
   });
 
   return { success: true, newStatus };

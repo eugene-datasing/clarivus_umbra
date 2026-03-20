@@ -50,7 +50,7 @@ export const docTypeConfig: Record<DocType, { label: string; color: string; icon
 };
 
 // --- Detection type ---
-export type DetectionType = "personal-name" | "phone" | "email-addr" | "ird" | "address" | "commercial" | "free-frank" | "legal-privilege" | "confidential" | "manual";
+export type DetectionType = "personal-name" | "phone" | "email-addr" | "ird" | "address" | "commercial" | "free-frank" | "legal-privilege" | "confidential" | "manual" | "custom-keyword" | "custom-pattern" | "custom-entity" | "custom-combination";
 export type DetectionStatus = "pending" | "accepted" | "rejected" | "modified";
 
 export const detectionTypeConfig: Record<DetectionType, { label: string; color: string }> = {
@@ -64,6 +64,10 @@ export const detectionTypeConfig: Record<DetectionType, { label: string; color: 
   "legal-privilege": { label: "Legal Privilege", color: "bg-orange-100 text-orange-700" },
   confidential: { label: "Confidential", color: "bg-pink-100 text-pink-700" },
   manual: { label: "Manual", color: "bg-gray-100 text-gray-700" },
+  "custom-keyword": { label: "Custom Keyword", color: "bg-teal-100 text-teal-700" },
+  "custom-pattern": { label: "Custom Pattern", color: "bg-teal-100 text-teal-700" },
+  "custom-entity": { label: "Custom Entity", color: "bg-teal-100 text-teal-700" },
+  "custom-combination": { label: "Custom Rule", color: "bg-teal-100 text-teal-700" },
 };
 
 // --- Document content types (for review page) ---

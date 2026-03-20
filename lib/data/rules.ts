@@ -1,5 +1,18 @@
 import { prisma } from "@/lib/db/prisma";
 
+const priorityWeight: Record<string, number> = {
+  Critical: 0,
+  High: 1,
+  Medium: 2,
+  Low: 3,
+};
+
+function sortByPriority<T extends { priority: string }>(rules: T[]): T[] {
+  return rules.sort(
+    (a, b) => (priorityWeight[a.priority] ?? 99) - (priorityWeight[b.priority] ?? 99),
+  );
+}
+
 export async function getAllRules() {
   const rules = await prisma.customRule.findMany({
     orderBy: { updatedAt: "desc" },
@@ -22,9 +35,8 @@ export async function getAllRules() {
 export async function getActiveRules() {
   const rules = await prisma.customRule.findMany({
     where: { status: "Active" },
-    orderBy: { priority: "asc" },
   });
-  return rules.map((r) => ({
+  const mapped = rules.map((r) => ({
     id: r.id,
     name: r.name,
     type: r.type,
@@ -34,6 +46,7 @@ export async function getActiveRules() {
     priority: r.priority,
     suggestedGround: r.suggestedGround,
   }));
+  return sortByPriority(mapped);
 }
 
 export async function incrementMatchCount(ruleId: string, count: number) {

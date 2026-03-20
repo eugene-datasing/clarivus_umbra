@@ -88,7 +88,7 @@ export const createRuleSchema = z.object({
   matchMode: z.enum(["Exact", "Fuzzy", "Regex"]),
   keywords: z.string().min(1, "Keywords are required").max(10000),
   scope: z.string().min(1).max(200),
-  priority: z.enum(["Low", "Medium", "High"]),
+  priority: z.enum(["Low", "Medium", "High", "Critical"]),
   suggestedGround: z.string().max(30).optional(),
   description: z.string().max(2000).optional(),
 });
