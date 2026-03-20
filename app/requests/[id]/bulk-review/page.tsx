@@ -1,4 +1,4 @@
-import { getGroupedDetectionsForCase } from "@/lib/data/detections";
+import { getGroupedDetectionsForCase, getThresholdPreview } from "@/lib/data/detections";
 import { getCase } from "@/lib/data/cases";
 import { notFound } from "next/navigation";
 import BulkReviewClient from "./bulk-review-client";
@@ -29,9 +29,10 @@ export default async function BulkReviewPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [caseData, detections] = await Promise.all([
+  const [caseData, detections, thresholdDetections] = await Promise.all([
     getCase(id),
     getGroupedDetectionsForCase(id),
+    getThresholdPreview(id),
   ]);
 
   if (!caseData) notFound();
@@ -90,9 +91,28 @@ export default async function BulkReviewPage({
         ),
         snippets,
         detectionIds: dets.map((d) => d.id),
+        // Include per-detection statuses so the client can filter post-threshold
+        detectionStatuses: dets.map((d) => ({
+          id: d.id,
+          status: d.status,
+          confidence: d.confidence,
+        })),
       };
     }
   );
+
+  // Map threshold detection types to display labels
+  const thresholdData = thresholdDetections.map((d) => {
+    const typeCfg = detectionTypeConfig[d.type as DetectionType];
+    return {
+      id: d.id,
+      type: d.type,
+      typeLabel: typeCfg?.label || d.type,
+      confidence: d.confidence,
+      suggestedGround: d.suggestedGround,
+      documentId: d.documentId,
+    };
+  });
 
   return (
     <BulkReviewClient
@@ -100,6 +120,7 @@ export default async function BulkReviewPage({
       caseReference={caseData.reference}
       requestId={id}
       totalDocuments={caseData.documentCount}
+      thresholdData={thresholdData}
     />
   );
 }

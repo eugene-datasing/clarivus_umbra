@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 
@@ -9,6 +10,7 @@ import { Sidebar } from "@/components/layout/sidebar";
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
   const isFullScreenRoute = pathname === "/login" || pathname.startsWith("/setup");
 
   if (isFullScreenRoute) {
@@ -17,8 +19,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <Sidebar />
-      <main className="ml-[260px] min-h-screen transition-all duration-200">
+      <Sidebar collapsed={collapsed} onToggleCollapse={() => setCollapsed((c) => !c)} />
+      <main
+        className="min-h-screen transition-all duration-200"
+        style={{ marginLeft: collapsed ? 64 : 260 }}
+      >
         {children}
       </main>
     </>

@@ -27,7 +27,15 @@ export default async function ReviewPage({
   }
 
   // Transition document from "ready" → "in-review" on first open
-  await markDocumentInReview(docId);
+  // Wrapped in try/catch: the status transition is a side-effect and
+  // should not prevent the page from rendering if auth fails (e.g.
+  // user's department is not assigned to this case but they have a
+  // direct document link).
+  try {
+    await markDocumentInReview(docId);
+  } catch {
+    // Silently skip — page still renders for read access
+  }
 
   const header = documentHeaders[docId] ?? {
     title: "New Plymouth District Council",

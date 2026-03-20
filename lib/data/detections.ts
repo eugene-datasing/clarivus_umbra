@@ -72,6 +72,30 @@ export async function getDetectionHistory(detectionId: string) {
   }));
 }
 
+/**
+ * Return all pending detections for a case with the fields needed
+ * for client-side confidence-threshold filtering.  The client uses
+ * this to drive an interactive slider without server round-trips.
+ */
+export async function getThresholdPreview(caseId: string) {
+  const detections = await prisma.detection.findMany({
+    where: {
+      document: { caseId },
+      status: "pending",
+    },
+    select: {
+      id: true,
+      type: true,
+      confidence: true,
+      suggestedGround: true,
+      documentId: true,
+    },
+    orderBy: { confidence: "desc" },
+  });
+
+  return detections;
+}
+
 export async function getWithholdingItems(caseId: string) {
   const acceptedDetections = await prisma.detection.findMany({
     where: {

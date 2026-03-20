@@ -10,6 +10,7 @@ import {
   ChevronRight,
   ArrowLeft,
   Eye,
+  EyeOff,
   Edit,
   AlertCircle,
   Star,
@@ -207,6 +208,7 @@ export default function ReviewClient({
   const [requestChangesReason, setRequestChangesReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSubmitSuccess, setShowSubmitSuccess] = useState(false);
+  const [showOriginal, setShowOriginal] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyData, setHistoryData] = useState<
     { id: string; field: string; previousValue: string | null; newValue: string | null; changedBy: string; changedAt: string }[]
@@ -313,6 +315,27 @@ export default function ReviewClient({
         !["personal-name", "phone", "email-addr", "ird", "address", "commercial"].includes(d.type)
     );
   }, [detections, activeTab]);
+
+  // Build document-order index for detection sorting
+  const detectionOrder = useMemo(() => {
+    const order = new Map<string, number>();
+    let idx = 0;
+    for (const para of documentContent) {
+      for (const seg of para.segments) {
+        if (seg.detectionId) {
+          order.set(seg.detectionId, idx++);
+        }
+      }
+    }
+    return order;
+  }, [documentContent]);
+
+  // Sort filtered detections by document position (top → bottom)
+  const sortedDetections = useMemo(() => {
+    return [...filteredDetections].sort((a, b) => {
+      return (detectionOrder.get(a.id) ?? Infinity) - (detectionOrder.get(b.id) ?? Infinity);
+    });
+  }, [filteredDetections, detectionOrder]);
 
   const stats = useMemo(() => {
     const total = detections.length;
@@ -676,7 +699,18 @@ export default function ReviewClient({
           )}
         </div>
 
-        {/* Right: stats + submit */}
+        {/* Right: toggle + stats + submit */}
+        <div className="flex items-center gap-3 shrink-0">
+          {/* Hide/Show Original toggle */}
+          <button
+            onClick={() => setShowOriginal((v) => !v)}
+            className="btn-ghost flex items-center gap-1 text-xs shrink-0"
+          >
+            {showOriginal ? <EyeOff size={13} /> : <Eye size={13} />}
+            <span className="hidden md:inline">{showOriginal ? "Hide Original" : "Show Original"}</span>
+          </button>
+          <div className="h-5 w-px bg-border shrink-0" />
+        </div>
         <div className="flex items-center gap-3 shrink-0">
           {/* Mini progress */}
           <div className="hidden lg:flex items-center gap-2.5 text-[11px] text-txt-secondary">
@@ -854,70 +888,66 @@ export default function ReviewClient({
 
       {/* ===== MAIN CONTENT: Split Panels + Bottom Detection Table ===== */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* --- Split Panels --- */}
-        <div className="flex-1 flex overflow-hidden min-h-0">
-          {/* LEFT PANEL -- Original Document */}
-          <div className="w-1/2 border-r border-border flex flex-col overflow-hidden">
-            <div className="shrink-0 px-4 py-2 border-b border-border bg-surface-card flex items-center gap-2">
-              <Eye size={13} className="text-txt-secondary" />
-              <span className="text-xs font-semibold text-txt-secondary uppercase tracking-wider">
-                Original Document
-              </span>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              <div className="max-w-[640px] mx-auto px-8 py-6">
-                {/* Simulated page chrome */}
-                <div className="bg-white border border-gray-200 rounded shadow-sm px-10 py-8 min-h-[600px]">
-                  {/* Document header bar */}
-                  <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200">
-                    <div className="w-8 h-8 rounded-full bg-brand-primary flex items-center justify-center">
-                      <span className="text-white font-heading text-xs font-bold">
-                        {header.title.split(" ").map(w => w[0]).slice(0, 2).join("")}
-                      </span>
+        {/* --- Document Panels (single scroll container) --- */}
+        <div className="flex-1 overflow-y-auto min-h-0">
+          <div className="flex min-h-full">
+            {/* LEFT PANEL -- Original Document (hideable) */}
+            {showOriginal && (
+              <div className="w-1/2 border-r border-border">
+                <div className="sticky top-0 z-10 px-4 py-2 border-b border-border bg-surface-card flex items-center gap-2">
+                  <Eye size={13} className="text-txt-secondary" />
+                  <span className="text-xs font-semibold text-txt-secondary uppercase tracking-wider">
+                    Original Document
+                  </span>
+                </div>
+                <div className="max-w-[640px] mx-auto px-8 py-6">
+                  <div className="bg-white border border-gray-200 rounded shadow-sm px-10 py-8 min-h-[600px]">
+                    <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200">
+                      <div className="w-8 h-8 rounded-full bg-brand-primary flex items-center justify-center">
+                        <span className="text-white font-heading text-xs font-bold">
+                          {header.title.split(" ").map(w => w[0]).slice(0, 2).join("")}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-txt-secondary uppercase tracking-widest font-semibold">
+                          {header.title}
+                        </p>
+                        <p className="text-[9px] text-txt-secondary/60">
+                          {header.subtitle}
+                        </p>
+                      </div>
+                      <span className="ml-auto text-[9px] text-txt-secondary/50">{header.date}</span>
                     </div>
-                    <div>
-                      <p className="text-[10px] text-txt-secondary uppercase tracking-widest font-semibold">
-                        {header.title}
-                      </p>
-                      <p className="text-[9px] text-txt-secondary/60">
-                        {header.subtitle}
-                      </p>
-                    </div>
-                    <span className="ml-auto text-[9px] text-txt-secondary/50">{header.date}</span>
+                    {documentContent.map((para, i) => renderOriginalParagraph(para, i))}
                   </div>
-
-                  {documentContent.map((para, i) => renderOriginalParagraph(para, i))}
                 </div>
               </div>
-            </div>
-          </div>
+            )}
 
-          {/* RIGHT PANEL -- Redacted View */}
-          <div className="w-1/2 flex flex-col overflow-hidden">
-            <div className="shrink-0 px-4 py-2 border-b border-border bg-surface-card flex items-center gap-2">
-              <Edit size={13} className="text-brand-primary" />
-              <span className="text-xs font-semibold text-brand-primary uppercase tracking-wider">
-                Redacted View
-              </span>
-              <span className="ml-auto flex items-center gap-3 text-[10px] text-txt-secondary">
-                <span className="flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-confidence-high inline-block" />
-                  High
+            {/* RIGHT PANEL -- Redacted View */}
+            <div className={showOriginal ? "w-1/2" : "w-full"} onMouseUp={handleTextSelection}>
+              <div className="sticky top-0 z-10 px-4 py-2 border-b border-border bg-surface-card flex items-center gap-2">
+                <Edit size={13} className="text-brand-primary" />
+                <span className="text-xs font-semibold text-brand-primary uppercase tracking-wider">
+                  Redacted View
                 </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-confidence-medium inline-block" />
-                  Medium
+                <span className="ml-auto flex items-center gap-3 text-[10px] text-txt-secondary">
+                  <span className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-confidence-high inline-block" />
+                    High
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-confidence-medium inline-block" />
+                    Medium
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-confidence-low inline-block" />
+                    Low
+                  </span>
                 </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-confidence-low inline-block" />
-                  Low
-                </span>
-              </span>
-            </div>
-            <div className="flex-1 overflow-y-auto bg-gray-50/50" onMouseUp={handleTextSelection}>
-              <div className="max-w-[640px] mx-auto px-8 py-6">
+              </div>
+              <div className={cn("mx-auto px-8 py-6", showOriginal ? "max-w-[640px]" : "max-w-[800px]")}>
                 <div className="bg-white border border-gray-200 rounded shadow-sm px-10 py-8 min-h-[600px]">
-                  {/* Document header bar */}
                   <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200">
                     <div className="w-8 h-8 rounded-full bg-brand-primary flex items-center justify-center">
                       <span className="text-white font-heading text-xs font-bold">
@@ -934,7 +964,6 @@ export default function ReviewClient({
                     </div>
                     <span className="ml-auto text-[9px] text-txt-secondary/50">{header.date}</span>
                   </div>
-
                   {documentContent.map((para, i) => renderRedactedParagraph(para, i))}
                 </div>
               </div>
@@ -1019,7 +1048,7 @@ export default function ReviewClient({
                 </tr>
               </thead>
               <tbody>
-                {filteredDetections.map((det, idx) => {
+                {sortedDetections.map((det, idx) => {
                   const state = detectionStates[det.id];
                   const isSelected = selectedDetectionId === det.id;
                   const isAccepted = state?.status === "accepted";
@@ -1183,7 +1212,7 @@ export default function ReviewClient({
                     </tr>
                   );
                 })}
-                {filteredDetections.length === 0 && (
+                {sortedDetections.length === 0 && (
                   <tr>
                     <td colSpan={8} className="text-center py-8 text-txt-secondary text-sm">
                       No detections in this category.

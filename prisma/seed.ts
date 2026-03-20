@@ -8,20 +8,20 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   console.log("Seeding Veil database...");
 
-  // --- Users ---
+  // --- Users (with department assignments) ---
   const users = [
-    { id: "u-001", name: "A. Richardson", email: "a.richardson@npdc.govt.nz", role: "request-manager" },
-    { id: "u-002", name: "B. Mitchell", email: "b.mitchell@npdc.govt.nz", role: "request-manager" },
-    { id: "u-003", name: "K. Williams", email: "k.williams@npdc.govt.nz", role: "reviewer" },
-    { id: "u-004", name: "M. Patel", email: "m.patel@npdc.govt.nz", role: "reviewer" },
-    { id: "u-005", name: "J. Chen", email: "j.chen@npdc.govt.nz", role: "senior-reviewer" },
-    { id: "u-006", name: "D. Harper", email: "d.harper@npdc.govt.nz", role: "final-approver" },
+    { id: "u-001", name: "A. Richardson", email: "a.richardson@npdc.govt.nz", role: "request-manager", departmentId: "dept-003" },
+    { id: "u-002", name: "B. Mitchell", email: "b.mitchell@npdc.govt.nz", role: "request-manager", departmentId: "dept-001" },
+    { id: "u-003", name: "K. Williams", email: "k.williams@npdc.govt.nz", role: "reviewer", departmentId: "dept-001" },
+    { id: "u-004", name: "M. Patel", email: "m.patel@npdc.govt.nz", role: "reviewer", departmentId: "dept-002" },
+    { id: "u-005", name: "J. Chen", email: "j.chen@npdc.govt.nz", role: "senior-reviewer", departmentId: "dept-003" },
+    { id: "u-006", name: "D. Harper", email: "d.harper@npdc.govt.nz", role: "final-approver", departmentId: "dept-003" },
   ];
 
   for (const u of users) {
     await prisma.user.upsert({
       where: { id: u.id },
-      update: { name: u.name, email: u.email, role: u.role },
+      update: { name: u.name, email: u.email, role: u.role, departmentId: u.departmentId },
       create: u,
     });
   }
@@ -302,6 +302,43 @@ async function main() {
     });
   }
   console.log(`  ✓ ${auditEntries.length} audit entries`);
+
+  // --- Pipeline milestones + assignments for req-001 ---
+  const milestones = [
+    { id: "ms-001", caseId: "req-001", stage: "collection", label: "Document Collection", targetDate: new Date("2026-03-18"), completedAt: new Date("2026-03-15"), sortOrder: 1 },
+    { id: "ms-002", caseId: "req-001", stage: "processing", label: "AI Processing", targetDate: new Date("2026-03-19"), completedAt: new Date("2026-03-15"), sortOrder: 2 },
+    { id: "ms-003", caseId: "req-001", stage: "initial-review", label: "Initial Review", targetDate: new Date("2026-03-27"), completedAt: null, sortOrder: 3 },
+    { id: "ms-004", caseId: "req-001", stage: "senior-review", label: "Senior Review", targetDate: new Date("2026-04-02"), completedAt: null, sortOrder: 4 },
+    { id: "ms-005", caseId: "req-001", stage: "final-approval", label: "Final Approval", targetDate: new Date("2026-04-04"), completedAt: null, sortOrder: 5 },
+    { id: "ms-006", caseId: "req-001", stage: "release", label: "Release", targetDate: new Date("2026-04-08"), completedAt: null, sortOrder: 6 },
+  ];
+
+  for (const m of milestones) {
+    await prisma.caseMilestone.upsert({
+      where: { id: m.id },
+      update: m,
+      create: m,
+    });
+  }
+  console.log(`  ✓ ${milestones.length} pipeline milestones`);
+
+  const pipelineAssignments = [
+    { id: "pa-001", caseId: "req-001", milestoneId: "ms-001", type: "department", departmentId: "dept-001", assignedBy: "A. Richardson" },
+    { id: "pa-002", caseId: "req-001", milestoneId: "ms-001", type: "department", departmentId: "dept-002", assignedBy: "A. Richardson" },
+    { id: "pa-003", caseId: "req-001", milestoneId: "ms-003", type: "user", userId: "u-003", role: "reviewer", assignedBy: "A. Richardson" },
+    { id: "pa-004", caseId: "req-001", milestoneId: "ms-003", type: "user", userId: "u-004", role: "reviewer", assignedBy: "A. Richardson" },
+    { id: "pa-005", caseId: "req-001", milestoneId: "ms-004", type: "user", userId: "u-005", role: "senior-reviewer", assignedBy: "A. Richardson" },
+    { id: "pa-006", caseId: "req-001", milestoneId: "ms-005", type: "user", userId: "u-006", role: "final-approver", assignedBy: "A. Richardson" },
+  ];
+
+  for (const a of pipelineAssignments) {
+    await prisma.caseAssignment.upsert({
+      where: { id: a.id },
+      update: a,
+      create: a,
+    });
+  }
+  console.log(`  ✓ ${pipelineAssignments.length} pipeline assignments`);
 
   console.log("\nSeed complete!");
 }

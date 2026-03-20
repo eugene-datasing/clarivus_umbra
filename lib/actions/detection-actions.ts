@@ -11,7 +11,9 @@ import {
   applyGroundSchema,
   bulkDetectionSchema,
   detectionIdSchema,
+  confidenceThresholdSchema,
 } from "@/lib/validation/schemas";
+import { authorizeForCase } from "@/lib/auth/authorize";
 
 // ---------------------------------------------------------------------------
 // Change tracking (WP12)
@@ -447,4 +449,84 @@ export async function bulkRejectDetections(detectionIds: string[]) {
   }
 
   return { count: result.count };
+}
+
+// ---------------------------------------------------------------------------
+// Confidence-threshold mass redaction
+// ---------------------------------------------------------------------------
+
+/**
+ * Auto-accept all pending detections above a confidence threshold.
+ * Each detection gets its suggestedGround applied as appliedGround.
+ * Only senior-reviewer, admin, and request-manager roles may use this.
+ */
+export async function applyConfidenceThreshold(caseId: string, threshold: number) {
+  const { caseId: validCaseId, threshold: validThreshold } =
+    confidenceThresholdSchema.parse({ caseId, threshold });
+
+  const user = await requireUser();
+  await authorizeForCase(user, validCaseId);
+
+  // Role restriction: only senior reviewers and admins
+  const allowedRoles = new Set(["admin", "request-manager", "senior-reviewer"]);
+  if (!allowedRoles.has(user.role)) {
+    throw new Error("Access denied: only senior reviewers and admins can apply confidence thresholds");
+  }
+
+  // Find all pending detections above the threshold
+  const detections = await prisma.detection.findMany({
+    where: {
+      document: { caseId: validCaseId },
+      status: "pending",
+      confidence: { gt: validThreshold },
+    },
+    select: {
+      id: true,
+      suggestedGround: true,
+      documentId: true,
+    },
+  });
+
+  if (detections.length === 0) {
+    return { accepted: 0, documentsAffected: 0 };
+  }
+
+  // Group by suggestedGround so each batch gets the right ground applied
+  const byGround = new Map<string | null, string[]>();
+  for (const det of detections) {
+    const ground = det.suggestedGround;
+    if (!byGround.has(ground)) byGround.set(ground, []);
+    byGround.get(ground)!.push(det.id);
+  }
+
+  // Bulk update per ground group
+  for (const [ground, ids] of byGround) {
+    await prisma.detection.updateMany({
+      where: { id: { in: ids } },
+      data: {
+        status: "accepted",
+        appliedGround: ground,
+        reviewedAt: new Date(),
+      },
+    });
+  }
+
+  // Recompute document statuses
+  const docIds = [...new Set(detections.map((d) => d.documentId))];
+  for (const docId of docIds) {
+    await recomputeDocumentStatus(docId);
+  }
+
+  // Audit trail
+  await createAuditEntry({
+    userName: user.name,
+    userRole: user.role,
+    type: "review",
+    description: `Applied confidence threshold ${validThreshold}%: ${detections.length} detection(s) auto-accepted`,
+    target: "Bulk Review",
+    caseId: validCaseId,
+    detail: `Threshold: >${validThreshold}%, Documents affected: ${docIds.length}`,
+  });
+
+  return { accepted: detections.length, documentsAffected: docIds.length };
 }

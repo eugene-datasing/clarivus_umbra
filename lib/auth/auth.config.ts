@@ -44,9 +44,10 @@ export const authConfig = {
       // Everything else requires auth
       if (!isLoggedIn) return false;
 
-      // Admin route protection
+      // Admin route protection — restrict to roles with admin access
       const role = (auth?.user as { role?: string })?.role;
-      if (pathname.startsWith("/admin") && role !== "admin" && role !== "senior-reviewer") {
+      const adminRoles = ["admin", "senior-reviewer", "request-manager", "final-approver"];
+      if (pathname.startsWith("/admin") && !adminRoles.includes(role ?? "")) {
         return Response.redirect(new URL("/", nextUrl));
       }
 

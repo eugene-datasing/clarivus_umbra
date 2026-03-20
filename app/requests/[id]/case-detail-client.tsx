@@ -174,6 +174,12 @@ export default function CaseDetailClient({ caseData, documents }: CaseDetailClie
           Documents
         </Link>
         <Link
+          href={`/requests/${request.id}/pipeline`}
+          className="px-4 py-2.5 text-sm font-medium text-txt-secondary hover:text-txt-primary transition-colors"
+        >
+          Pipeline
+        </Link>
+        <Link
           href={`/requests/${request.id}/schedule`}
           className="px-4 py-2.5 text-sm font-medium text-txt-secondary hover:text-txt-primary transition-colors"
         >

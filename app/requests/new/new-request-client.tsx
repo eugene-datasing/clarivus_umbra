@@ -82,7 +82,7 @@ export default function NewRequestClient({
       setCreatedRef(result.reference);
       setShowSuccess(true);
       setTimeout(() => {
-        router.push(`/requests/${result.id}/ingest`);
+        router.push(`/requests/${result.id}/pipeline`);
       }, 1200);
     } catch {
       setError("Failed to create case. Please try again.");

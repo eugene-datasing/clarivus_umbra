@@ -21,9 +21,10 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  department        Department?  @relation(fields: [departmentId], references: [id])
-  assignedDocuments Document[]   @relation("DocumentAssignee")
+  department        Department?      @relation(fields: [departmentId], references: [id])
+  assignedDocuments Document[]       @relation("DocumentAssignee")
   auditEntries      AuditEntry[]
+  caseAssignments   CaseAssignment[] @relation("caseAssignments")
 
   @@map("users")
 }
@@ -38,7 +39,8 @@ model Department {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  users User[]
+  users           User[]
+  caseAssignments CaseAssignment[]
 
   @@map("departments")
 }
@@ -66,6 +68,8 @@ model Case {
   documents        Document[]
   auditEntries     AuditEntry[]
   feedbackExamples FeedbackExample[]
+  milestones       CaseMilestone[]
+  caseAssignments  CaseAssignment[]
 
   @@map("cases")
 }
@@ -249,6 +253,44 @@ model CustomRule {
   updatedAt DateTime @updatedAt
 
   @@map("custom_rules")
+}
+
+model CaseMilestone {
+  id          String    @id @default(cuid())
+  caseId      String
+  stage       String    // collection, processing, initial-review, senior-review, final-approval, release
+  label       String
+  targetDate  DateTime
+  completedAt DateTime?
+  sortOrder   Int
+
+  case        Case             @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  assignments CaseAssignment[]
+
+  @@unique([caseId, stage])
+  @@index([caseId])
+  @@map("case_milestones")
+}
+
+model CaseAssignment {
+  id           String   @id @default(cuid())
+  caseId       String
+  milestoneId  String
+  type         String   // "user" or "department"
+  userId       String?
+  departmentId String?
+  role         String?  // "lead-reviewer", "sme-reviewer", "senior-reviewer", "final-approver"
+  assignedAt   DateTime @default(now())
+  assignedBy   String
+
+  case       Case           @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  milestone  CaseMilestone  @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  user       User?          @relation("caseAssignments", fields: [userId], references: [id])
+  department Department?    @relation(fields: [departmentId], references: [id])
+
+  @@index([caseId])
+  @@index([milestoneId])
+  @@map("case_assignments")
 }
 
 model DetectionSnapshot {

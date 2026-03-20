@@ -47,6 +47,11 @@ export const bulkDetectionSchema = z.object({
   ground: z.string().max(30).optional(),
 });
 
+export const confidenceThresholdSchema = z.object({
+  caseId: z.string().min(1, "Case ID is required"),
+  threshold: z.number().int().min(0).max(100),
+});
+
 // ---------------------------------------------------------------------------
 // Manual detection
 // ---------------------------------------------------------------------------

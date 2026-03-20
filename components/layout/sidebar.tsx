@@ -45,10 +45,9 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
-export function Sidebar() {
+export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; onToggleCollapse: () => void }) {
   const pathname = usePathname();
   const { data: session } = useSession();
-  const [collapsed, setCollapsed] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
@@ -69,19 +68,20 @@ export function Sidebar() {
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
-    return pathname.startsWith(href);
+    // Only highlight if this is the most-specific matching nav item.
+    // e.g. on /requests/new, highlight "New Case" (/requests/new) but NOT "Cases" (/requests).
+    if (!pathname.startsWith(href)) return false;
+    const hasMoreSpecific = navItems.some(
+      (other) => other.href !== href && other.href.startsWith(href) && pathname.startsWith(other.href)
+    );
+    return !hasMoreSpecific;
   };
 
+  const canAccessAdmin = userRole !== "reviewer";
   const sections = {
     main: navItems.filter((i) => i.section === "main"),
-    admin: navItems.filter((i) => i.section === "admin"),
-    system: navItems.filter((i) => i.section === "system"),
-  };
-
-  const sectionLabels: Record<string, string> = {
-    main: "",
-    admin: "Administration",
-    system: "System",
+    admin: canAccessAdmin ? navItems.filter((i) => i.section === "admin") : [],
+    system: canAccessAdmin ? navItems.filter((i) => i.section === "system") : [],
   };
 
   return (
@@ -104,17 +104,70 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 py-3 overflow-y-auto">
-        {Object.entries(sections).map(([key, items], sIdx) => (
-          <div key={key}>
-            {sIdx > 0 && <div className="mx-4 my-2 border-t border-white/10" />}
-            {!collapsed && sectionLabels[key] && (
+      {/* Navigation — main items scroll, admin/system pinned at bottom */}
+      <nav className="flex-1 flex flex-col min-h-0 py-3">
+        {/* Main section — scrollable */}
+        <div className="flex-1 overflow-y-auto">
+          {sections.main.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.href);
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg text-sm font-medium transition-colors",
+                  active
+                    ? "bg-white/20 text-white"
+                    : "text-white/70 hover:bg-white/10 hover:text-white"
+                )}
+                title={collapsed ? item.label : undefined}
+              >
+                <Icon className="w-5 h-5 flex-shrink-0" />
+                {!collapsed && <span>{item.label}</span>}
+              </Link>
+            );
+          })}
+        </div>
+
+        {/* Admin + System sections — only shown to roles with access */}
+        {canAccessAdmin && (
+          <div className="shrink-0">
+            <div className="mx-4 my-2 border-t border-white/10" />
+            {!collapsed && (
               <div className="px-5 py-1.5 text-[10px] uppercase tracking-widest text-white/40 font-semibold">
-                {sectionLabels[key]}
+                Administration
               </div>
             )}
-            {items.map((item) => {
+            {sections.admin.map((item) => {
+              const Icon = item.icon;
+              const active = isActive(item.href);
+              return (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg text-sm font-medium transition-colors",
+                    active
+                      ? "bg-white/20 text-white"
+                      : "text-white/70 hover:bg-white/10 hover:text-white"
+                  )}
+                  title={collapsed ? item.label : undefined}
+                >
+                  <Icon className="w-5 h-5 flex-shrink-0" />
+                  {!collapsed && <span>{item.label}</span>}
+                </Link>
+              );
+            })}
+
+            {/* System section */}
+            <div className="mx-4 my-2 border-t border-white/10" />
+            {!collapsed && (
+              <div className="px-5 py-1.5 text-[10px] uppercase tracking-widest text-white/40 font-semibold">
+                System
+              </div>
+            )}
+            {sections.system.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
               return (
@@ -135,7 +188,7 @@ export function Sidebar() {
               );
             })}
           </div>
-        ))}
+        )}
       </nav>
 
       {/* Bottom section — user + notifications */}
@@ -201,7 +254,7 @@ export function Sidebar() {
           )}
         </div>
         <button
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={onToggleCollapse}
           className="w-full flex items-center justify-center mt-1 p-1.5 hover:bg-white/10 rounded text-white/50"
         >
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
