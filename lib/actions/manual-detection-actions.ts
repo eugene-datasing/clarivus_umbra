@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db/prisma";
 import { createAuditEntry } from "@/lib/data/audit";
 import { rebuildContentJson } from "@/lib/pipeline/rebuild-content";
 import { requireUser } from "@/lib/auth/session";
+import { authorizeForDocument, authorizeForDetection, authorizeForCase } from "@/lib/auth/authorize";
+import { createManualDetectionSchema } from "@/lib/validation/schemas";
 
 // ---------------------------------------------------------------------------
 // Create a manual detection
@@ -19,10 +21,12 @@ interface CreateManualDetectionInput {
 }
 
 export async function createManualDetection(input: CreateManualDetectionInput) {
+  const validated = createManualDetectionSchema.parse(input);
   const user = await requireUser();
+  await authorizeForDocument(user, validated.documentId);
 
   const doc = await prisma.document.findUnique({
-    where: { id: input.documentId },
+    where: { id: validated.documentId },
     select: { name: true, caseId: true },
   });
   if (!doc) throw new Error("Document not found");
@@ -32,15 +36,15 @@ export async function createManualDetection(input: CreateManualDetectionInput) {
     // Create the detection record
     const det = await tx.detection.create({
       data: {
-        documentId: input.documentId,
-        type: input.type,
-        text: input.text,
+        documentId: validated.documentId,
+        type: validated.type,
+        text: validated.text,
         confidence: 100,
-        page: input.page,
-        suggestedGround: input.ground || null,
-        appliedGround: input.ground || null,
+        page: validated.page,
+        suggestedGround: validated.ground || null,
+        appliedGround: validated.ground || null,
         status: "accepted",
-        reasoning: input.reasoning || "Manually identified by reviewer",
+        reasoning: validated.reasoning || "Manually identified by reviewer",
         piConsideration: "",
         aiExplanation: "Manually added by reviewer — this item was not detected by AI.",
         source: "manual",
@@ -53,19 +57,19 @@ export async function createManualDetection(input: CreateManualDetectionInput) {
     await tx.feedbackExample.create({
       data: {
         caseId: doc.caseId,
-        documentId: input.documentId,
+        documentId: validated.documentId,
         detectionId: det.id,
-        type: input.type,
-        text: input.text,
-        ground: input.ground || null,
-        reasoning: input.reasoning || "",
+        type: validated.type,
+        text: validated.text,
+        ground: validated.ground || null,
+        reasoning: validated.reasoning || "",
         createdBy: user.name,
       },
     });
 
     // Increment document detection count
     await tx.document.update({
-      where: { id: input.documentId },
+      where: { id: validated.documentId },
       data: { detectionCount: { increment: 1 } },
     });
 
@@ -79,7 +83,7 @@ export async function createManualDetection(input: CreateManualDetectionInput) {
   });
 
   // Rebuild contentJson to include the new detection in highlighted segments
-  await rebuildContentJson(input.documentId);
+  await rebuildContentJson(validated.documentId);
 
   // Audit trail
   await createAuditEntry({
@@ -87,10 +91,10 @@ export async function createManualDetection(input: CreateManualDetectionInput) {
     userName: user.name,
     userRole: user.role,
     type: "manual_detection",
-    description: `Manually added detection: "${input.text.substring(0, 40)}${input.text.length > 40 ? "..." : ""}"`,
+    description: `Manually added detection: "${validated.text.substring(0, 40)}${validated.text.length > 40 ? "..." : ""}"`,
     target: doc.name,
     caseId: doc.caseId,
-    detail: `Type: ${input.type}, Page: ${input.page}${input.ground ? `, Ground: ${input.ground}` : ""}`,
+    detail: `Type: ${validated.type}, Page: ${validated.page}${validated.ground ? `, Ground: ${validated.ground}` : ""}`,
   });
 
   return { success: true, detectionId: detection.id };
@@ -102,6 +106,7 @@ export async function createManualDetection(input: CreateManualDetectionInput) {
 
 export async function deleteManualDetection(detectionId: string) {
   const user = await requireUser();
+  await authorizeForDetection(user, detectionId);
 
   const detection = await prisma.detection.findUnique({
     where: { id: detectionId },
@@ -178,6 +183,7 @@ export async function deleteManualDetection(detectionId: string) {
 
 export async function suggestCustomRule(detectionId: string) {
   const user = await requireUser();
+  await authorizeForDetection(user, detectionId);
 
   const detection = await prisma.detection.findUnique({
     where: { id: detectionId },
@@ -230,6 +236,8 @@ export async function scanCrossDocument(
   detectionId: string,
   caseId: string,
 ): Promise<{ matches: CrossDocMatch[] }> {
+  const user = await requireUser();
+  await authorizeForCase(user, caseId);
   const detection = await prisma.detection.findUnique({
     where: { id: detectionId },
     select: { text: true, documentId: true },
@@ -290,6 +298,7 @@ interface BulkCrossDocInput {
 
 export async function bulkCreateCrossDocDetections(input: BulkCrossDocInput) {
   const user = await requireUser();
+  await authorizeForDetection(user, input.sourceDetectionId);
 
   const source = await prisma.detection.findUnique({
     where: { id: input.sourceDetectionId },
@@ -317,29 +326,32 @@ export async function bulkCreateCrossDocDetections(input: BulkCrossDocInput) {
 
     if (existing) continue; // Skip duplicates
 
-    await prisma.detection.create({
-      data: {
-        documentId: target.documentId,
-        type: source.type,
-        text: source.text,
-        confidence: 100,
-        page: target.pageNumber,
-        suggestedGround: source.suggestedGround,
-        appliedGround: source.appliedGround,
-        status: "accepted",
-        reasoning: source.reasoning || "Cross-document match from manual detection",
-        piConsideration: "",
-        aiExplanation: `Cross-document match: same text found and applied from another document in this case.`,
-        source: "manual",
-        reviewedBy: user.name,
-        reviewedAt: new Date(),
-      },
-    });
+    // Wrap detection creation + counter increment in a transaction
+    await prisma.$transaction(async (tx) => {
+      await tx.detection.create({
+        data: {
+          documentId: target.documentId,
+          type: source.type,
+          text: source.text,
+          confidence: 100,
+          page: target.pageNumber,
+          suggestedGround: source.suggestedGround,
+          appliedGround: source.appliedGround,
+          status: "accepted",
+          reasoning: source.reasoning || "Cross-document match from manual detection",
+          piConsideration: "",
+          aiExplanation: `Cross-document match: same text found and applied from another document in this case.`,
+          source: "manual",
+          reviewedBy: user.name,
+          reviewedAt: new Date(),
+        },
+      });
 
-    // Increment detection count
-    await prisma.document.update({
-      where: { id: target.documentId },
-      data: { detectionCount: { increment: 1 } },
+      // Increment detection count
+      await tx.document.update({
+        where: { id: target.documentId },
+        data: { detectionCount: { increment: 1 } },
+      });
     });
 
     affectedDocIds.add(target.documentId);

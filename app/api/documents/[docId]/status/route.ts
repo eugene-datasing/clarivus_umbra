@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { requireUser } from "@/lib/auth/session";
+import { authorizeForDocument } from "@/lib/auth/authorize";
 
 export async function GET(
   _request: NextRequest,
@@ -7,6 +9,8 @@ export async function GET(
 ) {
   try {
     const { docId } = await params;
+    const user = await requireUser();
+    await authorizeForDocument(user, docId);
 
     const doc = await prisma.document.findUnique({
       where: { id: docId },

@@ -3,6 +3,8 @@
 import { prisma } from "@/lib/db/prisma";
 import { createAuditEntry } from "@/lib/data/audit";
 import { requireUser } from "@/lib/auth/session";
+import { requireAdmin } from "@/lib/auth/authorize";
+import { createRuleSchema, updateRuleSchema } from "@/lib/validation/schemas";
 
 export async function createRule(data: {
   name: string;
@@ -15,18 +17,20 @@ export async function createRule(data: {
   suggestedGround?: string;
   description?: string;
 }) {
+  const validated = createRuleSchema.parse(data);
   const user = await requireUser();
+  requireAdmin(user);
   const rule = await prisma.customRule.create({
     data: {
-      name: data.name,
-      type: data.type,
-      status: data.status,
-      matchMode: data.matchMode,
-      keywords: data.keywords,
-      scope: data.scope,
-      priority: data.priority,
-      suggestedGround: data.suggestedGround ?? null,
-      description: data.description ?? "",
+      name: validated.name,
+      type: validated.type,
+      status: validated.status,
+      matchMode: validated.matchMode,
+      keywords: validated.keywords,
+      scope: validated.scope,
+      priority: validated.priority,
+      suggestedGround: validated.suggestedGround ?? null,
+      description: validated.description ?? "",
     },
   });
 
@@ -34,8 +38,8 @@ export async function createRule(data: {
     userName: user.name,
     userRole: user.role,
     type: "rule-created",
-    description: `Created custom rule: "${data.name}"`,
-    target: data.name,
+    description: `Created custom rule: "${validated.name}"`,
+    target: validated.name,
   });
 
   return { id: rule.id };
@@ -55,9 +59,12 @@ export async function updateRule(
     description?: string;
   },
 ) {
+  const validated = updateRuleSchema.parse(data);
+  const user = await requireUser();
+  requireAdmin(user);
   await prisma.customRule.update({
     where: { id: ruleId },
-    data,
+    data: validated,
   });
 
   return { success: true };
@@ -65,6 +72,7 @@ export async function updateRule(
 
 export async function deleteRule(ruleId: string) {
   const user = await requireUser();
+  requireAdmin(user);
   const rule = await prisma.customRule.findUnique({
     where: { id: ruleId },
     select: { name: true },
@@ -86,6 +94,8 @@ export async function deleteRule(ruleId: string) {
 }
 
 export async function toggleRuleStatus(ruleId: string) {
+  const user = await requireUser();
+  requireAdmin(user);
   const rule = await prisma.customRule.findUnique({
     where: { id: ruleId },
     select: { status: true, name: true },

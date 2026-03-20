@@ -10,7 +10,12 @@ export class LocalStorageProvider implements StorageProvider {
   }
 
   private resolvePath(key: string): string {
-    return path.join(this.baseDir, key);
+    const resolved = path.resolve(this.baseDir, key);
+    const base = path.resolve(this.baseDir);
+    if (!resolved.startsWith(base + path.sep) && resolved !== base) {
+      throw new Error("Invalid storage key: path traversal detected");
+    }
+    return resolved;
   }
 
   async upload(key: string, data: Buffer, _mimeType: string): Promise<void> {

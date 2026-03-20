@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { getProcessingQueue } from "@/lib/queue/job-queue";
+import { requireUser } from "@/lib/auth/session";
+import { authorizeForDocument } from "@/lib/auth/authorize";
 
 export async function POST(
   _request: NextRequest,
@@ -8,6 +10,8 @@ export async function POST(
 ) {
   try {
     const { docId } = await params;
+    const user = await requireUser();
+    await authorizeForDocument(user, docId);
 
     const doc = await prisma.document.findUnique({
       where: { id: docId },

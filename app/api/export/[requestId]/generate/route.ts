@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { generateExportPackage, type PackageType } from "@/lib/pipeline/export";
+import { requireUser } from "@/lib/auth/session";
+import { authorizeForCase } from "@/lib/auth/authorize";
 
 export async function POST(
   request: NextRequest,
@@ -8,6 +10,8 @@ export async function POST(
 ) {
   try {
     const { requestId } = await params;
+    const user = await requireUser();
+    await authorizeForCase(user, requestId);
     const body = await request.json();
 
     const packageType: PackageType = body.packageType || "internal";

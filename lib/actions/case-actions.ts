@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { createAuditEntry } from "@/lib/data/audit";
 import { getNextReference } from "@/lib/data/cases";
 import { requireUser } from "@/lib/auth/session";
+import { createCaseSchema } from "@/lib/validation/schemas";
 
 export async function createCase(data: {
   requesterName: string;
@@ -14,19 +15,20 @@ export async function createCase(data: {
   departments: string[];
   description: string;
 }) {
+  const validated = createCaseSchema.parse(data);
   const user = await requireUser();
   const reference = await getNextReference();
 
   const newCase = await prisma.case.create({
     data: {
       reference,
-      requesterName: data.requesterName,
-      requesterType: data.requesterType,
-      dateReceived: new Date(data.dateReceived),
-      deadline: new Date(data.deadline),
-      priority: data.priority,
-      departments: data.departments,
-      description: data.description,
+      requesterName: validated.requesterName,
+      requesterType: validated.requesterType,
+      dateReceived: new Date(validated.dateReceived),
+      deadline: new Date(validated.deadline),
+      priority: validated.priority,
+      departments: validated.departments,
+      description: validated.description,
       status: "draft",
     },
   });

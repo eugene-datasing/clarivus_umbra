@@ -2,6 +2,8 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { requireUser } from "@/lib/auth/session";
+import { requireAdmin } from "@/lib/auth/authorize";
+import { createDepartmentSchema, updateDepartmentSchema } from "@/lib/validation/schemas";
 
 function isPrismaUniqueConstraintError(err: unknown): boolean {
   return (
@@ -17,7 +19,9 @@ export async function createDepartment(data: {
   contactEmail?: string;
   headName?: string;
 }) {
-  await requireUser();
+  const validated = createDepartmentSchema.parse(data);
+  const user = await requireUser();
+  requireAdmin(user);
 
   try {
     const dept = await prisma.$transaction(async (tx) => {
@@ -26,9 +30,9 @@ export async function createDepartment(data: {
 
       return tx.department.create({
         data: {
-          name: data.name,
-          contactEmail: data.contactEmail || null,
-          headName: data.headName || null,
+          name: validated.name,
+          contactEmail: validated.contactEmail || null,
+          headName: validated.headName || null,
           sortOrder: nextSort,
         },
       });
@@ -47,16 +51,18 @@ export async function updateDepartment(
   id: string,
   data: { name?: string; contactEmail?: string; headName?: string; isActive?: boolean },
 ) {
-  await requireUser();
+  const validated = updateDepartmentSchema.parse(data);
+  const user = await requireUser();
+  requireAdmin(user);
 
   try {
     await prisma.department.update({
       where: { id },
       data: {
-        ...(data.name !== undefined && { name: data.name }),
-        ...(data.contactEmail !== undefined && { contactEmail: data.contactEmail || null }),
-        ...(data.headName !== undefined && { headName: data.headName || null }),
-        ...(data.isActive !== undefined && { isActive: data.isActive }),
+        ...(validated.name !== undefined && { name: validated.name }),
+        ...(validated.contactEmail !== undefined && { contactEmail: validated.contactEmail || null }),
+        ...(validated.headName !== undefined && { headName: validated.headName || null }),
+        ...(validated.isActive !== undefined && { isActive: validated.isActive }),
       },
     });
 
@@ -70,7 +76,8 @@ export async function updateDepartment(
 }
 
 export async function deleteDepartment(id: string) {
-  await requireUser();
+  const user = await requireUser();
+  requireAdmin(user);
 
   // Move users in this department to no department
   await prisma.user.updateMany({
@@ -84,7 +91,8 @@ export async function deleteDepartment(id: string) {
 }
 
 export async function reorderDepartments(orderedIds: string[]) {
-  await requireUser();
+  const user = await requireUser();
+  requireAdmin(user);
 
   for (let i = 0; i < orderedIds.length; i++) {
     await prisma.department.update({
@@ -97,7 +105,8 @@ export async function reorderDepartments(orderedIds: string[]) {
 }
 
 export async function seedDefaultDepartments() {
-  await requireUser();
+  const user = await requireUser();
+  requireAdmin(user);
 
   const defaults = [
     "Mayor and Councillors",

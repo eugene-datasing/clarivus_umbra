@@ -99,6 +99,16 @@ export async function processDocument(docId: string): Promise<void> {
     }
 
     // ------------------------------------------------------------------
+    // 2.5 File size guard
+    // ------------------------------------------------------------------
+    const MAX_PROCESSING_SIZE = 100 * 1024 * 1024; // 100 MB
+    if (buffer.length > MAX_PROCESSING_SIZE) {
+      throw new Error(
+        `File too large for processing (${(buffer.length / 1024 / 1024).toFixed(1)} MB). Maximum: 100 MB.`,
+      );
+    }
+
+    // ------------------------------------------------------------------
     // 3. Update status to "processing"
     // ------------------------------------------------------------------
     await prisma.document.update({
@@ -135,16 +145,23 @@ export async function processDocument(docId: string): Promise<void> {
         };
         const attFileType = fileTypeMap[attExt] || "TXT";
 
-        // Store attachment to storage
-        const attDoc = await prisma.document.create({
-          data: {
-            caseId,
-            name: att.filename,
-            fileType: attFileType,
-            mimeType: att.contentType,
-            sizeBytes: att.size,
-            status: "queued",
-          },
+        // Store attachment to storage — wrap DB writes in transaction
+        const attDoc = await prisma.$transaction(async (tx) => {
+          const doc = await tx.document.create({
+            data: {
+              caseId,
+              name: att.filename,
+              fileType: attFileType,
+              mimeType: att.contentType,
+              sizeBytes: att.size,
+              status: "queued",
+            },
+          });
+          await tx.case.update({
+            where: { id: caseId },
+            data: { documentCount: { increment: 1 } },
+          });
+          return doc;
         });
 
         const attStorageKey = `${caseId}/${attDoc.id}/original${attExt || ".bin"}`;
@@ -152,12 +169,6 @@ export async function processDocument(docId: string): Promise<void> {
         await prisma.document.update({
           where: { id: attDoc.id },
           data: { originalPath: attStorageKey },
-        });
-
-        // Update case document count
-        await prisma.case.update({
-          where: { id: caseId },
-          data: { documentCount: { increment: 1 } },
         });
 
         // Fire-and-forget processing of the attachment
@@ -362,32 +373,33 @@ export async function processDocument(docId: string): Promise<void> {
 
     const totalProcessingMs = Date.now() - timingStart;
 
-    await prisma.document.update({
-      where: { id: docId },
-      data: {
-        contentJson: JSON.parse(JSON.stringify(content)),
-        detectionCount: totalDetections,
-        avgConfidence: Math.round(avgConfidence * 10) / 10,
-        status: "ready",
-        processingError: null,
-        processingCompletedAt: new Date(),
-        extractionMs,
-        patternDetectionMs,
-        aiDetectionMs,
-        totalProcessingMs,
-      },
-    });
-
-    // ------------------------------------------------------------------
-    // 11. Update case counters
-    // ------------------------------------------------------------------
-    await prisma.case.update({
-      where: { id: caseId },
-      data: {
-        redactionCount: {
-          increment: totalDetections,
+    // Wrap document update + case counter increment in a transaction
+    await prisma.$transaction(async (tx) => {
+      await tx.document.update({
+        where: { id: docId },
+        data: {
+          contentJson: JSON.parse(JSON.stringify(content)),
+          detectionCount: totalDetections,
+          avgConfidence: Math.round(avgConfidence * 10) / 10,
+          status: "ready",
+          processingError: null,
+          processingCompletedAt: new Date(),
+          extractionMs,
+          patternDetectionMs,
+          aiDetectionMs,
+          totalProcessingMs,
         },
-      },
+      });
+
+      // 11. Update case counters
+      await tx.case.update({
+        where: { id: caseId },
+        data: {
+          redactionCount: {
+            increment: totalDetections,
+          },
+        },
+      });
     });
 
     // ------------------------------------------------------------------

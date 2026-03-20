@@ -2,19 +2,15 @@
  * NextAuth v5 configuration — WP16
  *
  * Full auth config with credentials provider (requires Node.js runtime).
- * For the POC, passwords are SHA-256 hashed (not bcrypt) for simplicity.
+ * Passwords are hashed with bcrypt.
  * Production would use Azure AD / Entra ID for SSO.
  */
 
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { createHash } from "crypto";
+import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db/prisma";
 import { authConfig } from "./auth.config";
-
-function hashPassword(password: string): string {
-  return createHash("sha256").update(password).digest("hex");
-}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -37,8 +33,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (!user || !user.passwordHash) return null;
 
-        const hash = hashPassword(password);
-        if (hash !== user.passwordHash) return null;
+        const isValid = await bcrypt.compare(password, user.passwordHash);
+        if (!isValid) return null;
 
         return {
           id: user.id,

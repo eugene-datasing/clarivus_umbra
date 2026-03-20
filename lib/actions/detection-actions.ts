@@ -4,6 +4,14 @@ import { prisma } from "@/lib/db/prisma";
 import { createAuditEntry } from "@/lib/data/audit";
 import { createSnapshot } from "@/lib/pipeline/version-snapshot";
 import { requireUser } from "@/lib/auth/session";
+import { authorizeForDocument, authorizeForDetection } from "@/lib/auth/authorize";
+import {
+  acceptDetectionSchema,
+  rejectDetectionSchema,
+  applyGroundSchema,
+  bulkDetectionSchema,
+  detectionIdSchema,
+} from "@/lib/validation/schemas";
 
 // ---------------------------------------------------------------------------
 // Change tracking (WP12)
@@ -86,6 +94,7 @@ async function regressDocumentIfNeeded(documentId: string) {
  */
 export async function markDocumentInReview(documentId: string) {
   const user = await requireUser();
+  await authorizeForDocument(user, documentId);
   const doc = await prisma.document.findUnique({
     where: { id: documentId },
     select: { status: true, name: true, caseId: true },
@@ -117,6 +126,7 @@ export async function markDocumentInReview(documentId: string) {
  */
 export async function submitForSeniorReview(documentId: string) {
   const user = await requireUser();
+  await authorizeForDocument(user, documentId);
   const doc = await prisma.document.findUnique({
     where: { id: documentId },
     select: { status: true, name: true, caseId: true },
@@ -153,6 +163,7 @@ export async function submitForSeniorReview(documentId: string) {
  */
 export async function signOffDocument(documentId: string) {
   const user = await requireUser();
+  await authorizeForDocument(user, documentId);
   const doc = await prisma.document.findUnique({
     where: { id: documentId },
     select: { status: true, name: true, caseId: true },
@@ -188,6 +199,7 @@ export async function signOffDocument(documentId: string) {
  */
 export async function requestChanges(documentId: string, reason?: string) {
   const user = await requireUser();
+  await authorizeForDocument(user, documentId);
   const doc = await prisma.document.findUnique({
     where: { id: documentId },
     select: { status: true, name: true, caseId: true },
@@ -221,23 +233,25 @@ export async function requestChanges(documentId: string, reason?: string) {
 // ---------------------------------------------------------------------------
 
 export async function acceptDetection(detectionId: string, ground?: string) {
+  const { detectionId: validId, ground: validGround } = acceptDetectionSchema.parse({ detectionId, ground });
   const user = await requireUser();
+  await authorizeForDetection(user, validId);
   const detection = await prisma.detection.findUnique({
-    where: { id: detectionId },
+    where: { id: validId },
     include: { document: { select: { name: true, caseId: true } } },
   });
   if (!detection) throw new Error("Detection not found");
 
-  const appliedGround = ground || detection.suggestedGround;
+  const appliedGround = validGround || detection.suggestedGround;
 
   // Record change history
-  await recordHistory(detectionId, "status", detection.status, "accepted", user.name);
+  await recordHistory(validId, "status", detection.status, "accepted", user.name);
   if (detection.appliedGround !== appliedGround) {
-    await recordHistory(detectionId, "appliedGround", detection.appliedGround, appliedGround ?? null, user.name);
+    await recordHistory(validId, "appliedGround", detection.appliedGround, appliedGround ?? null, user.name);
   }
 
   await prisma.detection.update({
-    where: { id: detectionId },
+    where: { id: validId },
     data: {
       status: "accepted",
       appliedGround,
@@ -252,7 +266,7 @@ export async function acceptDetection(detectionId: string, ground?: string) {
     description: `Accepted detection: "${detection.text.substring(0, 40)}${detection.text.length > 40 ? "..." : ""}"`,
     target: detection.document.name,
     caseId: detection.document.caseId,
-    detail: `Detection ${detectionId}, Confidence: ${detection.confidence}%, Ground: ${appliedGround}`,
+    detail: `Detection ${validId}, Confidence: ${detection.confidence}%, Ground: ${appliedGround}`,
   });
 
   await recomputeDocumentStatus(detection.documentId);
@@ -261,20 +275,22 @@ export async function acceptDetection(detectionId: string, ground?: string) {
 }
 
 export async function rejectDetection(detectionId: string, reason?: string) {
+  const { detectionId: validId, reason: validReason } = rejectDetectionSchema.parse({ detectionId, reason });
   const user = await requireUser();
+  await authorizeForDetection(user, validId);
   const detection = await prisma.detection.findUnique({
-    where: { id: detectionId },
+    where: { id: validId },
     include: { document: { select: { name: true, caseId: true } } },
   });
   if (!detection) throw new Error("Detection not found");
 
-  await recordHistory(detectionId, "status", detection.status, "rejected", user.name);
+  await recordHistory(validId, "status", detection.status, "rejected", user.name);
   if (detection.appliedGround) {
-    await recordHistory(detectionId, "appliedGround", detection.appliedGround, null, user.name);
+    await recordHistory(validId, "appliedGround", detection.appliedGround, null, user.name);
   }
 
   await prisma.detection.update({
-    where: { id: detectionId },
+    where: { id: validId },
     data: {
       status: "rejected",
       appliedGround: null,
@@ -289,7 +305,7 @@ export async function rejectDetection(detectionId: string, reason?: string) {
     description: `Rejected detection: "${detection.text.substring(0, 40)}${detection.text.length > 40 ? "..." : ""}"`,
     target: detection.document.name,
     caseId: detection.document.caseId,
-    detail: reason ? `Reason: ${reason}` : undefined,
+    detail: validReason ? `Reason: ${validReason}` : undefined,
   });
 
   await recomputeDocumentStatus(detection.documentId);
@@ -298,21 +314,23 @@ export async function rejectDetection(detectionId: string, reason?: string) {
 }
 
 export async function revertDetection(detectionId: string) {
+  const validId = detectionIdSchema.parse(detectionId);
   const user = await requireUser();
+  await authorizeForDetection(user, validId);
   const detection = await prisma.detection.findUnique({
-    where: { id: detectionId },
+    where: { id: validId },
     select: { documentId: true, status: true, appliedGround: true },
   });
 
   if (detection) {
-    await recordHistory(detectionId, "status", detection.status, "pending", user.name);
+    await recordHistory(validId, "status", detection.status, "pending", user.name);
     if (detection.appliedGround) {
-      await recordHistory(detectionId, "appliedGround", detection.appliedGround, null, user.name);
+      await recordHistory(validId, "appliedGround", detection.appliedGround, null, user.name);
     }
   }
 
   await prisma.detection.update({
-    where: { id: detectionId },
+    where: { id: validId },
     data: {
       status: "pending",
       appliedGround: null,
@@ -328,37 +346,41 @@ export async function revertDetection(detectionId: string) {
 }
 
 export async function applyGround(detectionId: string, groundId: string) {
+  const { detectionId: validId, groundId: validGroundId } = applyGroundSchema.parse({ detectionId, groundId });
   const user = await requireUser();
+  await authorizeForDetection(user, validId);
   const detection = await prisma.detection.findUnique({
-    where: { id: detectionId },
+    where: { id: validId },
     select: { appliedGround: true },
   });
 
   if (detection) {
-    await recordHistory(detectionId, "appliedGround", detection.appliedGround, groundId, user.name);
+    await recordHistory(validId, "appliedGround", detection.appliedGround, validGroundId, user.name);
   }
 
   await prisma.detection.update({
-    where: { id: detectionId },
-    data: { appliedGround: groundId },
+    where: { id: validId },
+    data: { appliedGround: validGroundId },
   });
 
   return { success: true };
 }
 
 export async function bulkAcceptDetections(detectionIds: string[], ground?: string) {
+  const { detectionIds: validIds, ground: validGround } = bulkDetectionSchema.parse({ detectionIds, ground });
   const user = await requireUser();
+  if (validIds.length > 0) await authorizeForDetection(user, validIds[0]);
   // Get the document IDs and case info for recomputation + audit
   const detections = await prisma.detection.findMany({
-    where: { id: { in: detectionIds } },
+    where: { id: { in: validIds } },
     select: { documentId: true, text: true, document: { select: { caseId: true } } },
   });
 
   const result = await prisma.detection.updateMany({
-    where: { id: { in: detectionIds } },
+    where: { id: { in: validIds } },
     data: {
       status: "accepted",
-      appliedGround: ground || undefined,
+      appliedGround: validGround || undefined,
       reviewedAt: new Date(),
     },
   });
@@ -380,7 +402,7 @@ export async function bulkAcceptDetections(detectionIds: string[], ground?: stri
       description: `Bulk accepted ${result.count} detection(s) for "${sampleText}${detections[0]?.text?.length > 40 ? "..." : ""}"`,
       target: "Bulk Review",
       caseId,
-      detail: ground ? `Ground: ${ground}` : undefined,
+      detail: validGround ? `Ground: ${validGround}` : undefined,
     });
   }
 
@@ -388,14 +410,16 @@ export async function bulkAcceptDetections(detectionIds: string[], ground?: stri
 }
 
 export async function bulkRejectDetections(detectionIds: string[]) {
+  const { detectionIds: validIds } = bulkDetectionSchema.parse({ detectionIds });
   const user = await requireUser();
+  if (validIds.length > 0) await authorizeForDetection(user, validIds[0]);
   const detections = await prisma.detection.findMany({
-    where: { id: { in: detectionIds } },
+    where: { id: { in: validIds } },
     select: { documentId: true, text: true, document: { select: { caseId: true } } },
   });
 
   const result = await prisma.detection.updateMany({
-    where: { id: { in: detectionIds } },
+    where: { id: { in: validIds } },
     data: {
       status: "rejected",
       appliedGround: null,

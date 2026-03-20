@@ -12,6 +12,7 @@ import type {
 } from "@/lib/data/settings";
 import { getSetupWizardState } from "@/lib/data/org-config";
 import { requireUser } from "@/lib/auth/session";
+import { requireAdmin } from "@/lib/auth/authorize";
 
 // ---------------------------------------------------------------------------
 // Save individual steps
@@ -19,6 +20,7 @@ import { requireUser } from "@/lib/auth/session";
 
 export async function saveOrgIdentity(data: OrgIdentity) {
   const user = await requireUser();
+  requireAdmin(user);
   await setSetting(SETTING_KEYS.ORG_IDENTITY, data, user.name);
   await markStepCompleted(0);
   return { success: true };
@@ -26,6 +28,7 @@ export async function saveOrgIdentity(data: OrgIdentity) {
 
 export async function saveOrgBranding(data: OrgBranding & { signatory: OrgSignatory; ombudsman: OrgOmbudsman }) {
   const user = await requireUser();
+  requireAdmin(user);
   await setSetting(SETTING_KEYS.ORG_BRANDING, { logoStorageKey: data.logoStorageKey, footerText: data.footerText }, user.name);
   await setSetting(SETTING_KEYS.ORG_SIGNATORY, data.signatory, user.name);
   await setSetting(SETTING_KEYS.ORG_OMBUDSMAN, data.ombudsman, user.name);
@@ -35,6 +38,7 @@ export async function saveOrgBranding(data: OrgBranding & { signatory: OrgSignat
 
 export async function saveLGOIMAConfig(data: LGOIMAConfig) {
   const user = await requireUser();
+  requireAdmin(user);
   await setSetting(SETTING_KEYS.LGOIMA_CONFIG, data, user.name);
   await markStepCompleted(3);
   return { success: true };
@@ -42,6 +46,7 @@ export async function saveLGOIMAConfig(data: LGOIMAConfig) {
 
 export async function saveDetectionPolicies(data: { thresholds: ConfidenceThresholds }) {
   const user = await requireUser();
+  requireAdmin(user);
   await setSetting(SETTING_KEYS.CONFIDENCE_THRESHOLDS, data.thresholds, user.name);
   await markStepCompleted(4);
   return { success: true };
@@ -68,6 +73,7 @@ export async function markDepartmentsStepCompleted() {
 
 export async function completeSetup() {
   const user = await requireUser();
+  requireAdmin(user);
   const state = await getSetupWizardState();
   state.completedAt = new Date().toISOString();
   state.completedSteps = [0, 1, 2, 3, 4, 5];

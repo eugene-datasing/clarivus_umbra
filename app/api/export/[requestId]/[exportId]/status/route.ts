@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getExportProgress } from "@/lib/pipeline/export";
+import { requireUser } from "@/lib/auth/session";
+import { authorizeForCase } from "@/lib/auth/authorize";
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ requestId: string; exportId: string }> },
 ) {
-  const { exportId } = await params;
+  const { requestId, exportId } = await params;
+  const user = await requireUser();
+  await authorizeForCase(user, requestId);
 
   const progress = getExportProgress(exportId);
   if (!progress) {
