@@ -11,6 +11,7 @@ import type { NextAuthConfig } from "next-auth";
 
 export const authConfig = {
   providers: [] as [],  // Providers added in auth-options.ts; empty here for Edge middleware
+  trustHost: true,  // Required behind Azure App Service reverse proxy
   pages: {
     signIn: "/login",
   },

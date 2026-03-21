@@ -18,7 +18,7 @@ WORKDIR /app
 
 # Install Python3 + PyMuPDF for PDF redaction
 RUN apk add --no-cache python3 py3-pip && \
-    pip3 install --break-system-packages PyMuPDF
+    pip3 install --break-system-packages --prefer-binary PyMuPDF
 
 ENV NODE_ENV=production
 ENV PORT=3000
