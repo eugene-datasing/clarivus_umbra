@@ -3,7 +3,11 @@ import { getStorage } from "@/lib/storage";
 import { prisma } from "@/lib/db/prisma";
 import { createAuditEntry } from "@/lib/data/audit";
 import { applyRateLimit } from "@/lib/api-utils";
+import { logger } from "@/lib/logger";
+import { trackException } from "@/lib/telemetry";
 import path from "path";
+
+const log = logger.child({ module: "api", route: "/api/documents/upload" });
 
 /** Map file extension to fileType label and MIME type */
 function getFileTypeInfo(filename: string): { fileType: string; mimeType: string } {
@@ -176,7 +180,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(results, { status: 201 });
   } catch (error) {
-    console.error("Upload failed:", error);
+    log.error("Upload failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    trackException(error, { route: "/api/documents/upload" });
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
       {

@@ -14,13 +14,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isFullScreenRoute = pathname === "/login" || pathname.startsWith("/setup") || pathname.startsWith("/activate");
 
   if (isFullScreenRoute) {
-    return <>{children}</>;
+    return (
+      <main id="main-content" role="main">
+        {children}
+      </main>
+    );
   }
 
   return (
     <>
       <Sidebar collapsed={collapsed} onToggleCollapse={() => setCollapsed((c) => !c)} />
       <main
+        id="main-content"
+        role="main"
         className="min-h-screen transition-all duration-200"
         style={{ marginLeft: collapsed ? 64 : 260 }}
       >

@@ -86,6 +86,9 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
 
   return (
     <aside
+      id="main-navigation"
+      role="complementary"
+      aria-label="Application sidebar"
       className={cn(
         "fixed left-0 top-0 h-screen bg-brand-primary text-white flex flex-col z-40 transition-all duration-200",
         collapsed ? "w-16" : "w-[260px]"
@@ -104,10 +107,10 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
         )}
       </div>
 
-      {/* Navigation — main items scroll, admin/system pinned at bottom */}
-      <nav className="flex-1 flex flex-col min-h-0 py-3">
-        {/* Main section — scrollable */}
-        <div className="flex-1 overflow-y-auto">
+      {/* Navigation -- main items scroll, admin/system pinned at bottom */}
+      <nav className="flex-1 flex flex-col min-h-0 py-3" role="navigation" aria-label="Main navigation">
+        {/* Main section -- scrollable */}
+        <div className="flex-1 overflow-y-auto" role="list" aria-label="Main menu">
           {sections.main.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href);
@@ -115,6 +118,8 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
               <Link
                 key={item.label}
                 href={item.href}
+                role="listitem"
+                aria-current={active ? "page" : undefined}
                 className={cn(
                   "flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg text-sm font-medium transition-colors",
                   active
@@ -123,7 +128,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
                 )}
                 title={collapsed ? item.label : undefined}
               >
-                <Icon className="w-5 h-5 flex-shrink-0" />
+                <Icon className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
                 {!collapsed && <span>{item.label}</span>}
               </Link>
             );
@@ -146,6 +151,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
                 <Link
                   key={item.label}
                   href={item.href}
+                  aria-current={active ? "page" : undefined}
                   className={cn(
                     "flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg text-sm font-medium transition-colors",
                     active
@@ -154,7 +160,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
                   )}
                   title={collapsed ? item.label : undefined}
                 >
-                  <Icon className="w-5 h-5 flex-shrink-0" />
+                  <Icon className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
                   {!collapsed && <span>{item.label}</span>}
                 </Link>
               );
@@ -174,6 +180,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
                 <Link
                   key={item.label}
                   href={item.href}
+                  aria-current={active ? "page" : undefined}
                   className={cn(
                     "flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg text-sm font-medium transition-colors",
                     active
@@ -182,7 +189,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
                   )}
                   title={collapsed ? item.label : undefined}
                 >
-                  <Icon className="w-5 h-5 flex-shrink-0" />
+                  <Icon className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
                   {!collapsed && <span>{item.label}</span>}
                 </Link>
               );
@@ -195,11 +202,11 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
       <div className="border-t border-white/10 p-3" ref={notifRef}>
         {/* Notification panel */}
         {showNotifications && !collapsed && (
-          <div className="absolute bottom-[100px] left-3 w-[252px] bg-white rounded-card shadow-xl border border-gray-200 overflow-hidden z-50">
+          <div className="absolute bottom-[100px] left-3 w-[252px] bg-white rounded-card shadow-xl border border-gray-200 overflow-hidden z-50" role="region" aria-label="Notifications panel">
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100">
               <span className="text-xs font-semibold text-txt-primary">Notifications</span>
-              <button onClick={() => setShowNotifications(false)} className="text-txt-secondary hover:text-txt-primary">
-                <X size={14} />
+              <button onClick={() => setShowNotifications(false)} aria-label="Close notifications" className="text-txt-secondary hover:text-txt-primary">
+                <X size={14} aria-hidden="true" />
               </button>
             </div>
             <div className="max-h-[300px] overflow-y-auto">
@@ -235,29 +242,33 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
+                aria-label={`Notifications${showNotifications ? " (panel open)" : ""}`}
+                aria-expanded={showNotifications}
                 className={cn(
                   "relative p-1.5 rounded transition-colors",
                   showNotifications ? "bg-white/20" : "hover:bg-white/10"
                 )}
               >
-                <Bell className="w-4 h-4" />
-                <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-red-500 rounded-full text-[9px] flex items-center justify-center">3</span>
+                <Bell className="w-4 h-4" aria-hidden="true" />
+                <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-red-500 rounded-full text-[9px] flex items-center justify-center" aria-label="3 unread notifications">3</span>
               </button>
               <button
                 onClick={() => signOut({ callbackUrl: "/login" })}
                 className="p-1.5 rounded hover:bg-white/10 transition-colors"
+                aria-label="Sign out"
                 title="Sign out"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
           )}
         </div>
         <button
           onClick={onToggleCollapse}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           className="w-full flex items-center justify-center mt-1 p-1.5 hover:bg-white/10 rounded text-white/50"
         >
-          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          {collapsed ? <ChevronRight className="w-4 h-4" aria-hidden="true" /> : <ChevronLeft className="w-4 h-4" aria-hidden="true" />}
         </button>
       </div>
     </aside>

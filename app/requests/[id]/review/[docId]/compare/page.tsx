@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getDocument } from "@/lib/data/documents";
 import { getSnapshots } from "@/lib/pipeline/version-snapshot";
 import { getDetectionsForDocument } from "@/lib/data/detections";
+import { getSnapshotComparison } from "@/lib/data/snapshots";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeForCase } from "@/lib/auth/authorize";
 import CompareClient from "./compare-client";
@@ -15,10 +16,11 @@ export default async function ComparePage({
   const user = await requireUser();
   await authorizeForCase(user, id);
 
-  const [doc, snapshots, currentDetections] = await Promise.all([
+  const [doc, snapshots, currentDetections, comparison] = await Promise.all([
     getDocument(docId),
     getSnapshots(docId),
     getDetectionsForDocument(docId),
+    getSnapshotComparison(docId),
   ]);
 
   if (!doc) notFound();
@@ -39,6 +41,7 @@ export default async function ComparePage({
         appliedGround: d.appliedGround ?? null,
         suggestedGround: d.suggestedGround ?? null,
       }))}
+      preComparison={comparison}
     />
   );
 }

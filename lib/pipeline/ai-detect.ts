@@ -9,6 +9,13 @@
 
 import { AzureOpenAI } from "openai";
 import type { ExtractedPage } from "./extract";
+import {
+  resilientOpenAICall,
+  CircuitOpenError,
+} from "@/lib/resilience/azure-services";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ module: "ai-detect" });
 
 // ---------------------------------------------------------------------------
 // Types
@@ -189,16 +196,18 @@ export async function detectWithAI(
         ? SYSTEM_PROMPT + feedbackPrompt
         : SYSTEM_PROMPT;
 
-      const response = await client.chat.completions.create({
-        model: process.env.AZURE_OPENAI_DEPLOYMENT || "gpt-4o",
-        messages: [
-          { role: "system", content: systemContent },
-          { role: "user", content: userContent },
-        ],
-        temperature: 0.1,
-        max_tokens: 4096,
-        response_format: { type: "json_object" },
-      });
+      const response = await resilientOpenAICall(() =>
+        client.chat.completions.create({
+          model: process.env.AZURE_OPENAI_DEPLOYMENT || "gpt-4o",
+          messages: [
+            { role: "system", content: systemContent },
+            { role: "user", content: userContent },
+          ],
+          temperature: 0.1,
+          max_tokens: 4096,
+          response_format: { type: "json_object" },
+        }),
+      );
 
       const content = response.choices?.[0]?.message?.content;
       if (!content) continue;
@@ -207,7 +216,7 @@ export async function detectWithAI(
       try {
         parsed = JSON.parse(content);
       } catch {
-        console.warn("[ai-detect] Failed to parse AI response as JSON:", content.slice(0, 200));
+        log.warn("Failed to parse AI response as JSON", { preview: content.slice(0, 200) });
         continue;
       }
 
@@ -226,10 +235,17 @@ export async function detectWithAI(
         }
       }
     } catch (error) {
-      console.error(
-        `[ai-detect] Error processing pages ${batch.map((p) => p.pageNumber).join(",")}:`,
-        error,
-      );
+      if (error instanceof CircuitOpenError) {
+        log.warn("Circuit breaker OPEN for Azure OpenAI, skipping remaining batches", {
+          pages: batch.map((p) => p.pageNumber),
+        });
+        // Return what we have so far (partial processing / graceful degradation)
+        break;
+      }
+      log.error("Error processing AI detection batch", {
+        pages: batch.map((p) => p.pageNumber),
+        error: error instanceof Error ? error.message : String(error),
+      });
       // Continue with remaining batches
     }
   }

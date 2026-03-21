@@ -61,13 +61,18 @@ export default function LoginClient({ ssoEnabled = false }: LoginClientProps) {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="card">
+        <form onSubmit={handleSubmit} className="card" aria-label="Sign in">
           <h2 className="text-lg font-heading font-semibold text-txt-primary mb-4">
             Sign In
           </h2>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-card text-sm text-red-700">
+            <div
+              id="login-error"
+              role="alert"
+              aria-live="polite"
+              className="mb-4 p-3 bg-red-50 border border-red-200 rounded-card text-sm text-red-700"
+            >
               {error}
             </div>
           )}
@@ -116,29 +121,39 @@ export default function LoginClient({ ssoEnabled = false }: LoginClientProps) {
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-txt-primary mb-1.5">
+              <label htmlFor="login-email" className="block text-sm font-medium text-txt-primary mb-1.5">
                 Email
               </label>
               <input
+                id="login-email"
                 type="email"
                 className="input-field"
                 placeholder="you@npdc.govt.nz"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                aria-required="true"
+                aria-invalid={error ? "true" : undefined}
+                aria-describedby={error ? "login-error" : undefined}
+                autoComplete="email"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-txt-primary mb-1.5">
+              <label htmlFor="login-password" className="block text-sm font-medium text-txt-primary mb-1.5">
                 Password
               </label>
               <input
+                id="login-password"
                 type="password"
                 className="input-field"
                 placeholder="Enter password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                aria-required="true"
+                aria-invalid={error ? "true" : undefined}
+                aria-describedby={error ? "login-error" : undefined}
+                autoComplete="current-password"
               />
             </div>
             <button

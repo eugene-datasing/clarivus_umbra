@@ -215,6 +215,12 @@ export default function ReviewClient({
   >([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
+  // Keyboard shortcuts hint panel
+  const [showKeyboardHints, setShowKeyboardHints] = useState(false);
+
+  // Screen reader status announcements
+  const [statusAnnouncement, setStatusAnnouncement] = useState("");
+
   // Manual detection state (WP22)
   const [manualPopover, setManualPopover] = useState<{
     text: string;
@@ -528,6 +534,146 @@ export default function ReviewClient({
     },
     [router],
   );
+
+  // ----- Focus management: move focus to next detection after action -----
+  const focusNextDetection = useCallback(
+    (currentId: string) => {
+      const currentIdx = sortedDetections.findIndex((d) => d.id === currentId);
+      if (currentIdx >= 0 && currentIdx < sortedDetections.length - 1) {
+        const nextId = sortedDetections[currentIdx + 1].id;
+        setSelectedDetectionId(nextId);
+        // Focus the row after a brief delay to let React re-render
+        setTimeout(() => {
+          const row = detectionRowRefs.current[nextId];
+          if (row) {
+            row.focus();
+            row.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        }, 50);
+        setStatusAnnouncement(
+          `Moved to detection ${currentIdx + 2} of ${sortedDetections.length}`
+        );
+      }
+    },
+    [sortedDetections],
+  );
+
+  // ----- Wrap accept/reject to also advance focus -----
+  const handleAcceptAndAdvance = useCallback(
+    async (detectionId: string) => {
+      await handleAccept(detectionId);
+      setStatusAnnouncement("Detection accepted");
+      focusNextDetection(detectionId);
+    },
+    [handleAccept, focusNextDetection],
+  );
+
+  const handleRejectAndAdvance = useCallback(
+    async (detectionId: string) => {
+      await handleReject(detectionId);
+      setStatusAnnouncement("Detection rejected");
+      focusNextDetection(detectionId);
+    },
+    [handleReject, focusNextDetection],
+  );
+
+  // ----- Global keyboard event handler for detection review -----
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      // Ignore keyboard shortcuts when user is typing in an input/textarea
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+
+      switch (e.key) {
+        case "?":
+          e.preventDefault();
+          setShowKeyboardHints((v) => !v);
+          break;
+        case "Escape":
+          if (showKeyboardHints) {
+            setShowKeyboardHints(false);
+          } else if (selectedDetectionId) {
+            setSelectedDetectionId(null);
+            setGroundSelectorId(null);
+            setStatusAnnouncement("Detection deselected");
+          }
+          break;
+        case "a":
+          if (selectedDetectionId) {
+            const state = detectionStates[selectedDetectionId];
+            if (state?.status === "pending") {
+              e.preventDefault();
+              handleAcceptAndAdvance(selectedDetectionId);
+            }
+          }
+          break;
+        case "r":
+          if (selectedDetectionId) {
+            const state = detectionStates[selectedDetectionId];
+            if (state?.status === "pending") {
+              e.preventDefault();
+              handleRejectAndAdvance(selectedDetectionId);
+            }
+          }
+          break;
+        case "ArrowDown": {
+          e.preventDefault();
+          const currentIdx = selectedDetectionId
+            ? sortedDetections.findIndex((d) => d.id === selectedDetectionId)
+            : -1;
+          const nextIdx = Math.min(currentIdx + 1, sortedDetections.length - 1);
+          if (sortedDetections[nextIdx]) {
+            const nextId = sortedDetections[nextIdx].id;
+            setSelectedDetectionId(nextId);
+            const row = detectionRowRefs.current[nextId];
+            if (row) {
+              row.focus();
+              row.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            const el = redactionRefs.current[nextId];
+            if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+          break;
+        }
+        case "ArrowUp": {
+          e.preventDefault();
+          const currentIdx = selectedDetectionId
+            ? sortedDetections.findIndex((d) => d.id === selectedDetectionId)
+            : sortedDetections.length;
+          const prevIdx = Math.max(currentIdx - 1, 0);
+          if (sortedDetections[prevIdx]) {
+            const prevId = sortedDetections[prevIdx].id;
+            setSelectedDetectionId(prevId);
+            const row = detectionRowRefs.current[prevId];
+            if (row) {
+              row.focus();
+              row.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            const el = redactionRefs.current[prevId];
+            if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+          break;
+        }
+        case "Enter":
+        case " ":
+          if (selectedDetectionId && (e.target as HTMLElement)?.tagName?.toLowerCase() !== "button") {
+            e.preventDefault();
+            handleDetectionClick(selectedDetectionId);
+          }
+          break;
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    selectedDetectionId,
+    sortedDetections,
+    detectionStates,
+    showKeyboardHints,
+    handleAcceptAndAdvance,
+    handleRejectAndAdvance,
+    handleDetectionClick,
+  ]);
 
   // ----- Confidence colour helpers -----
   function confBgClass(score: number): string {
@@ -931,17 +1077,17 @@ export default function ReviewClient({
                 <span className="text-xs font-semibold text-brand-primary uppercase tracking-wider">
                   Redacted View
                 </span>
-                <span className="ml-auto flex items-center gap-3 text-[10px] text-txt-secondary">
+                <span className="ml-auto flex items-center gap-3 text-[10px] text-txt-secondary" aria-label="Confidence level legend">
                   <span className="flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 rounded-full bg-confidence-high inline-block" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-confidence-high inline-block" aria-hidden="true" />
                     High
                   </span>
                   <span className="flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 rounded-full bg-confidence-medium inline-block" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-confidence-medium inline-block" aria-hidden="true" />
                     Medium
                   </span>
                   <span className="flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 rounded-full bg-confidence-low inline-block" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-confidence-low inline-block" aria-hidden="true" />
                     Low
                   </span>
                 </span>
@@ -1060,8 +1206,12 @@ export default function ReviewClient({
                       key={det.id}
                       ref={(el) => { detectionRowRefs.current[det.id] = el; }}
                       onClick={() => handleDetectionClick(det.id)}
+                      tabIndex={0}
+                      role="row"
+                      aria-selected={isSelected}
+                      aria-label={`Detection ${idx + 1}: ${det.text.length > 40 ? det.text.slice(0, 40) + "..." : det.text}, ${typeConf?.label ?? det.type}, ${det.confidence}% confidence, ${state?.status ?? "pending"}`}
                       className={cn(
-                        "border-b border-border/50 cursor-pointer transition-colors",
+                        "border-b border-border/50 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-primary/60",
                         isSelected
                           ? "bg-brand-primary/5"
                           : "hover:bg-surface-hover",
@@ -1112,11 +1262,15 @@ export default function ReviewClient({
                               "w-1.5 h-1.5 rounded-full",
                               confDotClass(det.confidence)
                             )}
+                            aria-hidden="true"
                           />
                           <span
                             className={cn("font-mono font-medium", confTextClass(det.confidence))}
                           >
                             {det.confidence}%
+                          </span>
+                          <span className="sr-only">
+                            {det.confidence >= 85 ? "high" : det.confidence >= 50 ? "medium" : "low"} confidence
                           </span>
                         </div>
                       </td>
@@ -1162,6 +1316,7 @@ export default function ReviewClient({
                                 onClick={() => handleRevert(det.id)}
                                 className="btn-ghost text-[10px] px-2 py-1"
                                 title="Revert to pending"
+                                aria-label={`Revert detection "${det.text.length > 30 ? det.text.slice(0, 30) + "..." : det.text}" to pending`}
                               >
                                 Undo
                               </button>
@@ -1170,8 +1325,9 @@ export default function ReviewClient({
                                   onClick={() => handleDeleteManualDetection(det.id)}
                                   className="flex items-center gap-0.5 px-2 py-1 rounded-input text-[10px] font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
                                   title="Delete manual detection"
+                                  aria-label={`Delete manual detection "${det.text.length > 30 ? det.text.slice(0, 30) + "..." : det.text}"`}
                                 >
-                                  <X size={11} />
+                                  <X size={11} aria-hidden="true" />
                                   Delete
                                 </button>
                               )}
@@ -1182,16 +1338,18 @@ export default function ReviewClient({
                                 onClick={() => handleAccept(det.id)}
                                 className="flex items-center gap-0.5 px-2 py-1 rounded-input text-[10px] font-medium bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
                                 title="Accept detection and apply redaction"
+                                aria-label={`Accept detection "${det.text.length > 30 ? det.text.slice(0, 30) + "..." : det.text}"`}
                               >
-                                <Check size={11} />
+                                <Check size={11} aria-hidden="true" />
                                 Accept
                               </button>
                               <button
                                 onClick={() => handleReject(det.id)}
                                 className="flex items-center gap-0.5 px-2 py-1 rounded-input text-[10px] font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
                                 title="Reject detection -- do not redact"
+                                aria-label={`Reject detection "${det.text.length > 30 ? det.text.slice(0, 30) + "..." : det.text}"`}
                               >
-                                <X size={11} />
+                                <X size={11} aria-hidden="true" />
                                 Reject
                               </button>
                             </>
@@ -1227,8 +1385,8 @@ export default function ReviewClient({
 
       {/* ===== Submitting / Success overlay ===== */}
       {(isSubmitting || showSubmitSuccess) && (
-        <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center">
-          <div className="bg-white rounded-card shadow-xl px-8 py-6 text-center max-w-sm">
+        <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={isSubmitting ? "Submitting review" : "Submission successful"}>
+          <div className="bg-white rounded-card shadow-xl px-8 py-6 text-center max-w-sm" role="status" aria-live="polite">
             {isSubmitting ? (
               <>
                 <div className="w-10 h-10 border-3 border-brand-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
@@ -1272,6 +1430,62 @@ export default function ReviewClient({
           onCrossDocCreated={() => router.refresh()}
           panelHeight={panelHeight}
         />
+      )}
+
+      {/* ===== Screen reader status announcements ===== */}
+      <div
+        role="status"
+        aria-live="assertive"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {statusAnnouncement}
+      </div>
+
+      {/* ===== Keyboard Shortcuts Hint Panel (toggled with ?) ===== */}
+      {showKeyboardHints && (
+        <div
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[70] bg-surface-card border border-border rounded-card shadow-xl p-4 w-80"
+          role="dialog"
+          aria-label="Keyboard shortcuts"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-txt-primary">Keyboard Shortcuts</h3>
+            <button
+              onClick={() => setShowKeyboardHints(false)}
+              className="text-txt-secondary hover:text-txt-primary"
+              aria-label="Close keyboard shortcuts"
+            >
+              <X size={14} aria-hidden="true" />
+            </button>
+          </div>
+          <dl className="space-y-1.5 text-xs">
+            <div className="flex justify-between">
+              <dt className="text-txt-secondary">Navigate detections</dt>
+              <dd className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-txt-primary">Arrow Up / Down</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-txt-secondary">Accept detection</dt>
+              <dd className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-txt-primary">A</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-txt-secondary">Reject detection</dt>
+              <dd className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-txt-primary">R</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-txt-secondary">Select / expand</dt>
+              <dd className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-txt-primary">Enter / Space</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-txt-secondary">Deselect / close</dt>
+              <dd className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-txt-primary">Escape</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-txt-secondary">Toggle this panel</dt>
+              <dd className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-txt-primary">?</dd>
+            </div>
+          </dl>
+        </div>
       )}
 
       {/* ===== AI Explanation Popover (when a detection is selected) ===== */}
@@ -1320,11 +1534,13 @@ export default function ReviewClient({
             <div className="border-t border-border mt-2 pt-2">
               <button
                 onClick={() => setHistoryOpen((v) => !v)}
+                aria-expanded={historyOpen}
+                aria-label="Toggle change history"
                 className="flex items-center gap-1 text-[10px] text-txt-secondary hover:text-txt-primary transition-colors w-full"
               >
-                <History size={11} />
+                <History size={11} aria-hidden="true" />
                 <span className="uppercase tracking-wider font-semibold">Change History</span>
-                <ChevronRight size={10} className={cn("ml-auto transition-transform", historyOpen && "rotate-90")} />
+                <ChevronRight size={10} className={cn("ml-auto transition-transform", historyOpen && "rotate-90")} aria-hidden="true" />
               </button>
               {historyOpen && (
                 <div className="mt-1.5 max-h-32 overflow-y-auto">

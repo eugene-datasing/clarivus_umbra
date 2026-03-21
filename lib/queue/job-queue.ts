@@ -8,6 +8,9 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { processDocument } from "@/lib/pipeline/process";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ module: "queue" });
 
 // ---------------------------------------------------------------------------
 // Types
@@ -213,11 +216,13 @@ class ProcessingQueue {
         data: { status: "queued", step: "Retrying after restart" },
       });
       if (result.count > 0) {
-        console.log(`[queue] Recovered ${result.count} stale processing job(s)`);
+        log.info("Recovered stale processing jobs", { count: result.count });
         this.drain();
       }
     } catch (err) {
-      console.error("[queue] Failed to recover stale jobs:", err);
+      log.error("Failed to recover stale jobs", {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
@@ -269,9 +274,12 @@ class ProcessingQueue {
       const job = await prisma.processingJob.findUnique({ where: { id: jobId } });
 
       if (job && job.attempt < job.maxAttempts && this.isRetryable(errorMessage)) {
-        console.warn(
-          `[queue] Job ${docId} failed (attempt ${job.attempt}/${job.maxAttempts}), retrying: ${errorMessage}`,
-        );
+        log.warn("Job failed, retrying", {
+          docId,
+          attempt: job.attempt,
+          maxAttempts: job.maxAttempts,
+          error: errorMessage,
+        });
         await prisma.processingJob.update({
           where: { id: jobId },
           data: {
@@ -281,9 +289,11 @@ class ProcessingQueue {
           },
         });
       } else {
-        console.error(
-          `[queue] Job ${docId} failed permanently after ${job?.attempt ?? "?"} attempt(s): ${errorMessage}`,
-        );
+        log.error("Job failed permanently", {
+          docId,
+          attempts: job?.attempt ?? "?",
+          error: errorMessage,
+        });
         await prisma.processingJob.update({
           where: { id: jobId },
           data: {

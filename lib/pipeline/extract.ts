@@ -5,7 +5,9 @@
  * - PDF and images via Azure Document Intelligence (prebuilt-read)
  * - DOCX via mammoth
  * - XLSX via xlsx
- * - TXT / EML via plain UTF-8 decode
+ * - EML via mailparser (RFC822 email)
+ * - MSG via @kenjiuno/msgreader (Outlook binary format)
+ * - TXT via plain UTF-8 decode
  */
 
 import {
@@ -15,6 +17,11 @@ import {
 import mammoth from "mammoth";
 import * as XLSX from "xlsx";
 import { simpleParser } from "mailparser";
+import {
+  resilientDocIntelCall,
+  CircuitOpenError,
+} from "@/lib/resilience/azure-services";
+import { extractMsg, emailContentToExtractionResult } from "./email-extract";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -77,8 +84,10 @@ function getDIClient(): DocumentAnalysisClient {
 async function extractFromPdf(buffer: Buffer): Promise<ExtractionResult> {
   const client = getDIClient();
 
-  const poller = await client.beginAnalyzeDocument("prebuilt-read", buffer);
-  const result = await poller.pollUntilDone();
+  const result = await resilientDocIntelCall(async () => {
+    const poller = await client.beginAnalyzeDocument("prebuilt-read", buffer);
+    return poller.pollUntilDone();
+  });
 
   const pages: ExtractedPage[] = [];
 
@@ -264,6 +273,17 @@ async function extractFromEmail(buffer: Buffer): Promise<ExtractionResult> {
   return { pages, totalText, attachments: attachments.length > 0 ? attachments : undefined };
 }
 
+/**
+ * Extract email content from an Outlook MSG (binary) file.
+ * Uses @kenjiuno/msgreader to parse the Compound File Binary Format,
+ * then converts the structured email data to pipeline pages.
+ * Attachments are returned separately for child-document processing.
+ */
+async function extractFromMsgFile(buffer: Buffer): Promise<ExtractionResult> {
+  const emailContent = extractMsg(buffer);
+  return emailContentToExtractionResult(emailContent);
+}
+
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
@@ -288,7 +308,17 @@ export async function extractText(
     case "JPEG":
     case "TIFF":
     case "BMP":
-      return extractFromPdf(buffer);
+      try {
+        return await extractFromPdf(buffer);
+      } catch (error) {
+        if (error instanceof CircuitOpenError) {
+          // PDFs and images have no text-based fallback -- propagate as a
+          // service-unavailability error so the pipeline can set the document
+          // to "error" status with a clear message.
+          throw new OCRUnavailableError(ft);
+        }
+        throw error;
+      }
 
     case "DOCX":
       return extractFromDocx(buffer);
@@ -297,8 +327,10 @@ export async function extractText(
       return extractFromXlsx(buffer);
 
     case "EML":
-    case "MSG":
       return extractFromEmail(buffer);
+
+    case "MSG":
+      return extractFromMsgFile(buffer);
 
     case "TXT":
       return extractFromText(buffer);
@@ -310,5 +342,23 @@ export async function extractText(
 
     default:
       throw new Error(`Unsupported file type for text extraction: ${fileType}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Custom error for OCR service unavailability
+// ---------------------------------------------------------------------------
+
+/**
+ * Thrown when Document Intelligence is unavailable (circuit open) and the
+ * file type requires OCR (e.g. PDF, image).  Text-based formats (DOCX, EML)
+ * do not need OCR and are handled by their own extractors.
+ */
+export class OCRUnavailableError extends Error {
+  constructor(fileType: string) {
+    super(
+      `OCR service temporarily unavailable (circuit open). Cannot process ${fileType} file without Document Intelligence.`,
+    );
+    this.name = "OCRUnavailableError";
   }
 }

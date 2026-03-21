@@ -44,6 +44,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en">
       <body className="min-h-screen">
+        <a href="#main-content" className="skip-link">
+          Skip to main content
+        </a>
+        <a href="#main-navigation" className="skip-link">
+          Skip to navigation
+        </a>
         <SessionProvider>
           <QueryProvider>
             <AppShell>{children}</AppShell>

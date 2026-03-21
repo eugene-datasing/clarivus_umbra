@@ -4,6 +4,10 @@ import { generateExportPackage, type PackageType } from "@/lib/pipeline/export";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeForCase } from "@/lib/auth/authorize";
 import { applyRateLimit } from "@/lib/api-utils";
+import { logger } from "@/lib/logger";
+import { trackException } from "@/lib/telemetry";
+
+const log = logger.child({ module: "api", route: "/api/export/generate" });
 
 export async function POST(
   request: NextRequest,
@@ -90,7 +94,10 @@ export async function POST(
 
     return NextResponse.json({ exportId });
   } catch (error) {
-    console.error("Export generation failed:", error);
+    log.error("Export generation failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    trackException(error, { route: "/api/export/generate" });
     return NextResponse.json(
       { error: "Failed to start export" },
       { status: 500 },

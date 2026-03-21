@@ -16,7 +16,7 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { getStorage } from "@/lib/storage";
-import { extractText } from "./extract";
+import { extractText, OCRUnavailableError } from "./extract";
 import { detectPatterns } from "./patterns";
 import { detectWithAI } from "./ai-detect";
 import { detectDuplicates } from "./duplicate-detect";
@@ -25,7 +25,12 @@ import { calculateBBox } from "./bbox";
 import { buildContent } from "./content-builder";
 import { buildFeedbackPromptSection } from "./feedback-examples";
 import { createAuditEntry } from "@/lib/data/audit";
+import { CircuitOpenError } from "@/lib/resilience/azure-services";
+import { logger } from "@/lib/logger";
+import { trackException, trackEvent, trackMetric } from "@/lib/telemetry";
 import path from "path";
+
+const log = logger.child({ module: "pipeline" });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -50,7 +55,7 @@ function getExtension(filename: string): string {
  * @param docId - The Prisma document ID to process.
  */
 export async function processDocument(docId: string): Promise<void> {
-  console.log(`[pipeline] Starting processing for document ${docId}`);
+  log.info("Starting processing", { docId });
 
   try {
     // ------------------------------------------------------------------
@@ -87,7 +92,7 @@ export async function processDocument(docId: string): Promise<void> {
     const storageKey =
       doc.originalPath || `${caseId}/${docId}/original${ext}`;
 
-    console.log(`[pipeline] Downloading file: ${storageKey}`);
+    log.info("Downloading file", { docId, storageKey });
 
     const storage = getStorage();
     let buffer: Buffer;
@@ -120,23 +125,43 @@ export async function processDocument(docId: string): Promise<void> {
     // ------------------------------------------------------------------
     // 4. Extract text
     // ------------------------------------------------------------------
-    console.log(`[pipeline] Extracting text (type: ${doc.fileType})`);
+    log.info("Extracting text", { docId, fileType: doc.fileType });
     const extractionStart = Date.now();
-    const extraction = await extractText(buffer, doc.fileType);
+    let extraction;
+    try {
+      extraction = await extractText(buffer, doc.fileType);
+    } catch (extractError) {
+      if (extractError instanceof OCRUnavailableError) {
+        // OCR service circuit is open -- mark document as error and bail out
+        // without crashing the entire processing queue.
+        log.error("OCR service unavailable, marking document as error", { docId });
+        await prisma.document.update({
+          where: { id: docId },
+          data: {
+            status: "error",
+            processingError: "OCR service temporarily unavailable. The document will be retried when the service recovers.",
+          },
+        });
+        return;
+      }
+      throw extractError;
+    }
     extractionMs = Date.now() - extractionStart;
 
-    console.log(
-      `[pipeline] Extracted ${extraction.pages.length} page(s), ` +
-        `${extraction.totalText.length} chars total`,
-    );
+    log.info("Extraction complete", {
+      docId,
+      pages: extraction.pages.length,
+      totalChars: extraction.totalText.length,
+    });
 
     // ------------------------------------------------------------------
     // 4.5 Handle email attachments (create child documents)
     // ------------------------------------------------------------------
     if (extraction.attachments && extraction.attachments.length > 0) {
-      console.log(
-        `[pipeline] Email has ${extraction.attachments.length} attachment(s), creating child documents...`,
-      );
+      log.info("Email has attachments, creating child documents", {
+        docId,
+        attachmentCount: extraction.attachments.length,
+      });
       for (const att of extraction.attachments) {
         const attExt = path.extname(att.filename).toLowerCase();
         const fileTypeMap: Record<string, string> = {
@@ -174,12 +199,18 @@ export async function processDocument(docId: string): Promise<void> {
 
         // Fire-and-forget processing of the attachment
         processDocument(attDoc.id).catch((err) =>
-          console.error(`[pipeline] Failed to process attachment ${att.filename}:`, err),
+          log.error("Failed to process attachment", {
+            docId,
+            attachmentFilename: att.filename,
+            error: err instanceof Error ? err.message : String(err),
+          }),
         );
 
-        console.log(
-          `[pipeline] Created child document for attachment: ${att.filename} (${attDoc.id})`,
-        );
+        log.info("Created child document for attachment", {
+          docId,
+          attachmentFilename: att.filename,
+          childDocId: attDoc.id,
+        });
       }
     }
 
@@ -213,14 +244,15 @@ export async function processDocument(docId: string): Promise<void> {
     // ------------------------------------------------------------------
     // 5.5 Duplicate detection
     // ------------------------------------------------------------------
-    console.log("[pipeline] Checking for duplicates...");
+    log.info("Checking for duplicates", { docId });
     const dupResult = await detectDuplicates(docId, caseId, extraction.totalText);
     if (dupResult.isExactDuplicate) {
-      console.log(`[pipeline] Exact duplicate detected (group: ${dupResult.duplicateGroup})`);
+      log.info("Exact duplicate detected", { docId, duplicateGroup: dupResult.duplicateGroup });
     } else if (dupResult.nearDuplicateOf) {
-      console.log(
-        `[pipeline] Near-duplicate detected (${Math.round((dupResult.nearDuplicateSimilarity ?? 0) * 100)}% similarity)`,
-      );
+      log.info("Near-duplicate detected", {
+        docId,
+        similarity: Math.round((dupResult.nearDuplicateSimilarity ?? 0) * 100),
+      });
     }
 
     // ------------------------------------------------------------------
@@ -240,22 +272,25 @@ export async function processDocument(docId: string): Promise<void> {
     // ------------------------------------------------------------------
     // 6. Pattern detection
     // ------------------------------------------------------------------
-    console.log("[pipeline] Running pattern detection...");
+    log.info("Running pattern detection", { docId });
     const patternStart = Date.now();
     const patternMatches = detectPatterns(extraction.pages);
     patternDetectionMs = Date.now() - patternStart;
-    console.log(`[pipeline] Found ${patternMatches.length} pattern match(es)`);
+    log.info("Pattern detection complete", { docId, matches: patternMatches.length });
 
     // ------------------------------------------------------------------
     // 6.5 Custom rules detection (WP8)
     // ------------------------------------------------------------------
     let customRuleMatches: Awaited<ReturnType<typeof executeCustomRules>> = [];
     try {
-      console.log("[pipeline] Running custom rules...");
+      log.info("Running custom rules", { docId });
       customRuleMatches = await executeCustomRules(extraction.pages);
-      console.log(`[pipeline] Found ${customRuleMatches.length} custom rule match(es)`);
+      log.info("Custom rules complete", { docId, matches: customRuleMatches.length });
     } catch (rulesError) {
-      console.error("[pipeline] Custom rules failed, continuing:", rulesError);
+      log.error("Custom rules failed, continuing", {
+        docId,
+        error: rulesError instanceof Error ? rulesError.message : String(rulesError),
+      });
     }
 
     // ------------------------------------------------------------------
@@ -264,19 +299,24 @@ export async function processDocument(docId: string): Promise<void> {
     let aiDetections: Awaited<ReturnType<typeof detectWithAI>> = [];
 
     try {
-      console.log("[pipeline] Running AI detection...");
+      log.info("Running AI detection", { docId });
       const aiStart = Date.now();
       const patternTexts = patternMatches.map((m) => m.text);
       const feedbackPrompt = await buildFeedbackPromptSection();
       aiDetections = await detectWithAI(extraction.pages, patternTexts, feedbackPrompt || undefined);
       aiDetectionMs = Date.now() - aiStart;
-      console.log(`[pipeline] Found ${aiDetections.length} AI detection(s)`);
+      log.info("AI detection complete", { docId, detections: aiDetections.length });
     } catch (aiError) {
-      // AI detection is non-critical -- log and continue with pattern-only
-      console.error(
-        "[pipeline] AI detection failed, continuing with pattern-only results:",
-        aiError,
-      );
+      if (aiError instanceof CircuitOpenError) {
+        log.warn("AI detection unavailable, proceeding with pattern detection only", { docId });
+      } else {
+        // AI detection is non-critical -- log and continue with pattern-only
+        log.error("AI detection failed, continuing with pattern-only results", {
+          docId,
+          error: aiError instanceof Error ? aiError.message : String(aiError),
+        });
+        trackException(aiError, { docId, stage: "ai-detection" });
+      }
     }
 
     // ------------------------------------------------------------------
@@ -371,15 +411,18 @@ export async function processDocument(docId: string): Promise<void> {
 
     const totalDetections = allDetectionRecords.length;
 
-    console.log(
-      `[pipeline] Stored ${totalDetections} detection(s) ` +
-        `(${patternDetectionRecords.length} pattern + ${aiDetectionRecords.length} AI + ${customRuleRecords.length} custom)`,
-    );
+    log.info("Detections stored", {
+      docId,
+      total: totalDetections,
+      pattern: patternDetectionRecords.length,
+      ai: aiDetectionRecords.length,
+      customRule: customRuleRecords.length,
+    });
 
     // ------------------------------------------------------------------
     // 9. Build content for review UI
     // ------------------------------------------------------------------
-    console.log("[pipeline] Building content structure for review UI...");
+    log.info("Building content structure for review UI", { docId });
 
     const contentDetections = allDetectionRecords.map((r) => ({
       id: r.id,
@@ -453,7 +496,9 @@ export async function processDocument(docId: string): Promise<void> {
       ].join("; "),
     });
 
-    console.log(`[pipeline] Document ${docId} processing complete.`);
+    log.info("Document processing complete", { docId, totalProcessingMs });
+    trackEvent("document_processed", { docId });
+    trackMetric("pipeline.duration_ms", totalProcessingMs);
   } catch (error) {
     // ------------------------------------------------------------------
     // Error handling — classify errors for user-friendly display
@@ -479,7 +524,8 @@ export async function processDocument(docId: string): Promise<void> {
       userMessage = `Processing failed: ${rawMessage.slice(0, 200)}`;
     }
 
-    console.error(`[pipeline] Processing failed for ${docId}:`, rawMessage);
+    log.error("Processing failed", { docId, error: rawMessage });
+    trackException(error, { docId, stage: "pipeline" });
 
     try {
       await prisma.document.update({
@@ -490,10 +536,10 @@ export async function processDocument(docId: string): Promise<void> {
         },
       });
     } catch (updateErr) {
-      console.error(
-        `[pipeline] Failed to update error status for ${docId}:`,
-        updateErr,
-      );
+      log.error("Failed to update error status", {
+        docId,
+        error: updateErr instanceof Error ? updateErr.message : String(updateErr),
+      });
     }
   }
 }

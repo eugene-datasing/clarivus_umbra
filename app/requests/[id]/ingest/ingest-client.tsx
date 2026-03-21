@@ -286,7 +286,7 @@ export default function IngestClient({
       </div>
 
       {uploadError && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-card text-sm text-red-700">
+        <div role="alert" aria-live="assertive" className="mb-4 p-3 bg-red-50 border border-red-200 rounded-card text-sm text-red-700">
           {uploadError}
         </div>
       )}
@@ -299,12 +299,16 @@ export default function IngestClient({
         className="hidden"
         accept=".pdf,.docx,.xlsx,.pptx,.eml,.msg,.txt,.png,.jpg,.jpeg,.zip"
         onChange={handleFileSelect}
+        aria-label="Upload documents"
       />
 
       {/* Upload Zone */}
       <div
+        role="button"
+        tabIndex={0}
+        aria-label="File upload dropzone. Drag and drop files or click to browse"
         className={cn(
-          "card border-2 border-dashed text-center py-16 mb-6 transition-colors cursor-pointer",
+          "card border-2 border-dashed text-center py-16 mb-6 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-primary/60 focus:ring-offset-1",
           dragActive
             ? "border-brand-primary bg-purple-50/50"
             : "border-border hover:border-brand-primary/40 hover:bg-surface-hover"
@@ -316,6 +320,12 @@ export default function IngestClient({
         onDragLeave={() => setDragActive(false)}
         onDrop={handleFileDrop}
         onClick={handleBrowseClick}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            handleBrowseClick();
+          }
+        }}
       >
         <div className="flex flex-col items-center">
           <div className="w-16 h-16 rounded-full bg-purple-50 flex items-center justify-center mb-4">
@@ -354,7 +364,7 @@ export default function IngestClient({
 
       {/* Overall Progress (only show when there are documents) */}
       {totalCount > 0 && (
-        <div className="card mb-6">
+        <div className="card mb-6" role="status" aria-live="polite">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-heading font-semibold text-txt-primary">
               Processing Progress
@@ -363,7 +373,14 @@ export default function IngestClient({
               {progressPct}% ({readyCount}/{totalCount})
             </span>
           </div>
-          <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+          <div
+            className="h-3 bg-gray-100 rounded-full overflow-hidden"
+            role="progressbar"
+            aria-valuenow={progressPct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`Processing progress: ${progressPct}% complete`}
+          >
             <div
               className="h-full bg-brand-primary rounded-full transition-all"
               style={{ width: `${progressPct}%` }}
@@ -434,7 +451,14 @@ export default function IngestClient({
                   {item.status === "processing" && item.queueStep && (
                     <div className="mt-1 ml-6">
                       <div className="flex items-center gap-2">
-                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden max-w-[200px]">
+                        <div
+                          className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden max-w-[200px]"
+                          role="progressbar"
+                          aria-valuenow={item.queueProgress ?? 0}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-label={`Processing ${item.name}: ${item.queueStep}`}
+                        >
                           <div
                             className="h-full bg-blue-500 rounded-full transition-all duration-500"
                             style={{ width: `${item.queueProgress ?? 0}%` }}

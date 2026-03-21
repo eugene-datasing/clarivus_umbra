@@ -48,6 +48,23 @@
   }
 }
 
+/* ---- Accessibility: Skip Navigation ---- */
+.skip-link {
+  @apply sr-only;
+}
+.skip-link:focus {
+  @apply not-sr-only fixed top-2 left-2 z-[100] bg-brand-primary text-white px-4 py-2 rounded-input text-sm font-medium shadow-lg;
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* ---- Accessibility: Focus-visible styles ---- */
+@layer base {
+  *:focus-visible {
+    @apply outline-none ring-2 ring-brand-primary/60 ring-offset-1;
+  }
+}
+
 /* Animations */
 @keyframes slideIn {
   from { opacity: 0; transform: translateY(-12px); }

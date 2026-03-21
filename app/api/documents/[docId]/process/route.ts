@@ -4,6 +4,10 @@ import { getProcessingQueue } from "@/lib/queue/job-queue";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeForDocument } from "@/lib/auth/authorize";
 import { applyRateLimit } from "@/lib/api-utils";
+import { logger } from "@/lib/logger";
+import { trackException } from "@/lib/telemetry";
+
+const log = logger.child({ module: "api", route: "/api/documents/process" });
 
 export async function POST(
   _request: NextRequest,
@@ -42,7 +46,10 @@ export async function POST(
       queuePosition: stats.queued,
     });
   } catch (error) {
-    console.error("Process trigger failed:", error);
+    log.error("Process trigger failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    trackException(error, { route: "/api/documents/process" });
     return NextResponse.json(
       { error: "Failed to trigger document processing" },
       { status: 500 },

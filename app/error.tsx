@@ -2,6 +2,32 @@
 
 import { useEffect } from "react";
 
+/**
+ * Report a client-side error to the server for Application Insights tracking.
+ * Fire-and-forget -- failures are silently ignored.
+ */
+function reportErrorToServer(error: Error & { digest?: string }) {
+  try {
+    const payload = JSON.stringify({
+      message: error.message,
+      digest: error.digest,
+      stack: error.stack?.slice(0, 2000),
+      source: "client-error-boundary",
+    });
+    if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+      navigator.sendBeacon("/api/telemetry/error", payload);
+    } else {
+      fetch("/api/telemetry/error", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      }).catch(() => {});
+    }
+  } catch {
+    // Swallow -- telemetry must never break the UI
+  }
+}
+
 export default function GlobalError({
   error,
   reset,
@@ -11,6 +37,7 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     console.error("[error-boundary]", error);
+    reportErrorToServer(error);
   }, [error]);
 
   return (

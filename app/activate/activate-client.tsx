@@ -91,8 +91,8 @@ export default function ActivateClient() {
 
         <div className="card">
           {success ? (
-            <div className="text-center py-4">
-              <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-3" />
+            <div className="text-center py-4" role="status" aria-live="polite">
+              <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-3" aria-hidden="true" />
               <h2 className="text-lg font-heading font-semibold text-txt-primary mb-2">
                 Activated
               </h2>
@@ -114,19 +114,25 @@ export default function ActivateClient() {
               </p>
 
               {error && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-card text-sm text-red-700 flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <div
+                  id="activation-error"
+                  role="alert"
+                  aria-live="assertive"
+                  className="mb-4 p-3 bg-red-50 border border-red-200 rounded-card text-sm text-red-700 flex items-start gap-2"
+                >
+                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" aria-hidden="true" />
                   <span>{error}</span>
                 </div>
               )}
 
-              <form onSubmit={handleSubmit}>
+              <form onSubmit={handleSubmit} aria-label="Activate instance">
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-txt-primary mb-1.5">
+                    <label htmlFor="activation-code" className="block text-sm font-medium text-txt-primary mb-1.5">
                       Activation Code
                     </label>
                     <input
+                      id="activation-code"
                       type="text"
                       className="input-field font-mono text-center text-lg tracking-wider"
                       placeholder="VEIL-XXXX-XXXX-XXXX"
@@ -136,6 +142,9 @@ export default function ActivateClient() {
                       autoComplete="off"
                       autoFocus
                       required
+                      aria-required="true"
+                      aria-invalid={error ? "true" : undefined}
+                      aria-describedby={error ? "activation-error" : "activation-hint"}
                     />
                   </div>
                   <button
@@ -155,7 +164,7 @@ export default function ActivateClient() {
                 </div>
               </form>
 
-              <p className="mt-4 pt-4 border-t border-border text-xs text-txt-secondary text-center">
+              <p id="activation-hint" className="mt-4 pt-4 border-t border-border text-xs text-txt-secondary text-center">
                 Contact your DataSing account manager if you don&apos;t have an activation code.
               </p>
             </>

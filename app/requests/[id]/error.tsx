@@ -1,6 +1,29 @@
 "use client";
 
+import { useEffect } from "react";
 import ErrorDisplay from "@/components/common/error-display";
+
+function reportErrorToServer(error: Error & { digest?: string }) {
+  try {
+    const payload = JSON.stringify({
+      message: error.message,
+      digest: error.digest,
+      stack: error.stack?.slice(0, 2000),
+      source: "case-error-boundary",
+    });
+    if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+      navigator.sendBeacon("/api/telemetry/error", payload);
+    } else {
+      fetch("/api/telemetry/error", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      }).catch(() => {});
+    }
+  } catch {
+    // Swallow
+  }
+}
 
 export default function CaseError({
   error,
@@ -9,6 +32,10 @@ export default function CaseError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    reportErrorToServer(error);
+  }, [error]);
+
   // Classify the error to provide helpful suggestions
   const message = error.message || "An unexpected error occurred while loading this page.";
   let suggestion: string | undefined;
