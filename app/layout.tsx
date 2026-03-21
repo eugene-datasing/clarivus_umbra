@@ -21,10 +21,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const headersList = await headers();
   const pathname = headersList.get("x-pathname") || "";
 
+  // Skip activation check on pages that need to work during activation flow.
+  // /activate is the activation page itself (requires auth — middleware bounces to /login first)
+  // /login and /api/auth are the auth flow pages
+  // /setup is the post-activation wizard
   const skipActivationCheck =
     pathname.startsWith("/activate") ||
     pathname.startsWith("/login") ||
-    pathname.startsWith("/api/auth");
+    pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/setup");
 
   if (!skipActivationCheck) {
     try {

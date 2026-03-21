@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { verifyAndRedeemCode } from "@/lib/data/activation";
 import { createAuditEntry } from "@/lib/data/audit";
+import { auth } from "@/lib/auth/auth-options";
 
 // ---------------------------------------------------------------------------
 // In-memory rate limiter for activation attempts (per-process)
@@ -54,12 +55,25 @@ if (typeof globalThis !== "undefined") {
 
 /**
  * Server action to redeem an activation code.
- * This does NOT require authentication — it runs before any user can log in.
+ * Requires authentication — the user must sign in via Azure AD first.
+ * The redeeming user is promoted to admin role.
  * Rate-limited to 5 attempts per IP per 15-minute window.
  */
 export async function redeemActivationCode(
   code: string,
 ): Promise<{ success: boolean; error?: string }> {
+  // Require authenticated user
+  const session = await auth();
+  if (!session?.user) {
+    return { success: false, error: "You must be signed in to activate this instance." };
+  }
+
+  const userId = (session.user as { id?: string }).id;
+  if (!userId) {
+    return { success: false, error: "Session is missing user ID. Please sign out and sign in again." };
+  }
+  const userName = session.user.name || session.user.email || "Unknown";
+
   // Get client IP for rate limiting
   const headersList = await headers();
   const ip = headersList.get("x-forwarded-for")?.split(",")[0]?.trim()
@@ -80,25 +94,26 @@ export async function redeemActivationCode(
     return { success: false, error: "Please enter an activation code." };
   }
 
-  const result = await verifyAndRedeemCode(code.trim());
+  const result = await verifyAndRedeemCode(code.trim(), userId);
 
   if (result.success) {
     // Log successful activation
     try {
       await createAuditEntry({
-        userName: "Veil System",
-        userRole: "System",
+        userId,
+        userName,
+        userRole: "admin", // User was just promoted
         type: "activation",
-        description: "Instance activated with activation code",
+        description: `Instance activated by ${userName}`,
         target: "system",
-        detail: `Activation code redeemed. IP: ${ip}`,
+        detail: `Activation code redeemed. User promoted to admin. IP: ${ip}`,
       });
     } catch (err) {
       console.error("[activation] Failed to create audit entry:", err);
     }
   } else {
     // Log failed attempts for security monitoring
-    console.warn(`[activation] Failed attempt: ip=${ip}, error=${result.error}`);
+    console.warn(`[activation] Failed attempt: ip=${ip}, user=${userName}, error=${result.error}`);
   }
 
   return result;

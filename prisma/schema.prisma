@@ -333,16 +333,38 @@ model FeedbackExample {
 }
 
 model ActivationCode {
-  id         String    @id @default(cuid())
-  codeHash   String
-  status     String    @default("pending") // "pending" | "redeemed" | "revoked"
-  redeemedAt DateTime?
-  redeemedBy String?
-  createdAt  DateTime  @default(now())
-  expiresAt  DateTime?
+  id              String    @id @default(cuid())
+  codeHash        String
+  status          String    @default("pending") // "pending" | "redeemed" | "revoked"
+  orgName         String?   // Organisation name, e.g. "New Plymouth District Council"
+  orgAbbreviation String?   // e.g. "NPDC"
+  orgTenantId     String?   // Azure AD tenant ID bound to this code
+  allowedDomain   String?   // e.g. "npdc.govt.nz"
+  redeemedAt      DateTime?
+  redeemedBy      String?
+  createdAt       DateTime  @default(now())
+  expiresAt       DateTime?
 
   @@index([status])
   @@map("activation_codes")
+}
+
+model UserInvitation {
+  id           String    @id @default(cuid())
+  email        String
+  name         String?
+  role         String    @default("reviewer")
+  departmentId String?
+  invitedBy    String
+  status       String    @default("pending") // "pending" | "accepted" | "expired" | "revoked"
+  token        String    @unique
+  acceptedAt   DateTime?
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+
+  @@index([email])
+  @@index([status])
+  @@map("user_invitations")
 }
 
 model ProcessingJob {

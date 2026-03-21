@@ -17,6 +17,7 @@ import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db/prisma";
 import { authConfig } from "./auth.config";
+import { getSetting, SETTING_KEYS, type InstanceConfig, DEFAULT_INSTANCE_CONFIG } from "@/lib/data/settings";
 
 // ---------------------------------------------------------------------------
 // Build providers list — Credentials is always present; Azure AD is
@@ -89,6 +90,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const email = user.email;
         if (!email) return false; // Reject sign-in if Azure AD didn't give us an email
 
+        // Domain restriction: if instance_config has an allowedDomain, enforce it
+        const instanceConfig = await getSetting<InstanceConfig>(
+          SETTING_KEYS.INSTANCE_CONFIG,
+          DEFAULT_INSTANCE_CONFIG,
+        );
+        if (instanceConfig.allowedDomain) {
+          const domain = email.split("@")[1]?.toLowerCase();
+          if (domain !== instanceConfig.allowedDomain.toLowerCase()) {
+            console.warn(`[auth] Rejected sign-in: email domain "${domain}" does not match allowed domain "${instanceConfig.allowedDomain}"`);
+            return false;
+          }
+        }
+
         // Extract OID from Azure AD profile (stable identity across email changes)
         const oid = (profile as { oid?: string } | undefined)?.oid
           ?? account.providerAccountId;
@@ -123,16 +137,43 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             });
           }
         } else {
-          // Auto-provision: create a new local user with the default "reviewer" role
-          dbUser = await prisma.user.create({
-            data: {
-              name: user.name ?? email.split("@")[0],
-              email,
-              role: "reviewer",
-              azureAdOid: oid || null,
-              // No passwordHash — SSO-only user
+          // Check if there's a matching invitation for this email
+          const invitation = await prisma.userInvitation.findFirst({
+            where: {
+              email: { equals: email, mode: "insensitive" },
+              status: "pending",
+              expiresAt: { gt: new Date() },
             },
           });
+
+          // Check if any users exist — if not, this is the bootstrap admin
+          // (pre-activation flow: first user through Azure AD gets created)
+          const userCount = await prisma.user.count();
+
+          if (!invitation && userCount > 0) {
+            // No invitation and not the first user — reject
+            console.warn(`[auth] Rejected sign-in: no invitation found for "${email}"`);
+            return false;
+          }
+
+          // Auto-provision from invitation or as bootstrap user
+          dbUser = await prisma.user.create({
+            data: {
+              name: invitation?.name ?? user.name ?? email.split("@")[0],
+              email,
+              role: invitation?.role ?? "reviewer",
+              departmentId: invitation?.departmentId ?? null,
+              azureAdOid: oid || null,
+            },
+          });
+
+          // Mark invitation as accepted
+          if (invitation) {
+            await prisma.userInvitation.update({
+              where: { id: invitation.id },
+              data: { status: "accepted", acceptedAt: new Date() },
+            });
+          }
         }
 
         // Attach local DB id and role to the user object so the jwt callback

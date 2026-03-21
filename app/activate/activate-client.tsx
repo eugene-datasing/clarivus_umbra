@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { EyeOff, KeyRound, CheckCircle2, AlertCircle } from "lucide-react";
+import { EyeOff, KeyRound, CheckCircle2, AlertCircle, User } from "lucide-react";
 import { redeemActivationCode } from "@/lib/actions/activation-actions";
 
 /**
@@ -38,7 +38,11 @@ function formatActivationCode(raw: string): string {
   return groups.join("-");
 }
 
-export default function ActivateClient() {
+interface ActivateClientProps {
+  userName: string;
+}
+
+export default function ActivateClient({ userName }: ActivateClientProps) {
   const router = useRouter();
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
@@ -61,9 +65,9 @@ export default function ActivateClient() {
 
       if (result.success) {
         setSuccess(true);
-        // Redirect to login after a brief success message
+        // Redirect to setup wizard after a brief success message
         setTimeout(() => {
-          router.push("/login");
+          router.push("/setup");
           router.refresh();
         }, 2000);
       } else {
@@ -97,11 +101,18 @@ export default function ActivateClient() {
                 Activated
               </h2>
               <p className="text-sm text-txt-secondary">
-                Your Veil instance is now active. Redirecting to sign in...
+                Your Veil instance is now active. Redirecting to setup...
               </p>
             </div>
           ) : (
             <>
+              {userName && (
+                <div className="flex items-center gap-2 mb-4 p-2 bg-surface-raised rounded-card text-sm text-txt-secondary">
+                  <User className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+                  <span>Signed in as <strong className="text-txt-primary">{userName}</strong></span>
+                </div>
+              )}
+
               <div className="flex items-center gap-2 mb-4">
                 <KeyRound className="w-5 h-5 text-brand-primary" />
                 <h2 className="text-lg font-heading font-semibold text-txt-primary">
@@ -111,6 +122,7 @@ export default function ActivateClient() {
 
               <p className="text-sm text-txt-secondary mb-4">
                 Enter the activation code provided by DataSing to unlock this Veil instance.
+                You will be set up as the initial administrator.
               </p>
 
               {error && (

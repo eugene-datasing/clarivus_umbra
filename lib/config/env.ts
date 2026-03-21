@@ -98,6 +98,13 @@ const specs: EnvVarSpec[] = [
     description: "Azure Blob Storage account name",
   },
 
+  // --- Optional: Azure Communication Services (email) ---
+  {
+    name: "AZURE_COMMUNICATION_CONNECTION_STRING",
+    required: false,
+    description: "Azure Communication Services connection string for email",
+  },
+
   // --- Optional: Telemetry ---
   {
     name: "APPLICATIONINSIGHTS_CONNECTION_STRING",
@@ -158,6 +165,9 @@ export const env = {
   // Azure Blob Storage
   get AZURE_STORAGE_CONNECTION_STRING() { return getOptional("AZURE_STORAGE_CONNECTION_STRING"); },
   get AZURE_STORAGE_ACCOUNT_NAME() { return getOptional("AZURE_STORAGE_ACCOUNT_NAME"); },
+
+  // Azure Communication Services
+  get AZURE_COMMUNICATION_CONNECTION_STRING() { return getOptional("AZURE_COMMUNICATION_CONNECTION_STRING"); },
 
   // Telemetry
   get APPLICATIONINSIGHTS_CONNECTION_STRING() { return getOptional("APPLICATIONINSIGHTS_CONNECTION_STRING"); },

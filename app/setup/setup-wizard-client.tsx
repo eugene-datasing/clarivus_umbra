@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import {
   Building2,
   Users,
+  UserPlus,
   Palette,
   Scale,
   Shield,
@@ -16,6 +17,9 @@ import {
   Trash2,
   Edit,
   Loader2,
+  Mail,
+  RotateCw,
+  XCircle,
 } from "lucide-react";
 import type {
   OrgIdentity,
@@ -40,6 +44,11 @@ import {
   deleteDepartment,
   seedDefaultDepartments,
 } from "@/lib/actions/department-actions";
+import {
+  inviteUser,
+  revokeInvitation,
+  resendInvitation,
+} from "@/lib/actions/invitation-actions";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -52,6 +61,16 @@ interface Department {
   headName: string | null;
 }
 
+interface Invitation {
+  id: string;
+  email: string;
+  name: string | null;
+  role: string;
+  departmentId: string | null;
+  status: string;
+  createdAt: string;
+}
+
 interface SetupWizardClientProps {
   initialStep: number;
   completedSteps: number[];
@@ -62,6 +81,7 @@ interface SetupWizardClientProps {
   lgoimaConfig: LGOIMAConfig;
   thresholds: ConfidenceThresholds;
   departments: Department[];
+  invitations: Invitation[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -74,6 +94,7 @@ const STEPS = [
   { label: "Document Branding", icon: Palette },
   { label: "LGOIMA Workflow", icon: Scale },
   { label: "Detection Policies", icon: Shield },
+  { label: "Team Setup", icon: UserPlus },
   { label: "Review & Confirm", icon: CheckCircle },
 ] as const;
 
@@ -91,12 +112,13 @@ export default function SetupWizardClient({
   lgoimaConfig: initialLgoima,
   thresholds: initialThresholds,
   departments: initialDepartments,
+  invitations: initialInvitations,
 }: SetupWizardClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   // Wizard state
-  const [currentStep, setCurrentStep] = useState(Math.min(initialStep, 5));
+  const [currentStep, setCurrentStep] = useState(Math.min(initialStep, 6));
   const [completed, setCompleted] = useState<number[]>(initialCompleted);
 
   // Step 0: Organisation Identity
@@ -122,6 +144,11 @@ export default function SetupWizardClient({
 
   // Step 4: Thresholds
   const [thresholds, setThresholds] = useState<ConfidenceThresholds>(initialThresholds);
+
+  // Step 5: Team Setup
+  const [invitations, setInvitations] = useState<Invitation[]>(initialInvitations);
+  const [inviteForm, setInviteForm] = useState({ email: "", name: "", role: "reviewer", departmentId: "" });
+  const [showInviteForm, setShowInviteForm] = useState(false);
 
   // Status
   const [saving, setSaving] = useState(false);
@@ -172,9 +199,12 @@ export default function SetupWizardClient({
       } else if (currentStep === 4) {
         await saveDetectionPolicies({ thresholds });
         markComplete(4);
+      } else if (currentStep === 5) {
+        // Team Setup — mark complete (invitations already sent inline)
+        markComplete(5);
       }
 
-      const next = Math.min(currentStep + 1, 5);
+      const next = Math.min(currentStep + 1, 6);
       setCurrentStep(next);
       startTransition(async () => {
         await saveSetupStep(next);
@@ -984,8 +1014,215 @@ export default function SetupWizardClient({
                   </div>
                 )}
 
-                {/* Step 5: Review & Confirm */}
+                {/* Step 5: Team Setup */}
                 {currentStep === 5 && (
+                  <div>
+                    <h2 className="text-lg font-heading font-semibold text-txt-primary mb-1">
+                      Team Setup
+                    </h2>
+                    <p className="text-sm text-txt-secondary mb-6">
+                      Invite team members to Veil. They will receive an email and can sign in with their
+                      organisation Azure AD credentials. You can skip this and invite users later from Admin Settings.
+                    </p>
+
+                    <div className="flex items-center gap-3 mb-4">
+                      <button
+                        className="btn-primary flex items-center gap-1.5"
+                        onClick={() => {
+                          setInviteForm({ email: "", name: "", role: "reviewer", departmentId: "" });
+                          setShowInviteForm(true);
+                        }}
+                      >
+                        <Plus className="w-4 h-4" />
+                        Invite User
+                      </button>
+                    </div>
+
+                    {/* Invite form */}
+                    {showInviteForm && (
+                      <div className="mb-4 p-4 bg-surface-bg border border-border rounded-card">
+                        <h3 className="text-sm font-medium text-txt-primary mb-3">New Invitation</h3>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-medium text-txt-secondary mb-1">
+                              Email <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="email"
+                              className="input-field"
+                              placeholder="user@org.govt.nz"
+                              value={inviteForm.email}
+                              onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-txt-secondary mb-1">
+                              Display Name <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              className="input-field"
+                              placeholder="Full name"
+                              value={inviteForm.name}
+                              onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-txt-secondary mb-1">Role</label>
+                            <select
+                              className="input-field"
+                              value={inviteForm.role}
+                              onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value })}
+                            >
+                              <option value="reviewer">Reviewer</option>
+                              <option value="senior-reviewer">Senior Reviewer</option>
+                              <option value="request-manager">Request Manager</option>
+                              <option value="admin">Administrator</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-txt-secondary mb-1">Department</label>
+                            <select
+                              className="input-field"
+                              value={inviteForm.departmentId}
+                              onChange={(e) => setInviteForm({ ...inviteForm, departmentId: e.target.value })}
+                            >
+                              <option value="">-- None --</option>
+                              {departments.map((d) => (
+                                <option key={d.id} value={d.id}>{d.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mt-3">
+                          <button
+                            className="btn-primary text-xs flex items-center gap-1.5"
+                            disabled={saving || !inviteForm.email || !inviteForm.name}
+                            onClick={async () => {
+                              setSaving(true);
+                              setError(null);
+                              try {
+                                const result = await inviteUser({
+                                  email: inviteForm.email,
+                                  name: inviteForm.name,
+                                  role: inviteForm.role,
+                                  departmentId: inviteForm.departmentId || undefined,
+                                });
+                                if (result.success && result.id) {
+                                  setInvitations((prev) => [
+                                    {
+                                      id: result.id!,
+                                      email: inviteForm.email.toLowerCase(),
+                                      name: inviteForm.name,
+                                      role: inviteForm.role,
+                                      departmentId: inviteForm.departmentId || null,
+                                      status: "pending",
+                                      createdAt: new Date().toISOString(),
+                                    },
+                                    ...prev,
+                                  ]);
+                                  setInviteForm({ email: "", name: "", role: "reviewer", departmentId: "" });
+                                  setShowInviteForm(false);
+                                } else {
+                                  setError(result.error || "Failed to send invitation.");
+                                }
+                              } catch {
+                                setError("Failed to send invitation.");
+                              } finally {
+                                setSaving(false);
+                              }
+                            }}
+                          >
+                            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+                            Send Invitation
+                          </button>
+                          <button
+                            className="btn-ghost text-xs"
+                            onClick={() => setShowInviteForm(false)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Invitations table */}
+                    {invitations.length > 0 ? (
+                      <div className="border border-border rounded-card overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-border bg-surface-bg">
+                              <th className="text-left px-4 py-2.5 font-medium text-txt-secondary">Name</th>
+                              <th className="text-left px-4 py-2.5 font-medium text-txt-secondary">Email</th>
+                              <th className="text-left px-4 py-2.5 font-medium text-txt-secondary">Role</th>
+                              <th className="text-left px-4 py-2.5 font-medium text-txt-secondary">Status</th>
+                              <th className="text-right px-4 py-2.5 font-medium text-txt-secondary">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {invitations.map((inv) => (
+                              <tr key={inv.id} className="border-b border-border last:border-0 hover:bg-surface-hover transition-colors">
+                                <td className="px-4 py-2.5 font-medium text-txt-primary">{inv.name || "--"}</td>
+                                <td className="px-4 py-2.5 text-txt-secondary text-xs font-mono">{inv.email}</td>
+                                <td className="px-4 py-2.5 text-txt-secondary capitalize">{inv.role.replace("-", " ")}</td>
+                                <td className="px-4 py-2.5">
+                                  <span className={cn(
+                                    "badge text-xs",
+                                    inv.status === "pending" && "bg-amber-50 text-amber-700",
+                                    inv.status === "accepted" && "bg-green-50 text-green-700",
+                                    inv.status === "revoked" && "bg-red-50 text-red-700",
+                                  )}>
+                                    {inv.status}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-2.5 text-right">
+                                  {inv.status === "pending" && (
+                                    <>
+                                      <button
+                                        className="btn-ghost p-1"
+                                        title="Resend"
+                                        onClick={async () => {
+                                          await resendInvitation(inv.id);
+                                        }}
+                                      >
+                                        <RotateCw className="w-4 h-4" />
+                                      </button>
+                                      <button
+                                        className="btn-ghost p-1 text-red-500 hover:text-red-700"
+                                        title="Revoke"
+                                        onClick={async () => {
+                                          const result = await revokeInvitation(inv.id);
+                                          if (result.success) {
+                                            setInvitations((prev) =>
+                                              prev.map((i) => i.id === inv.id ? { ...i, status: "revoked" } : i)
+                                            );
+                                          }
+                                        }}
+                                      >
+                                        <XCircle className="w-4 h-4" />
+                                      </button>
+                                    </>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 text-txt-secondary">
+                        <UserPlus className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                        <p className="text-sm">No invitations sent yet.</p>
+                        <p className="text-xs mt-1">
+                          Invite team members above, or skip this step and add users later.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Step 6: Review & Confirm */}
+                {currentStep === 6 && (
                   <div>
                     <h2 className="text-lg font-heading font-semibold text-txt-primary mb-1">
                       Review & Confirm
@@ -1141,6 +1378,42 @@ export default function SetupWizardClient({
                           </div>
                         </div>
                       </div>
+
+                      {/* Team Setup summary */}
+                      <div className="card">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-sm font-semibold text-txt-primary flex items-center gap-2">
+                            <UserPlus className="w-4 h-4 text-brand-primary" />
+                            Team Setup
+                          </h3>
+                          <button className="btn-ghost text-xs" onClick={() => goToStep(5)}>
+                            Edit
+                          </button>
+                        </div>
+                        {invitations.length > 0 ? (
+                          <div className="text-sm">
+                            <p className="text-txt-primary mb-2">
+                              {invitations.filter((i) => i.status === "pending").length} pending invitation{invitations.filter((i) => i.status === "pending").length !== 1 ? "s" : ""}
+                              {invitations.filter((i) => i.status === "accepted").length > 0 && (
+                                <>, {invitations.filter((i) => i.status === "accepted").length} accepted</>
+                              )}
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {invitations.filter((i) => i.status !== "revoked").map((inv) => (
+                                <span key={inv.id} className={cn(
+                                  "badge text-xs",
+                                  inv.status === "pending" && "bg-amber-50 text-amber-700",
+                                  inv.status === "accepted" && "bg-green-50 text-green-700",
+                                )}>
+                                  {inv.name || inv.email}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-txt-secondary">No team members invited yet. You can add users later from Admin Settings.</p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1157,7 +1430,7 @@ export default function SetupWizardClient({
                   Back
                 </button>
 
-                {currentStep < 5 ? (
+                {currentStep < 6 ? (
                   <button
                     className="btn-primary flex items-center gap-1.5"
                     onClick={handleNext}
@@ -1167,7 +1440,7 @@ export default function SetupWizardClient({
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
                       <>
-                        {currentStep === 4 ? "Save & Review" : "Save & Continue"}
+                        {currentStep === 5 ? "Continue to Review" : "Save & Continue"}
                         <ChevronRight className="w-4 h-4" />
                       </>
                     )}

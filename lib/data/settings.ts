@@ -18,6 +18,7 @@ export const SETTING_KEYS = {
   CONFIDENCE_THRESHOLDS: "confidence_thresholds",
   SETUP_WIZARD_STATE: "setup_wizard_state",
   ACTIVATION_STATUS: "activation_status",
+  INSTANCE_CONFIG: "instance_config",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
@@ -220,3 +221,14 @@ export interface ActivationStatus {
 export const DEFAULT_ACTIVATION_STATUS: ActivationStatus = {
   activated: false,
 };
+
+// ---------------------------------------------------------------------------
+// Instance config (set during activation from activation code metadata)
+// ---------------------------------------------------------------------------
+
+export interface InstanceConfig {
+  allowedDomain?: string;    // e.g. "npdc.govt.nz"
+  orgTenantId?: string;      // Azure AD tenant ID (for reference)
+}
+
+export const DEFAULT_INSTANCE_CONFIG: InstanceConfig = {};

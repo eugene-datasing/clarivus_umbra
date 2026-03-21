@@ -50,7 +50,9 @@ export const authConfig = {
       const { pathname } = nextUrl;
 
       // Public paths — always allow
-      if (pathname.startsWith("/login") || pathname.startsWith("/api/auth") || pathname.startsWith("/activate")) {
+      // Note: /activate is NOT public — it requires authentication so the
+      // user must sign in via Azure AD before entering the activation code.
+      if (pathname.startsWith("/login") || pathname.startsWith("/api/auth")) {
         return true;
       }
 

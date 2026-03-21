@@ -12,10 +12,12 @@
 import { prisma } from "@/lib/db/prisma";
 import {
   getSetting,
-  setSetting,
   SETTING_KEYS,
   type ActivationStatus,
   DEFAULT_ACTIVATION_STATUS,
+  type OrgIdentity,
+  DEFAULT_ORG_IDENTITY,
+  type InstanceConfig,
 } from "./settings";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
@@ -51,11 +53,18 @@ export async function getActivationStatus(): Promise<ActivationStatus> {
  *
  * Uses an interactive Prisma transaction to prevent race conditions — two
  * concurrent requests cannot both redeem the same code.
+ *
+ * On success:
+ * - Marks the code as redeemed
+ * - Sets activation_status in SystemSettings
+ * - Pre-seeds org_identity from code metadata (if present)
+ * - Stores instance_config (allowedDomain, orgTenantId) in SystemSettings
+ * - Promotes the redeeming user to admin role
  */
 export async function verifyAndRedeemCode(
   code: string,
-  redeemedBy?: string,
-): Promise<{ success: boolean; error?: string }> {
+  redeemedByUserId?: string,
+): Promise<{ success: boolean; error?: string; orgName?: string }> {
   // Normalise: uppercase, strip whitespace
   const normalised = code.toUpperCase().replace(/\s/g, "");
 
@@ -124,18 +133,18 @@ export async function verifyAndRedeemCode(
       data: {
         status: "redeemed",
         redeemedAt: now,
-        redeemedBy: redeemedBy || "unknown",
+        redeemedBy: redeemedByUserId || "unknown",
       },
     });
 
-    // Set activation status in system settings (within transaction)
+    // Set activation status in system settings
     await tx.systemSetting.upsert({
       where: { key: SETTING_KEYS.ACTIVATION_STATUS },
       update: {
         value: {
           activated: true,
           activatedAt: now.toISOString(),
-          activatedBy: redeemedBy || "unknown",
+          activatedBy: redeemedByUserId || "unknown",
         } satisfies ActivationStatus as object,
         updatedBy: "system",
       },
@@ -144,13 +153,48 @@ export async function verifyAndRedeemCode(
         value: {
           activated: true,
           activatedAt: now.toISOString(),
-          activatedBy: redeemedBy || "unknown",
+          activatedBy: redeemedByUserId || "unknown",
         } satisfies ActivationStatus as object,
         updatedBy: "system",
       },
     });
 
-    return { success: true };
+    // Pre-seed org_identity from activation code metadata
+    if (matchedRecord.orgName) {
+      const orgIdentity: OrgIdentity = {
+        ...DEFAULT_ORG_IDENTITY,
+        name: matchedRecord.orgName,
+        abbreviation: matchedRecord.orgAbbreviation || "",
+      };
+      await tx.systemSetting.upsert({
+        where: { key: SETTING_KEYS.ORG_IDENTITY },
+        update: { value: orgIdentity as object, updatedBy: "system" },
+        create: { key: SETTING_KEYS.ORG_IDENTITY, value: orgIdentity as object, updatedBy: "system" },
+      });
+    }
+
+    // Store instance config (domain restriction + tenant reference)
+    if (matchedRecord.allowedDomain || matchedRecord.orgTenantId) {
+      const instanceConfig: InstanceConfig = {
+        allowedDomain: matchedRecord.allowedDomain || undefined,
+        orgTenantId: matchedRecord.orgTenantId || undefined,
+      };
+      await tx.systemSetting.upsert({
+        where: { key: SETTING_KEYS.INSTANCE_CONFIG },
+        update: { value: instanceConfig as object, updatedBy: "system" },
+        create: { key: SETTING_KEYS.INSTANCE_CONFIG, value: instanceConfig as object, updatedBy: "system" },
+      });
+    }
+
+    // Promote the redeeming user to admin
+    if (redeemedByUserId) {
+      await tx.user.update({
+        where: { id: redeemedByUserId },
+        data: { role: "admin" },
+      });
+    }
+
+    return { success: true, orgName: matchedRecord.orgName || undefined };
   });
 }
 
@@ -166,8 +210,12 @@ export async function verifyAndRedeemCode(
 export async function generateActivationCode(options?: {
   expiresInDays?: number;
   revokeExisting?: boolean;
+  orgName?: string;
+  orgAbbreviation?: string;
+  orgTenantId?: string;
+  allowedDomain?: string;
 }): Promise<{ code: string; id: string; revokedCount: number }> {
-  const { expiresInDays, revokeExisting } = options ?? {};
+  const { expiresInDays, revokeExisting, orgName, orgAbbreviation, orgTenantId, allowedDomain } = options ?? {};
 
   // Revoke any existing pending codes if requested
   let revokedCount = 0;
@@ -202,6 +250,10 @@ export async function generateActivationCode(options?: {
     data: {
       codeHash,
       expiresAt,
+      orgName: orgName || null,
+      orgAbbreviation: orgAbbreviation || null,
+      orgTenantId: orgTenantId || null,
+      allowedDomain: allowedDomain || null,
     },
   });
 

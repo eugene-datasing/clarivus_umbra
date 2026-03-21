@@ -10,6 +10,7 @@ import {
   getConfidenceThresholds,
 } from "@/lib/data/org-config";
 import { getDepartments } from "@/lib/data/departments";
+import { prisma } from "@/lib/db/prisma";
 import SetupWizardClient from "./setup-wizard-client";
 
 export default async function SetupPage() {
@@ -23,6 +24,7 @@ export default async function SetupPage() {
     lgoimaConfig,
     thresholds,
     departments,
+    invitations,
   ] = await Promise.all([
     getSetupWizardState(),
     getOrgIdentity(),
@@ -32,6 +34,7 @@ export default async function SetupPage() {
     getLGOIMAConfig(),
     getConfidenceThresholds(),
     getDepartments(),
+    prisma.userInvitation.findMany({ orderBy: { createdAt: "desc" } }),
   ]);
 
   if (wizardState.completedAt) {
@@ -53,6 +56,15 @@ export default async function SetupPage() {
         name: d.name,
         contactEmail: d.contactEmail,
         headName: d.headName,
+      }))}
+      invitations={invitations.map((inv) => ({
+        id: inv.id,
+        email: inv.email,
+        name: inv.name,
+        role: inv.role,
+        departmentId: inv.departmentId,
+        status: inv.status,
+        createdAt: inv.createdAt.toISOString(),
       }))}
     />
   );
