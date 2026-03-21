@@ -21,6 +21,8 @@ import {
   Plug,
   XCircle,
   AlertTriangle,
+  Archive,
+  Search,
 } from "lucide-react";
 import {
   saveDetectionToggles,
@@ -34,12 +36,17 @@ import type {
   OrgIdentity,
   ConfidenceThresholds,
 } from "@/lib/data/settings";
+import type {
+  BackupStatus,
+  BackupEntry,
+} from "@/lib/data/backup-restore";
+import BackupRestore from "./backup-restore";
 
 /* ------------------------------------------------------------------ */
 /*  Tab configuration                                                 */
 /* ------------------------------------------------------------------ */
 
-type TabId = "organisation" | "departments" | "users" | "detection" | "workflow" | "notifications" | "integrations" | "health";
+type TabId = "organisation" | "departments" | "users" | "detection" | "workflow" | "notifications" | "integrations" | "backup" | "health";
 
 const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "organisation", label: "Organisation", icon: Building2 },
@@ -49,6 +56,7 @@ const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "workflow", label: "Workflow", icon: Settings2 },
   { id: "notifications", label: "Notifications", icon: Activity },
   { id: "integrations", label: "Integrations", icon: Plug },
+  { id: "backup", label: "Backup & Recovery", icon: Database },
   { id: "health", label: "System Health", icon: Server },
 ];
 
@@ -112,6 +120,22 @@ interface M365StatusInfo {
   missingVars: string[];
 }
 
+interface RecordsStatusInfo {
+  configured: boolean;
+  connected: boolean;
+  provider: string | null;
+  lastSync: string | null;
+  error?: string;
+}
+
+interface EDiscoveryStatusInfo {
+  configured: boolean;
+  connected: boolean;
+  provider: string | null;
+  matterCount: number;
+  error?: string;
+}
+
 interface SettingsClientProps {
   initialDetectionToggles: DetectionToggle[];
   initialWorkflowConfig: WorkflowConfig;
@@ -120,6 +144,10 @@ interface SettingsClientProps {
   thresholds: ConfidenceThresholds;
   departments: SettingsDepartment[];
   m365Status?: M365StatusInfo;
+  recordsStatus?: RecordsStatusInfo;
+  ediscoveryStatus?: EDiscoveryStatusInfo;
+  backupStatus?: BackupStatus;
+  backupHistory?: BackupEntry[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -134,6 +162,10 @@ export default function SettingsClient({
   thresholds,
   departments,
   m365Status,
+  recordsStatus,
+  ediscoveryStatus,
+  backupStatus,
+  backupHistory,
 }: SettingsClientProps) {
   const [activeTab, setActiveTab] = useState<TabId>("organisation");
   const [detectionToggles, setDetectionToggles] = useState(initialDetectionToggles);
@@ -648,41 +680,214 @@ export default function SettingsClient({
             )}
           </div>
 
-          {/* Additional integrations placeholder */}
+          {/* Records Management Integration */}
           <div className="card">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center">
-                <Plug className="w-5 h-5 text-gray-400" />
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center">
+                  <Archive className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-heading font-semibold text-txt-primary">
+                    Records Management System
+                  </h2>
+                  <p className="text-xs text-txt-secondary">
+                    EDRMS integration (SharePoint Records, OpenText, HPRM, CMIS)
+                  </p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-lg font-heading font-semibold text-txt-primary">
-                  Records Management System
-                </h2>
-                <p className="text-xs text-txt-secondary">
-                  Integration with external records management systems
+              {recordsStatus?.configured && recordsStatus.connected ? (
+                <span className="badge bg-green-50 text-green-700 flex items-center gap-1.5">
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  Connected
+                </span>
+              ) : recordsStatus?.configured && !recordsStatus.connected ? (
+                <span className="badge bg-amber-50 text-amber-700 flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  Configured — connection failed
+                </span>
+              ) : (
+                <span className="badge bg-gray-100 text-gray-500 flex items-center gap-1.5">
+                  <XCircle className="w-3.5 h-3.5" />
+                  Not Configured
+                </span>
+              )}
+            </div>
+
+            {recordsStatus?.configured && recordsStatus.connected && (
+              <div className="p-4 rounded-lg bg-green-50/50 border border-green-200">
+                <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                  <div>
+                    <dt className="text-txt-secondary text-xs">Provider</dt>
+                    <dd className="font-medium text-txt-primary capitalize">
+                      {recordsStatus.provider || "--"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-txt-secondary text-xs">Last Sync</dt>
+                    <dd className="font-medium text-txt-primary text-xs">
+                      {recordsStatus.lastSync
+                        ? new Date(recordsStatus.lastSync).toLocaleString("en-NZ")
+                        : "Never"}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            )}
+
+            {!recordsStatus?.configured && (
+              <div className="p-4 rounded-lg bg-gray-50 border border-border">
+                <p className="text-sm text-txt-secondary mb-3">
+                  To enable Records Management integration, configure the following environment variables:
+                </p>
+                <div className="space-y-2">
+                  {["RECORDS_PROVIDER", "RECORDS_ENDPOINT", "RECORDS_CLIENT_ID", "RECORDS_CLIENT_SECRET"].map(
+                    (envVar) => (
+                      <div
+                        key={envVar}
+                        className="flex items-center gap-2 px-3 py-2 rounded bg-white border border-border"
+                      >
+                        <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                        <code className="text-xs font-mono text-txt-primary">{envVar}</code>
+                        <span className="text-xs text-red-500 ml-auto">Not set</span>
+                      </div>
+                    ),
+                  )}
+                </div>
+                <div className="mt-3 p-3 rounded bg-blue-50/60 border border-blue-200">
+                  <p className="text-xs text-blue-700">
+                    <span className="font-semibold">Supported providers:</span>{" "}
+                    <code className="font-mono">sharepoint-records</code>,{" "}
+                    <code className="font-mono">opentext</code>,{" "}
+                    <code className="font-mono">hprm</code>,{" "}
+                    <code className="font-mono">generic-cmis</code>.
+                    Optionally set <code className="font-mono">RECORDS_TENANT_ID</code> for
+                    multi-tenant environments.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {recordsStatus?.configured && !recordsStatus.connected && (
+              <div className="p-4 rounded-lg bg-amber-50/50 border border-amber-200">
+                <p className="text-sm text-amber-700">
+                  Environment variables are configured but the connection to the records management
+                  system could not be established.
+                  {recordsStatus.error && (
+                    <span className="block mt-1 text-xs font-mono">{recordsStatus.error}</span>
+                  )}
                 </p>
               </div>
-              <span className="badge bg-gray-100 text-gray-500 ml-auto">Coming Soon</span>
-            </div>
+            )}
           </div>
 
+          {/* eDiscovery Integration */}
           <div className="card">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center">
-                <Plug className="w-5 h-5 text-gray-400" />
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center">
+                  <Search className="w-5 h-5 text-purple-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-heading font-semibold text-txt-primary">
+                    eDiscovery
+                  </h2>
+                  <p className="text-xs text-txt-secondary">
+                    eDiscovery platform integration (Relativity, Nuix, Clearwell)
+                  </p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-lg font-heading font-semibold text-txt-primary">
-                  eDiscovery
-                </h2>
-                <p className="text-xs text-txt-secondary">
-                  eDiscovery platform integration for legal workflows
+              {ediscoveryStatus?.configured && ediscoveryStatus.connected ? (
+                <span className="badge bg-green-50 text-green-700 flex items-center gap-1.5">
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  Connected
+                </span>
+              ) : ediscoveryStatus?.configured && !ediscoveryStatus.connected ? (
+                <span className="badge bg-amber-50 text-amber-700 flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  Configured — connection failed
+                </span>
+              ) : (
+                <span className="badge bg-gray-100 text-gray-500 flex items-center gap-1.5">
+                  <XCircle className="w-3.5 h-3.5" />
+                  Not Configured
+                </span>
+              )}
+            </div>
+
+            {ediscoveryStatus?.configured && ediscoveryStatus.connected && (
+              <div className="p-4 rounded-lg bg-green-50/50 border border-green-200">
+                <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                  <div>
+                    <dt className="text-txt-secondary text-xs">Provider</dt>
+                    <dd className="font-medium text-txt-primary capitalize">
+                      {ediscoveryStatus.provider || "--"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-txt-secondary text-xs">Active Matters</dt>
+                    <dd className="font-medium text-txt-primary">
+                      {ediscoveryStatus.matterCount}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            )}
+
+            {!ediscoveryStatus?.configured && (
+              <div className="p-4 rounded-lg bg-gray-50 border border-border">
+                <p className="text-sm text-txt-secondary mb-3">
+                  To enable eDiscovery integration, configure the following environment variables:
+                </p>
+                <div className="space-y-2">
+                  {["EDISCOVERY_PROVIDER", "EDISCOVERY_ENDPOINT", "EDISCOVERY_API_KEY"].map(
+                    (envVar) => (
+                      <div
+                        key={envVar}
+                        className="flex items-center gap-2 px-3 py-2 rounded bg-white border border-border"
+                      >
+                        <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                        <code className="text-xs font-mono text-txt-primary">{envVar}</code>
+                        <span className="text-xs text-red-500 ml-auto">Not set</span>
+                      </div>
+                    ),
+                  )}
+                </div>
+                <div className="mt-3 p-3 rounded bg-blue-50/60 border border-blue-200">
+                  <p className="text-xs text-blue-700">
+                    <span className="font-semibold">Supported providers:</span>{" "}
+                    <code className="font-mono">relativity</code>,{" "}
+                    <code className="font-mono">nuix</code>,{" "}
+                    <code className="font-mono">clearwell</code>,{" "}
+                    <code className="font-mono">generic</code>.
+                    Optionally set <code className="font-mono">EDISCOVERY_CASE_MAPPING</code> to
+                    map Veil cases to eDiscovery matters.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {ediscoveryStatus?.configured && !ediscoveryStatus.connected && (
+              <div className="p-4 rounded-lg bg-amber-50/50 border border-amber-200">
+                <p className="text-sm text-amber-700">
+                  Environment variables are configured but the connection to the eDiscovery
+                  platform could not be established.
+                  {ediscoveryStatus.error && (
+                    <span className="block mt-1 text-xs font-mono">{ediscoveryStatus.error}</span>
+                  )}
                 </p>
               </div>
-              <span className="badge bg-gray-100 text-gray-500 ml-auto">Coming Soon</span>
-            </div>
+            )}
           </div>
         </div>
+      )}
+
+      {/* TAB: Backup & Recovery */}
+      {activeTab === "backup" && backupStatus && backupHistory && (
+        <BackupRestore
+          initialStatus={backupStatus}
+          initialHistory={backupHistory}
+        />
       )}
 
       {/* TAB 5: System Health */}

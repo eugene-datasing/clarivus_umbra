@@ -18,6 +18,8 @@ model User {
   passwordHash String?
   role         String   @default("reviewer")
   departmentId String?
+  azureAdOid   String?  @unique
+  isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

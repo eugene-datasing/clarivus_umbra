@@ -45,6 +45,22 @@ function getFileTypeInfo(filename: string): { fileType: string; mimeType: string
     case ".jpg":
     case ".jpeg":
       return { fileType: "Image", mimeType: "image/jpeg" };
+    // Audio formats
+    case ".mp3":
+      return { fileType: "MP3", mimeType: "audio/mpeg" };
+    case ".wav":
+      return { fileType: "WAV", mimeType: "audio/wav" };
+    case ".m4a":
+      return { fileType: "M4A", mimeType: "audio/x-m4a" };
+    // Video formats
+    case ".mp4":
+      return { fileType: "MP4", mimeType: "video/mp4" };
+    case ".mov":
+      return { fileType: "MOV", mimeType: "video/quicktime" };
+    case ".avi":
+      return { fileType: "AVI", mimeType: "video/x-msvideo" };
+    case ".webm":
+      return { fileType: "WEBM", mimeType: "video/webm" };
     default:
       return {
         fileType: ext ? ext.slice(1).toUpperCase() : "UNKNOWN",

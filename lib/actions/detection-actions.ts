@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { createAuditEntry } from "@/lib/data/audit";
+import { maskEntityText, stripPiiPatterns } from "@/lib/data/audit-sanitize";
 import { createSnapshot } from "@/lib/pipeline/version-snapshot";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeForDocument, authorizeForDetection } from "@/lib/auth/authorize";
@@ -226,7 +227,7 @@ export async function requestChanges(documentId: string, reason?: string) {
     description: `Requested changes on document: "${doc.name}"`,
     target: doc.name,
     caseId: doc.caseId,
-    detail: reason || undefined,
+    detail: reason ? stripPiiPatterns(reason) : undefined,
   });
 
   return { success: true };
@@ -309,7 +310,7 @@ export async function rejectDetection(detectionId: string, reason?: string) {
     description: `Rejected detection (${detection.type || "unknown"})`,
     target: detection.document.name,
     caseId: detection.document.caseId,
-    detail: validReason ? `Reason: ${validReason}` : `Detection ${validId}`,
+    detail: validReason ? `Reason: ${stripPiiPatterns(validReason)}` : `Detection ${validId}`,
   });
 
   await recomputeDocumentStatus(detection.documentId);
@@ -630,15 +631,16 @@ export async function bulkApplyGroundToSimilar(
     await recomputeDocumentStatus(docId);
   }
 
-  // Audit trail
+  // Audit trail — mask entity text to prevent PII leaking into audit logs
+  const maskedEntity = maskEntityText(validated.entityText, matching[0]?.type);
   await createAuditEntry({
     userName: user.name,
     userRole: user.role,
     type: "review",
-    description: `Bulk ${newStatus} ${matching.length} detection(s) matching "${validated.entityText}"`,
+    description: `Bulk ${newStatus} ${matching.length} detection(s) matching ${maskedEntity}`,
     target: "Bulk Review",
     caseId: validated.caseId,
-    detail: `Entity: "${validated.entityText}", Ground: ${validated.ground}, Action: ${validated.action}`,
+    detail: `Entity: ${maskedEntity}, Ground: ${validated.ground}, Action: ${validated.action}`,
   });
 
   return { updatedCount: matching.length };

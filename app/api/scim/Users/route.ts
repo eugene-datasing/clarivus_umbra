@@ -65,16 +65,18 @@ function toScimUser(user: {
   id: string;
   name: string;
   email: string | null;
-  passwordHash: string | null;
+  azureAdOid: string | null;
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
-}): ScimUser {
+}): ScimUser & { externalId?: string } {
   return {
     schemas: [SCIM_USER_SCHEMA],
     id: user.id,
+    ...(user.azureAdOid ? { externalId: user.azureAdOid } : {}),
     userName: user.email ?? "",
     displayName: user.name,
-    active: user.passwordHash !== null || user.email !== null,
+    active: user.isActive,
     meta: {
       resourceType: "User",
       created: user.createdAt.toISOString(),
@@ -182,12 +184,15 @@ export async function POST(request: NextRequest) {
     return scimError(400, "Cannot create an inactive user via SCIM provisioning");
   }
 
+  const externalId = body.externalId as string | undefined;
+
   const user = await prisma.user.create({
     data: {
       name: displayName,
       email: userName,
       role: "reviewer", // Default role for SCIM-provisioned users
       passwordHash: null, // SSO-only — no local password
+      azureAdOid: externalId || null,
     },
   });
 

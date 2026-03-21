@@ -59,6 +59,14 @@ const MAGIC_SIGNATURES: MagicSignature[] = [
   { label: "TIFF_BE", bytes: [0x4d, 0x4d, 0x00, 0x2a] }, // MM\0*
   { label: "BMP", bytes: [0x42, 0x4d] }, // BM
   { label: "OLE2", bytes: [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1] }, // OLE2 Compound (MSG, DOC, XLS)
+  // Audio formats
+  { label: "ID3", bytes: [0x49, 0x44, 0x33] }, // ID3 tag (MP3 with metadata)
+  { label: "MP3_SYNC", bytes: [0xff, 0xfb] }, // MP3 sync word (MPEG1 Layer3)
+  { label: "MP3_SYNC2", bytes: [0xff, 0xf3] }, // MP3 sync word (MPEG2 Layer3)
+  { label: "MP3_SYNC3", bytes: [0xff, 0xf2] }, // MP3 sync word (MPEG2.5 Layer3)
+  { label: "WAV", bytes: [0x52, 0x49, 0x46, 0x46] }, // RIFF (WAV and AVI share this header)
+  // Video formats — MP4/MOV use the "ftyp" box at offset 4
+  { label: "MP4_FTYP", bytes: [0x66, 0x74, 0x79, 0x70], offset: 4 }, // ftyp at offset 4
 ];
 
 /**
@@ -104,6 +112,15 @@ function expectedMagicTypes(mimeType: string): string[] {
   if (mt === "message/rfc822") return []; // EML is plain text, no magic bytes
   if (mt === "text/plain") return []; // plain text, no magic bytes
   if (mt === "application/octet-stream") return []; // generic, skip check
+  // Audio formats
+  if (mt === "audio/mpeg") return ["ID3", "MP3_SYNC", "MP3_SYNC2", "MP3_SYNC3"];
+  if (mt === "audio/wav") return ["WAV"];
+  if (mt === "audio/x-m4a") return ["MP4_FTYP"]; // M4A is an MP4 container
+  // Video formats
+  if (mt === "video/mp4") return ["MP4_FTYP"];
+  if (mt === "video/quicktime") return ["MP4_FTYP"]; // MOV uses ftyp box
+  if (mt === "video/x-msvideo") return ["WAV"]; // AVI uses RIFF container
+  if (mt === "video/webm") return []; // WebM uses EBML header, skip strict check
 
   return [];
 }

@@ -1072,7 +1072,7 @@ export default function ReviewClient({
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* --- Document Panels (single scroll container) --- */}
         <div className="flex-1 overflow-y-auto min-h-0">
-          <div className="flex min-h-full">
+          <div className="flex min-h-full review-split-pane">
             {/* LEFT PANEL -- Original Document (hideable) */}
             {showOriginal && (
               <div className="w-1/2 border-r border-border">
@@ -1198,7 +1198,7 @@ export default function ReviewClient({
             ))}
 
             {/* Right side: summary */}
-            <div className="ml-auto flex items-center gap-4 text-[11px] text-txt-secondary pr-1">
+            <div className="ml-auto flex items-center gap-4 text-[11px] text-txt-secondary pr-1" role="status" aria-live="polite" aria-label="Detection review progress">
               <span>
                 <span className="font-semibold text-confidence-high">{stats.accepted}</span>{" "}
                 accepted
@@ -1215,7 +1215,7 @@ export default function ReviewClient({
           </div>
 
           {/* Table */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto table-responsive">
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-surface-card z-10">
                 <tr className="text-left text-[10px] uppercase tracking-wider text-txt-secondary border-b border-border">
@@ -1229,7 +1229,7 @@ export default function ReviewClient({
                   <th className="pr-4 pl-2 py-2 w-28 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody role="listbox" aria-label="Detections list">
                 {sortedDetections.map((det, idx) => {
                   const state = detectionStates[det.id];
                   const isSelected = selectedDetectionId === det.id;
@@ -1243,7 +1243,7 @@ export default function ReviewClient({
                       ref={(el) => { detectionRowRefs.current[det.id] = el; }}
                       onClick={() => handleDetectionClick(det.id)}
                       tabIndex={0}
-                      role="row"
+                      role="option"
                       aria-selected={isSelected}
                       aria-label={`Detection ${idx + 1}: ${det.text.length > 40 ? det.text.slice(0, 40) + "..." : det.text}, ${typeConf?.label ?? det.type}, ${det.confidence}% confidence, ${state?.status ?? "pending"}`}
                       className={cn(

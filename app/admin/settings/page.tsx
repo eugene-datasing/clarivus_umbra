@@ -14,6 +14,9 @@ import {
 } from "@/lib/data/org-config";
 import { getAllDepartments } from "@/lib/data/departments";
 import { isM365Configured, getMissingM365Vars, getM365Status } from "@/lib/integrations/m365-connector";
+import { isRecordsConfigured, getRecordsStatus } from "@/lib/integrations/records-connector";
+import { isEDiscoveryConfigured, getEDiscoveryStatus } from "@/lib/integrations/ediscovery-connector";
+import { getBackupStatus, getBackupHistory } from "@/lib/data/backup-restore";
 import SettingsClient from "./settings-client";
 
 export default async function SettingsPage() {
@@ -72,6 +75,93 @@ export default async function SettingsPage() {
     };
   }
 
+  // Fetch Records Management status (gracefully handle errors)
+  let recordsStatus: {
+    configured: boolean;
+    connected: boolean;
+    provider: string | null;
+    lastSync: string | null;
+    error?: string;
+  };
+
+  if (isRecordsConfigured()) {
+    try {
+      const status = await getRecordsStatus();
+      recordsStatus = {
+        configured: status.configured,
+        connected: status.connected,
+        provider: status.provider,
+        lastSync: status.lastSync,
+        error: status.error,
+      };
+    } catch {
+      recordsStatus = {
+        configured: true,
+        connected: false,
+        provider: process.env.RECORDS_PROVIDER ?? null,
+        lastSync: null,
+        error: "Failed to connect",
+      };
+    }
+  } else {
+    recordsStatus = {
+      configured: false,
+      connected: false,
+      provider: null,
+      lastSync: null,
+    };
+  }
+
+  // Fetch eDiscovery status (gracefully handle errors)
+  let ediscoveryStatus: {
+    configured: boolean;
+    connected: boolean;
+    provider: string | null;
+    matterCount: number;
+    error?: string;
+  };
+
+  if (isEDiscoveryConfigured()) {
+    try {
+      const status = await getEDiscoveryStatus();
+      ediscoveryStatus = {
+        configured: status.configured,
+        connected: status.connected,
+        provider: status.provider,
+        matterCount: status.matterCount,
+        error: status.error,
+      };
+    } catch {
+      ediscoveryStatus = {
+        configured: true,
+        connected: false,
+        provider: process.env.EDISCOVERY_PROVIDER ?? null,
+        matterCount: 0,
+        error: "Failed to connect",
+      };
+    }
+  } else {
+    ediscoveryStatus = {
+      configured: false,
+      connected: false,
+      provider: null,
+      matterCount: 0,
+    };
+  }
+
+  // Fetch backup status and history (gracefully handle errors)
+  let backupStatus;
+  let backupHistoryData;
+  try {
+    [backupStatus, backupHistoryData] = await Promise.all([
+      getBackupStatus(),
+      getBackupHistory(),
+    ]);
+  } catch {
+    backupStatus = undefined;
+    backupHistoryData = undefined;
+  }
+
   return (
     <SettingsClient
       initialDetectionToggles={detectionToggles}
@@ -88,6 +178,10 @@ export default async function SettingsPage() {
         userCount: d._count.users,
       }))}
       m365Status={m365Status}
+      recordsStatus={recordsStatus}
+      ediscoveryStatus={ediscoveryStatus}
+      backupStatus={backupStatus}
+      backupHistory={backupHistoryData}
     />
   );
 }

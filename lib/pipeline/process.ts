@@ -18,6 +18,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getStorage } from "@/lib/storage";
 import { extractText, OCRUnavailableError, ExtractionCorruptionError } from "./extract";
 import { validateFile } from "./file-validator";
+import { convertFromPages } from "./format-converter";
 import { detectPatterns } from "./patterns";
 import { detectWithAI } from "./ai-detect";
 import { detectDuplicates } from "./duplicate-detect";
@@ -276,6 +277,8 @@ export async function processDocument(docId: string): Promise<void> {
           ".pdf": "PDF", ".docx": "DOCX", ".xlsx": "XLSX", ".txt": "TXT",
           ".eml": "EML", ".msg": "MSG", ".png": "PNG", ".jpg": "JPG",
           ".jpeg": "JPG", ".pptx": "PPTX",
+          ".mp3": "MP3", ".wav": "WAV", ".m4a": "M4A",
+          ".mp4": "MP4", ".mov": "MOV", ".avi": "AVI", ".webm": "WEBM",
         };
         const attFileType = fileTypeMap[attExt] || "TXT";
 
@@ -320,6 +323,31 @@ export async function processDocument(docId: string): Promise<void> {
           childDocId: attDoc.id,
         });
       }
+    }
+
+    // ------------------------------------------------------------------
+    // 4.6 Format conversion — normalize content to structured review format
+    // ------------------------------------------------------------------
+    let conversionResult;
+    try {
+      log.info("Converting to review format", { docId, fileType: doc.fileType });
+      conversionResult = convertFromPages(
+        extraction.pages,
+        doc.fileType,
+        doc.name,
+      );
+      log.info("Format conversion complete", {
+        docId,
+        reviewPages: conversionResult.pages.length,
+        notes: conversionResult.conversionNotes.length,
+      });
+    } catch (conversionError) {
+      // Format conversion is non-critical — log and continue
+      log.error("Format conversion failed, continuing without structured content", {
+        docId,
+        error: conversionError instanceof Error ? conversionError.message : String(conversionError),
+      });
+      conversionResult = null;
     }
 
     // ------------------------------------------------------------------

@@ -59,11 +59,7 @@
 }
 
 /* ---- Accessibility: Focus-visible styles ---- */
-@layer base {
-  *:focus-visible {
-    @apply outline-none ring-2 ring-brand-primary/60 ring-offset-1;
-  }
-}
+/* Overridden below with high-contrast NZ Web Standards compliant focus indicators */
 
 /* Animations */
 @keyframes slideIn {
@@ -76,3 +72,206 @@
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #d1d0d5; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #a8a5b0; }
+
+/* ============================================================ */
+/*  NZ Web Standards Accessibility (WCAG 2.1 AA)                */
+/* ============================================================ */
+
+/* High-contrast focus indicators (3:1 minimum contrast ratio) */
+@layer base {
+  *:focus-visible {
+    outline: 3px solid #1B2B5B;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 5px rgba(27, 43, 91, 0.25);
+  }
+}
+
+/* Screen-reader only utility */
+@layer utilities {
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+}
+
+/* Reduced-motion: disable transitions and animations */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================ */
+/*  Responsive Design — Mobile & Tablet Breakpoints             */
+/* ============================================================ */
+
+/* Touch-friendly tap targets */
+@layer utilities {
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* Visibility utilities */
+@layer utilities {
+  .mobile-only {
+    display: none;
+  }
+  .desktop-only {
+    display: block;
+  }
+}
+
+/* Responsive table wrapper */
+@layer components {
+  .table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* ---- Mobile styles (max-width: 767px) ---- */
+@media (max-width: 767px) {
+  /* Base font size guarantee (WCAG) */
+  html {
+    font-size: 16px;
+  }
+
+  /* Visibility toggles */
+  .mobile-only {
+    display: block !important;
+  }
+  .desktop-only {
+    display: none !important;
+  }
+
+  /* Desktop sidebar hidden on mobile */
+  .sidebar-desktop {
+    display: none !important;
+  }
+
+  /* Mobile bottom navigation bar */
+  .sidebar-mobile {
+    display: flex !important;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    height: 60px;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+  }
+
+  /* Main content adjustment for bottom nav */
+  .main-content-responsive {
+    margin-left: 0 !important;
+    padding-bottom: 68px;
+  }
+
+  /* Full-width content panels */
+  .card {
+    border-radius: 0.5rem;
+    padding: 1rem;
+  }
+
+  /* Stack document review split-pane vertically */
+  .review-split-pane {
+    flex-direction: column !important;
+  }
+  .review-split-pane > div {
+    width: 100% !important;
+  }
+
+  /* Smaller font sizes for data tables */
+  .table-responsive table {
+    font-size: 0.6875rem;
+  }
+  .table-responsive th,
+  .table-responsive td {
+    padding: 0.375rem 0.5rem;
+  }
+
+  /* Touch-friendly buttons (44x44 minimum tap target) */
+  button,
+  [role="button"],
+  a[href] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Ensure input fields are large enough */
+  .input-field {
+    min-height: 44px;
+    font-size: 16px; /* Prevent iOS zoom */
+  }
+
+  /* Mobile hamburger menu for admin items */
+  .mobile-hamburger-menu {
+    position: fixed;
+    bottom: 68px;
+    left: 0;
+    right: 0;
+    z-index: 49;
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+}
+
+/* ---- Tablet styles (768px - 1024px) ---- */
+@media (min-width: 768px) and (max-width: 1024px) {
+  /* Visibility */
+  .mobile-only {
+    display: none !important;
+  }
+  .desktop-only {
+    display: block !important;
+  }
+
+  /* Collapsible sidebar (default collapsed on tablet) */
+  .sidebar-tablet-collapsed {
+    width: 64px !important;
+  }
+
+  /* Adjusted grid layouts for tablet */
+  .grid-responsive {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Moderate padding reduction */
+  .card {
+    padding: 1rem;
+  }
+
+  /* Tablet data table sizing */
+  .table-responsive table {
+    font-size: 0.75rem;
+  }
+}
+
+/* ---- Responsive table: horizontal scroll on small screens ---- */
+@media (max-width: 1024px) {
+  .table-responsive {
+    border: 1px solid var(--border, #e2e2e5);
+    border-radius: 0.5rem;
+  }
+  .table-responsive table {
+    min-width: 600px;
+  }
+}

@@ -40,6 +40,7 @@ const providers: Provider[] = [
       });
 
       if (!user || !user.passwordHash) return null;
+      if (!user.isActive) return null;
 
       const isValid = await bcrypt.compare(password, user.passwordHash);
       if (!isValid) return null;
@@ -83,20 +84,52 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
      * For credentials sign-ins the user object is already populated by
      * authorize(), so we just pass through.
      */
-    async signIn({ user, account }) {
+    async signIn({ user, account, profile }) {
       if (account?.provider === "microsoft-entra-id") {
         const email = user.email;
         if (!email) return false; // Reject sign-in if Azure AD didn't give us an email
 
-        let dbUser = await prisma.user.findUnique({ where: { email } });
+        // Extract OID from Azure AD profile (stable identity across email changes)
+        const oid = (profile as { oid?: string } | undefined)?.oid
+          ?? account.providerAccountId;
 
+        // 1. Try OID-first match (stable across email changes)
+        let dbUser = oid
+          ? await prisma.user.findUnique({ where: { azureAdOid: oid } })
+          : null;
+
+        // 2. Fall back to email match
         if (!dbUser) {
+          dbUser = await prisma.user.findUnique({ where: { email } });
+        }
+
+        if (dbUser) {
+          // Check isActive gate
+          if (!dbUser.isActive) return false;
+
+          // Backfill OID if matched by email but missing OID
+          if (oid && !dbUser.azureAdOid) {
+            await prisma.user.update({
+              where: { id: dbUser.id },
+              data: { azureAdOid: oid },
+            });
+          }
+
+          // Sync email if changed in Azure AD
+          if (dbUser.email !== email) {
+            await prisma.user.update({
+              where: { id: dbUser.id },
+              data: { email },
+            });
+          }
+        } else {
           // Auto-provision: create a new local user with the default "reviewer" role
           dbUser = await prisma.user.create({
             data: {
               name: user.name ?? email.split("@")[0],
               email,
               role: "reviewer",
+              azureAdOid: oid || null,
               // No passwordHash — SSO-only user
             },
           });

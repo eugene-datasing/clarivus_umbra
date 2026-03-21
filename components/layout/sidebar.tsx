@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, FolderOpen, ClipboardList, PlusCircle,
   Settings2, Brain, FileBarChart, Cog, Bell, ChevronLeft, ChevronRight, EyeOff,
-  Clock, FileText, CheckCircle, AlertTriangle, X, LogOut,
+  Clock, FileText, CheckCircle, AlertTriangle, X, LogOut, Menu,
 } from "lucide-react";
 
 const navItems = [
@@ -77,6 +77,13 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
     return !hasMoreSpecific;
   };
 
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
   const canAccessAdmin = userRole !== "reviewer";
   const sections = {
     main: navItems.filter((i) => i.section === "main"),
@@ -84,13 +91,22 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
     system: canAccessAdmin ? navItems.filter((i) => i.section === "system") : [],
   };
 
+  // Mobile nav items (main only)
+  const mobileNavItems = navItems.filter((i) => i.section === "main");
+  // Admin/system items for hamburger
+  const mobileAdminItems = canAccessAdmin
+    ? navItems.filter((i) => i.section === "admin" || i.section === "system")
+    : [];
+
   return (
+    <>
+    {/* ===== DESKTOP SIDEBAR ===== */}
     <aside
       id="main-navigation"
       role="complementary"
       aria-label="Application sidebar"
       className={cn(
-        "fixed left-0 top-0 h-screen bg-brand-primary text-white flex flex-col z-40 transition-all duration-200",
+        "sidebar-desktop fixed left-0 top-0 h-screen bg-brand-primary text-white flex flex-col z-40 transition-all duration-200",
         collapsed ? "w-16" : "w-[260px]"
       )}
     >
@@ -272,5 +288,111 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
         </button>
       </div>
     </aside>
+
+    {/* ===== MOBILE BOTTOM NAVIGATION BAR ===== */}
+    <nav
+      className="sidebar-mobile hidden bg-brand-primary text-white items-center justify-around"
+      role="navigation"
+      aria-label="Mobile navigation"
+    >
+      {mobileNavItems.map((item) => {
+        const Icon = item.icon;
+        const active = isActive(item.href);
+        return (
+          <Link
+            key={item.label}
+            href={item.href}
+            aria-current={active ? "page" : undefined}
+            aria-label={item.label}
+            className={cn(
+              "touch-target flex flex-col items-center justify-center gap-0.5 px-2 py-1 rounded-lg text-[10px] font-medium transition-colors",
+              active
+                ? "bg-white/20 text-white"
+                : "text-white/70 hover:bg-white/10 hover:text-white"
+            )}
+          >
+            <Icon className="w-5 h-5" aria-hidden="true" />
+            <span className="truncate max-w-[56px]">{item.label}</span>
+          </Link>
+        );
+      })}
+
+      {/* Hamburger for admin/system items */}
+      {mobileAdminItems.length > 0 && (
+        <div className="relative">
+          <button
+            onClick={() => setMobileMenuOpen((v) => !v)}
+            aria-expanded={mobileMenuOpen}
+            aria-label="More navigation options"
+            className={cn(
+              "touch-target flex flex-col items-center justify-center gap-0.5 px-2 py-1 rounded-lg text-[10px] font-medium transition-colors",
+              mobileMenuOpen
+                ? "bg-white/20 text-white"
+                : "text-white/70 hover:bg-white/10 hover:text-white"
+            )}
+          >
+            <Menu className="w-5 h-5" aria-hidden="true" />
+            <span>More</span>
+          </button>
+        </div>
+      )}
+    </nav>
+
+    {/* ===== MOBILE HAMBURGER OVERFLOW MENU ===== */}
+    {mobileMenuOpen && mobileAdminItems.length > 0 && (
+      <>
+        {/* Backdrop */}
+        <div
+          className="mobile-only fixed inset-0 z-[48] bg-black/30"
+          onClick={() => setMobileMenuOpen(false)}
+          aria-hidden="true"
+        />
+        <div
+          className="mobile-hamburger-menu mobile-only bg-brand-primary text-white rounded-t-xl shadow-xl p-3 space-y-1"
+          role="menu"
+          aria-label="Administration menu"
+        >
+          <div className="text-[10px] uppercase tracking-widest text-white/40 font-semibold px-3 py-1">
+            Administration
+          </div>
+          {mobileAdminItems.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.href);
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                role="menuitem"
+                aria-current={active ? "page" : undefined}
+                onClick={() => setMobileMenuOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                  active
+                    ? "bg-white/20 text-white"
+                    : "text-white/70 hover:bg-white/10 hover:text-white"
+                )}
+              >
+                <Icon className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+          <div className="border-t border-white/10 mt-2 pt-2">
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                signOut({ callbackUrl: "/login" });
+              }}
+              role="menuitem"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors w-full"
+            >
+              <LogOut className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
+              <span>Sign Out</span>
+            </button>
+          </div>
+        </div>
+      </>
+    )}
+    </>
   );
 }

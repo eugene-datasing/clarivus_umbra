@@ -64,16 +64,18 @@ function toScimUser(user: {
   id: string;
   name: string;
   email: string | null;
-  passwordHash: string | null;
+  azureAdOid: string | null;
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
-}): ScimUser {
+}): ScimUser & { externalId?: string } {
   return {
     schemas: [SCIM_USER_SCHEMA],
     id: user.id,
+    ...(user.azureAdOid ? { externalId: user.azureAdOid } : {}),
     userName: user.email ?? "",
     displayName: user.name,
-    active: user.passwordHash !== null || user.email !== null,
+    active: user.isActive,
     meta: {
       resourceType: "User",
       created: user.createdAt.toISOString(),
@@ -158,16 +160,13 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
     displayName = userName;
   }
 
-  // Handle active status — deactivate by removing passwordHash
+  // Handle active status
   const active = body.active !== false;
   const updateData: Record<string, unknown> = {
     name: displayName,
     email: userName,
+    isActive: active,
   };
-
-  if (!active) {
-    updateData.passwordHash = null;
-  }
 
   const user = await prisma.user.update({
     where: { id },
@@ -274,11 +273,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
         if (typeof op.value !== "boolean") {
           return scimError(400, "active value must be a boolean");
         }
-        if (!op.value) {
-          // Deactivate: remove passwordHash
-          updateData.passwordHash = null;
-        }
-        // If re-activating, we don't set a password — the user must use SSO
+        updateData.isActive = op.value;
         break;
 
       default:
@@ -322,10 +317,10 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
     return scimError(404, `User "${id}" not found`);
   }
 
-  // Soft delete: remove password hash to deactivate, keep the record for audit
+  // Soft delete: deactivate user, keep the record for audit trail
   await prisma.user.update({
     where: { id },
-    data: { passwordHash: null },
+    data: { isActive: false },
   });
 
   return new NextResponse(null, { status: 204 });

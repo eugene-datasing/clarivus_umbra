@@ -27,7 +27,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main
         id="main-content"
         role="main"
-        className="min-h-screen transition-all duration-200"
+        className="main-content-responsive min-h-screen transition-all duration-200"
         style={{ marginLeft: collapsed ? 64 : 260 }}
       >
         {children}

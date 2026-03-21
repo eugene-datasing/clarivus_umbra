@@ -22,6 +22,11 @@ import {
   CircuitOpenError,
 } from "@/lib/resilience/azure-services";
 import { extractMsg, emailContentToExtractionResult } from "./email-extract";
+import {
+  extractFromAudio,
+  extractFromVideo,
+  extractFromImageRegions,
+} from "./multimedia-extract";
 import { logger } from "@/lib/logger";
 
 const log = logger.child({ module: "extract" });
@@ -403,6 +408,31 @@ export async function extractText(
 
     case "TXT":
       return extractFromText(buffer);
+
+    // Audio formats — delegate to multimedia extractor
+    case "MP3":
+    case "WAV":
+    case "M4A": {
+      const audioResult = await extractFromAudio(buffer, fileType);
+      return {
+        pages: audioResult.pages,
+        totalText: audioResult.totalText,
+        attachments: audioResult.attachments,
+      };
+    }
+
+    // Video formats — delegate to multimedia extractor
+    case "MP4":
+    case "MOV":
+    case "AVI":
+    case "WEBM": {
+      const videoResult = await extractFromVideo(buffer, fileType);
+      return {
+        pages: videoResult.pages,
+        totalText: videoResult.totalText,
+        attachments: videoResult.attachments,
+      };
+    }
 
     case "PST":
       throw new Error(
