@@ -11,7 +11,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const isFullScreenRoute = pathname === "/login" || pathname.startsWith("/setup");
+  const isFullScreenRoute = pathname === "/login" || pathname.startsWith("/setup") || pathname.startsWith("/activate");
 
   if (isFullScreenRoute) {
     return <>{children}</>;

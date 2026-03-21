@@ -5,6 +5,7 @@
  */
 
 import { auth } from "./auth-options";
+import { isActivated } from "@/lib/data/activation";
 
 export interface SessionUser {
   id: string;
@@ -32,10 +33,17 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
 
 /**
  * Get the current authenticated user or throw. Use in server actions
- * where authentication is required.
+ * and API routes where authentication is required.
+ *
+ * Also enforces the activation gate — if the instance is not activated,
+ * no authenticated operations are permitted.
  */
 export async function requireUser(): Promise<SessionUser> {
   const user = await getCurrentUser();
   if (!user) throw new Error("Authentication required");
+
+  const activated = await isActivated();
+  if (!activated) throw new Error("Instance not activated");
+
   return user;
 }

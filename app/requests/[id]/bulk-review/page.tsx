@@ -1,6 +1,8 @@
 import { getGroupedDetectionsForCase, getThresholdPreview } from "@/lib/data/detections";
 import { getCase } from "@/lib/data/cases";
 import { notFound } from "next/navigation";
+import { requireUser } from "@/lib/auth/session";
+import { authorizeForCase } from "@/lib/auth/authorize";
 import BulkReviewClient from "./bulk-review-client";
 import { detectionTypeConfig, type DetectionType } from "@/lib/db/mappers";
 
@@ -29,6 +31,8 @@ export default async function BulkReviewPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const user = await requireUser();
+  await authorizeForCase(user, id);
   const [caseData, detections, thresholdDetections] = await Promise.all([
     getCase(id),
     getGroupedDetectionsForCase(id),

@@ -4,6 +4,8 @@ import { getDocument, getDocumentIdsForCase } from "@/lib/data/documents";
 import { getDetectionsForDocument } from "@/lib/data/detections";
 import { getDocumentContent, documentHeaders } from "@/lib/data/document-content";
 import { markDocumentInReview } from "@/lib/actions/detection-actions";
+import { requireUser } from "@/lib/auth/session";
+import { authorizeForCase } from "@/lib/auth/authorize";
 import ReviewClient from "./review-client";
 
 export default async function ReviewPage({
@@ -12,6 +14,8 @@ export default async function ReviewPage({
   params: Promise<{ id: string; docId: string }>;
 }) {
   const { id, docId } = await params;
+  const user = await requireUser();
+  await authorizeForCase(user, id);
 
   // Fetch all data in parallel
   const [caseData, doc, detections, content, documentIds] = await Promise.all([

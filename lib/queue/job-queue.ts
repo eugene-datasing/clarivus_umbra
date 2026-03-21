@@ -52,9 +52,34 @@ class ProcessingQueue {
   private concurrency: number;
   private maxAttempts: number;
 
+  /** Time after which completed/errored jobs are purged (15 minutes). */
+  private static readonly JOB_TTL_MS = 15 * 60 * 1000;
+  /** Cleanup interval (5 minutes). */
+  private static readonly CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+
   constructor(concurrency = 2, maxAttempts = 3) {
     this.concurrency = concurrency;
     this.maxAttempts = maxAttempts;
+
+    // Periodically purge finished jobs to prevent unbounded memory growth
+    const cleanup = setInterval(() => this.purgeFinishedJobs(), ProcessingQueue.CLEANUP_INTERVAL_MS);
+    if (typeof cleanup === "object" && "unref" in cleanup) cleanup.unref();
+  }
+
+  /**
+   * Remove completed and errored jobs older than JOB_TTL_MS.
+   */
+  private purgeFinishedJobs(): void {
+    const cutoff = Date.now() - ProcessingQueue.JOB_TTL_MS;
+    for (const [docId, job] of this.jobs) {
+      if (
+        (job.status === "complete" || job.status === "error") &&
+        job.completedAt &&
+        job.completedAt < cutoff
+      ) {
+        this.jobs.delete(docId);
+      }
+    }
   }
 
   /**

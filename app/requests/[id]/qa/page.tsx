@@ -3,6 +3,8 @@ import { getCase } from "@/lib/data/cases";
 import { getDocumentsForCase } from "@/lib/data/documents";
 import { getWithholdingItems } from "@/lib/data/detections";
 import { prisma } from "@/lib/db/prisma";
+import { requireUser } from "@/lib/auth/session";
+import { authorizeForCase } from "@/lib/auth/authorize";
 import QAClient from "./qa-client";
 
 export default async function QAPage({
@@ -11,6 +13,8 @@ export default async function QAPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const user = await requireUser();
+  await authorizeForCase(user, id);
 
   const [caseData, documents, withholdingItems] = await Promise.all([
     getCase(id),

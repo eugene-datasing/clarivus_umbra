@@ -5,14 +5,27 @@
 
 ## Pre-Demo Setup
 
+### Option A: Azure (Recommended for External Demos)
+
+1. Open https://app-veil-prototype.azurewebsites.net in Edge or Chrome (full-screen, no bookmarks bar)
+2. Sign in with credentials (or Azure AD once configured)
+3. Ensure sidebar is expanded (not collapsed)
+4. Have a test document ready (PDF or DOCX with some PII) for the live upload demo
+5. Have this script on a second screen or printed
+
+**Note:** The Azure deployment uses a clean database. Create demo data live during the demo for maximum impact.
+
+### Option B: Local Development
+
 1. Ensure Docker is running: `docker compose up -d`
 2. Run `npm run dev` from the `veil-prototype/` directory
 3. Open http://localhost:3000 in Edge or Chrome (full-screen, no bookmarks bar)
-4. Ensure sidebar is expanded (not collapsed)
-5. Have a test document ready (PDF or DOCX with some PII) for the live upload demo
-6. Have this script on a second screen or printed
+4. Sign in with demo credentials from the login page
+5. Ensure sidebar is expanded (not collapsed)
+6. Have a test document ready (PDF or DOCX with some PII) for the live upload demo
+7. Have this script on a second screen or printed
 
-**Pre-demo data reset (optional):**
+**Pre-demo data reset (optional, local only):**
 ```bash
 DATABASE_URL="postgresql://veil:veil_dev@localhost:5434/veil" npx prisma migrate reset
 ```
@@ -288,8 +301,16 @@ DOCUMENT STATUSES:
 
 ## Troubleshooting
 
+### Local Development
 - **Database not running:** Run `docker compose up -d` and wait 5 seconds
 - **Azure services not configured:** Check `.env` has valid endpoints and keys; without them, upload works but AI detection will fail
+- **Slow first load:** First page load after `npm run dev` compiles on-demand — allow a few seconds
+
+### Azure Deployment
+- **503 error after deploy:** App Service container startup can take 30-60 seconds after a restart. Wait and refresh.
+- **AI detection failing:** Check Key Vault secret values for `azure-openai-key` and `azure-di-key` are current
+- **File uploads not persisting:** Azure deployment currently uses local filesystem storage (ephemeral). Files are lost on container restart. Blob Storage integration is pending.
+
+### General
 - **Sidebar obscuring content:** Click the collapse arrow at the bottom of the sidebar
 - **Screen too small:** Demo should be run at 1920x1080 minimum
-- **Slow first load:** First page load after `npm run dev` compiles on-demand — allow a few seconds

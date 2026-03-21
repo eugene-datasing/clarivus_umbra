@@ -17,6 +17,7 @@ export const SETTING_KEYS = {
   LGOIMA_CONFIG: "lgoima_config",
   CONFIDENCE_THRESHOLDS: "confidence_thresholds",
   SETUP_WIZARD_STATE: "setup_wizard_state",
+  ACTIVATION_STATUS: "activation_status",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
@@ -204,4 +205,18 @@ export interface SetupWizardState {
 export const DEFAULT_SETUP_WIZARD_STATE: SetupWizardState = {
   currentStep: 0,
   completedSteps: [],
+};
+
+// ---------------------------------------------------------------------------
+// Activation status (client deployment gate)
+// ---------------------------------------------------------------------------
+
+export interface ActivationStatus {
+  activated: boolean;
+  activatedAt?: string;
+  activatedBy?: string;
+}
+
+export const DEFAULT_ACTIVATION_STATUS: ActivationStatus = {
+  activated: false,
 };

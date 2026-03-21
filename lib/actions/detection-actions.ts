@@ -265,7 +265,7 @@ export async function acceptDetection(detectionId: string, ground?: string) {
     userName: user.name,
     userRole: user.role,
     type: "review",
-    description: `Accepted detection: "${detection.text.substring(0, 40)}${detection.text.length > 40 ? "..." : ""}"`,
+    description: `Accepted detection (${detection.type || "unknown"})`,
     target: detection.document.name,
     caseId: detection.document.caseId,
     detail: `Detection ${validId}, Confidence: ${detection.confidence}%, Ground: ${appliedGround}`,
@@ -304,10 +304,10 @@ export async function rejectDetection(detectionId: string, reason?: string) {
     userName: user.name,
     userRole: user.role,
     type: "review",
-    description: `Rejected detection: "${detection.text.substring(0, 40)}${detection.text.length > 40 ? "..." : ""}"`,
+    description: `Rejected detection (${detection.type || "unknown"})`,
     target: detection.document.name,
     caseId: detection.document.caseId,
-    detail: validReason ? `Reason: ${validReason}` : undefined,
+    detail: validReason ? `Reason: ${validReason}` : `Detection ${validId}`,
   });
 
   await recomputeDocumentStatus(detection.documentId);
@@ -371,15 +371,27 @@ export async function applyGround(detectionId: string, groundId: string) {
 export async function bulkAcceptDetections(detectionIds: string[], ground?: string) {
   const { detectionIds: validIds, ground: validGround } = bulkDetectionSchema.parse({ detectionIds, ground });
   const user = await requireUser();
-  if (validIds.length > 0) await authorizeForDetection(user, validIds[0]);
-  // Get the document IDs and case info for recomputation + audit
+
+  // Fetch all detections and verify they belong to the same authorized case
   const detections = await prisma.detection.findMany({
     where: { id: { in: validIds } },
-    select: { documentId: true, text: true, document: { select: { caseId: true } } },
+    select: { id: true, documentId: true, document: { select: { caseId: true } } },
   });
 
+  if (detections.length === 0) return { count: 0 };
+
+  // All detections must belong to the same case
+  const caseIds = new Set(detections.map((d) => d.document.caseId));
+  if (caseIds.size !== 1) {
+    throw new Error("All detections in a bulk operation must belong to the same case");
+  }
+  const caseId = detections[0].document.caseId;
+  await authorizeForCase(user, caseId);
+
+  // Only update IDs that were actually found (prevents updating phantom IDs)
+  const authorizedIds = detections.map((d) => d.id);
   const result = await prisma.detection.updateMany({
-    where: { id: { in: validIds } },
+    where: { id: { in: authorizedIds } },
     data: {
       status: "accepted",
       appliedGround: validGround || undefined,
@@ -393,20 +405,15 @@ export async function bulkAcceptDetections(detectionIds: string[], ground?: stri
     await recomputeDocumentStatus(docId);
   }
 
-  // Audit entry
-  const caseId = detections[0]?.document.caseId;
-  if (caseId) {
-    const sampleText = detections[0]?.text?.substring(0, 40) || "—";
-    await createAuditEntry({
-      userName: user.name,
-      userRole: user.role,
-      type: "review",
-      description: `Bulk accepted ${result.count} detection(s) for "${sampleText}${detections[0]?.text?.length > 40 ? "..." : ""}"`,
-      target: "Bulk Review",
-      caseId,
-      detail: validGround ? `Ground: ${validGround}` : undefined,
-    });
-  }
+  await createAuditEntry({
+    userName: user.name,
+    userRole: user.role,
+    type: "review",
+    description: `Bulk accepted ${result.count} detection(s)`,
+    target: "Bulk Review",
+    caseId,
+    detail: `${result.count} detection(s)${validGround ? `, Ground: ${validGround}` : ""}`,
+  });
 
   return { count: result.count };
 }
@@ -414,14 +421,25 @@ export async function bulkAcceptDetections(detectionIds: string[], ground?: stri
 export async function bulkRejectDetections(detectionIds: string[]) {
   const { detectionIds: validIds } = bulkDetectionSchema.parse({ detectionIds });
   const user = await requireUser();
-  if (validIds.length > 0) await authorizeForDetection(user, validIds[0]);
+
+  // Fetch all detections and verify they belong to the same authorized case
   const detections = await prisma.detection.findMany({
     where: { id: { in: validIds } },
-    select: { documentId: true, text: true, document: { select: { caseId: true } } },
+    select: { id: true, documentId: true, document: { select: { caseId: true } } },
   });
 
+  if (detections.length === 0) return { count: 0 };
+
+  const caseIds = new Set(detections.map((d) => d.document.caseId));
+  if (caseIds.size !== 1) {
+    throw new Error("All detections in a bulk operation must belong to the same case");
+  }
+  const caseId = detections[0].document.caseId;
+  await authorizeForCase(user, caseId);
+
+  const authorizedIds = detections.map((d) => d.id);
   const result = await prisma.detection.updateMany({
-    where: { id: { in: validIds } },
+    where: { id: { in: authorizedIds } },
     data: {
       status: "rejected",
       appliedGround: null,
@@ -434,19 +452,14 @@ export async function bulkRejectDetections(detectionIds: string[]) {
     await recomputeDocumentStatus(docId);
   }
 
-  // Audit entry
-  const caseId = detections[0]?.document.caseId;
-  if (caseId) {
-    const sampleText = detections[0]?.text?.substring(0, 40) || "—";
-    await createAuditEntry({
-      userName: user.name,
-      userRole: user.role,
-      type: "review",
-      description: `Bulk rejected ${result.count} detection(s) for "${sampleText}${detections[0]?.text?.length > 40 ? "..." : ""}"`,
-      target: "Bulk Review",
-      caseId,
-    });
-  }
+  await createAuditEntry({
+    userName: user.name,
+    userRole: user.role,
+    type: "review",
+    description: `Bulk rejected ${result.count} detection(s)`,
+    target: "Bulk Review",
+    caseId,
+  });
 
   return { count: result.count };
 }

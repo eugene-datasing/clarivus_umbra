@@ -1,6 +1,8 @@
 import { getCase } from "@/lib/data/cases";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
+import { requireUser } from "@/lib/auth/session";
+import { authorizeForCase } from "@/lib/auth/authorize";
 import ExportClient, { type ExportDocument } from "./export-client";
 
 export default async function ExportPage({
@@ -9,6 +11,8 @@ export default async function ExportPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const user = await requireUser();
+  await authorizeForCase(user, id);
   const caseData = await getCase(id);
   if (!caseData) notFound();
 

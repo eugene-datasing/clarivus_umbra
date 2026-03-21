@@ -327,3 +327,16 @@ model FeedbackExample {
   @@index([createdAt])
   @@map("feedback_examples")
 }
+
+model ActivationCode {
+  id         String    @id @default(cuid())
+  codeHash   String
+  status     String    @default("pending") // "pending" | "redeemed" | "revoked"
+  redeemedAt DateTime?
+  redeemedBy String?
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime?
+
+  @@index([status])
+  @@map("activation_codes")
+}

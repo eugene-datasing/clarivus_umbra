@@ -9,6 +9,8 @@ import {
 } from "@/lib/data/pipeline";
 import { initializePipeline } from "@/lib/actions/pipeline-actions";
 import { notFound } from "next/navigation";
+import { requireUser } from "@/lib/auth/session";
+import { authorizeForCase } from "@/lib/auth/authorize";
 import PipelineClient from "./pipeline-client";
 
 export default async function PipelineSetupPage({
@@ -17,6 +19,8 @@ export default async function PipelineSetupPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const user = await requireUser();
+  await authorizeForCase(user, id);
   const caseData = await getCase(id);
   if (!caseData) notFound();
 

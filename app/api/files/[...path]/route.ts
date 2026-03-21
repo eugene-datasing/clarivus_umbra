@@ -30,7 +30,7 @@ function getMimeType(filePath: string): string {
     case ".gif":
       return "image/gif";
     case ".svg":
-      return "image/svg+xml";
+      return "application/octet-stream"; // Serve SVGs as downloads, not inline (XSS prevention)
     default:
       return "application/octet-stream";
   }
@@ -58,13 +58,29 @@ export async function GET(
 
     const buffer = await storage.download(key);
     const contentType = getMimeType(key);
+    const filename = pathSegments[pathSegments.length - 1] || "download";
+
+    // Force download for non-image/non-PDF types to prevent XSS via
+    // HTML, SVG, or other active content served inline.
+    const safeInlineTypes = new Set([
+      "application/pdf",
+      "image/png",
+      "image/jpeg",
+      "image/gif",
+      "text/plain",
+    ]);
+    const disposition = safeInlineTypes.has(contentType)
+      ? `inline; filename="${filename}"`
+      : `attachment; filename="${filename}"`;
 
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
         "Content-Type": contentType,
         "Content-Length": String(buffer.length),
+        "Content-Disposition": disposition,
         "Cache-Control": "private, max-age=3600",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   } catch (error) {

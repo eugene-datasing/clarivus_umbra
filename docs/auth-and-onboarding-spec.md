@@ -446,38 +446,57 @@ These files should require zero changes:
 
 ## 9. Deployment Considerations (Azure)
 
-### 9.1 Hosting
+### 9.1 Current Deployment
 
-| Component | Azure Service | Notes |
-|-----------|--------------|-------|
-| Next.js app | Azure App Service (Linux) or Azure Static Web Apps | App Service recommended for server components + API routes |
-| PostgreSQL | Azure Database for PostgreSQL Flexible Server | NZ region (Australia East until NZ North available) |
-| File storage | Azure Blob Storage | Document uploads, originals |
-| Secrets | Azure Key Vault | Client secret, DB connection string, AUTH_SECRET |
-| DNS/SSL | Azure Front Door or App Service managed cert | Custom domain + HTTPS |
+The prototype is live at **https://app-veil-prototype.azurewebsites.net**.
 
-### 9.2 Data Sovereignty
+| Component | Azure Service | Resource Name |
+|-----------|--------------|---------------|
+| Next.js app | Azure App Service (Linux B1, custom Docker container) | `app-veil-prototype` |
+| PostgreSQL | Azure Database for PostgreSQL Flexible Server (Burstable B1ms, v16) | `psql-veil-prototype` |
+| File storage | Azure Blob Storage (Standard LRS, Hot) | `stveilprototype` |
+| Secrets | Azure Key Vault (Standard, RBAC) | `kv-veil-prototype` |
+| Container images | Azure Container Registry (Basic) | `acrveilprototype` |
+| Message queue | Azure Service Bus (Standard) | `sb-veil-prototype` |
+| DNS/SSL | App Service managed certificate | `*.azurewebsites.net` |
 
-All data processing and storage in NZ/AU Azure regions. This is a key differentiator in the RFP response:
+All resources in `australiaeast` region, resource group `rg-veil-prototype`, subscription `clarivus_veil`.
 
-- Database: Australia East (closest to NZ with PostgreSQL Flexible Server)
+See `docs/azure-infrastructure-spec.md` for full architecture and provisioning details.
+
+### 9.2 Auth Status
+
+- **Currently active:** NextAuth Credentials provider (email/password login)
+- **Not yet configured:** Azure AD provider — requires an Azure AD app registration with redirect URI `https://app-veil-prototype.azurewebsites.net/api/auth/callback/azure-ad`
+- **Key Vault secret `azure-ad-client-secret`** needs to be created once the app registration exists
+- **`AUTH_CREDENTIALS_ENABLED`** is currently `true` — set to `false` once Azure AD is the primary auth method
+
+### 9.3 Data Sovereignty
+
+All data processing and storage in AU Azure region (`australiaeast`). This is a key differentiator in the RFP response:
+
+- Database: Australia East
 - Blob Storage: Australia East
 - App Service: Australia East
-- Azure OpenAI: Australia East (GPT-4o available)
+- Azure OpenAI: Australia East (GPT-4o)
 - Azure Document Intelligence: Australia East
+- Key Vault: Australia East
+- Service Bus: Australia East
 
-### 9.3 Azure AD Tenant
+### 9.4 Azure AD Tenant
 
 NPDC would use their own Azure AD tenant. The app registration lives in their tenant. Veil is registered as a single-tenant application — only NPDC staff can authenticate.
 
 For development/staging, DataSing uses its own tenant with a separate app registration.
 
-### 9.4 CI/CD
+### 9.5 CI/CD
+
+Currently manual via CLI (`az acr build` + `az webapp restart`). Target:
 
 ```
 GitHub Actions:
-  → Push to main → build Next.js → deploy to Azure App Service
-  → Prisma migrations run as part of deploy (post-deploy script)
+  → Push to main → build Docker image via ACR Tasks → restart App Service
+  → Prisma migrations run via npx prisma migrate deploy
   → Environment variables managed via Azure Key Vault references
 ```
 

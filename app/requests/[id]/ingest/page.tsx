@@ -1,6 +1,8 @@
 import { getCase } from "@/lib/data/cases";
 import { getDocumentsForCase } from "@/lib/data/documents";
 import { notFound } from "next/navigation";
+import { requireUser } from "@/lib/auth/session";
+import { authorizeForCase } from "@/lib/auth/authorize";
 import IngestClient from "./ingest-client";
 
 export default async function IngestPage({
@@ -9,6 +11,8 @@ export default async function IngestPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const user = await requireUser();
+  await authorizeForCase(user, id);
   const [caseData, existingDocs] = await Promise.all([
     getCase(id),
     getDocumentsForCase(id),

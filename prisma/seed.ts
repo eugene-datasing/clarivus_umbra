@@ -340,6 +340,18 @@ async function main() {
   }
   console.log(`  ✓ ${pipelineAssignments.length} pipeline assignments`);
 
+  // --- Activation: mark instance as activated for development ---
+  await prisma.systemSetting.upsert({
+    where: { key: "activation_status" },
+    update: {},
+    create: {
+      key: "activation_status",
+      value: { activated: true, activatedAt: new Date().toISOString(), activatedBy: "seed" },
+      updatedBy: "seed",
+    },
+  });
+  console.log("  ✓ Instance activated (dev seed)");
+
   console.log("\nSeed complete!");
 }
 

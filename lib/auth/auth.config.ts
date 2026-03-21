@@ -37,7 +37,7 @@ export const authConfig = {
       const { pathname } = nextUrl;
 
       // Public paths — always allow
-      if (pathname.startsWith("/login") || pathname.startsWith("/api/auth")) {
+      if (pathname.startsWith("/login") || pathname.startsWith("/api/auth") || pathname.startsWith("/activate")) {
         return true;
       }
 

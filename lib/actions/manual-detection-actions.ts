@@ -91,10 +91,10 @@ export async function createManualDetection(input: CreateManualDetectionInput) {
     userName: user.name,
     userRole: user.role,
     type: "manual_detection",
-    description: `Manually added detection: "${validated.text.substring(0, 40)}${validated.text.length > 40 ? "..." : ""}"`,
+    description: `Manually added detection (${validated.type})`,
     target: doc.name,
     caseId: doc.caseId,
-    detail: `Type: ${validated.type}, Page: ${validated.page}${validated.ground ? `, Ground: ${validated.ground}` : ""}`,
+    detail: `Detection ${detection.id}, Page: ${validated.page}${validated.ground ? `, Ground: ${validated.ground}` : ""}`,
   });
 
   return { success: true, detectionId: detection.id };
@@ -168,10 +168,10 @@ export async function deleteManualDetection(detectionId: string) {
     userName: user.name,
     userRole: user.role,
     type: "manual_detection_deleted",
-    description: `Deleted manual detection: "${detection.text.substring(0, 40)}${detection.text.length > 40 ? "..." : ""}"`,
+    description: `Deleted manual detection (${detection.type})`,
     target: detection.document.name,
     caseId,
-    detail: `Type: ${detection.type}, Page: ${detection.page}`,
+    detail: `Detection ${detectionId}, Page: ${detection.page}`,
   });
 
   return { success: true };

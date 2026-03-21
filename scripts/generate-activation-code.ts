@@ -1,0 +1,62 @@
+/**
+ * Generate an activation code for a Veil deployment.
+ *
+ * Usage:
+ *   DATABASE_URL="postgresql://veil:veil_dev@localhost:5434/veil" npx tsx scripts/generate-activation-code.ts [--expires-days 90]
+ *
+ * Generates a VEIL-XXXX-XXXX-XXXX code, stores the bcrypt hash in the
+ * activation_codes table, and prints the plaintext code to stdout.
+ *
+ * The printed code is the only copy — it is never stored in plaintext.
+ */
+
+import { generateActivationCode } from "../lib/data/activation";
+import { prisma } from "../lib/db/prisma";
+
+async function main() {
+  // Parse --expires-days flag
+  const args = process.argv.slice(2);
+  let expiresInDays: number | undefined;
+  const expiresIdx = args.indexOf("--expires-days");
+  if (expiresIdx !== -1 && args[expiresIdx + 1]) {
+    expiresInDays = parseInt(args[expiresIdx + 1], 10);
+    if (isNaN(expiresInDays) || expiresInDays <= 0) {
+      console.error("Error: --expires-days must be a positive integer");
+      process.exit(1);
+    }
+  }
+
+  const { code, id, revokedCount } = await generateActivationCode({
+    expiresInDays,
+    revokeExisting: true,
+  });
+
+  if (revokedCount > 0) {
+    console.log(`Revoked ${revokedCount} existing pending code(s).`);
+  }
+
+  const expiresAt = expiresInDays
+    ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000)
+    : undefined;
+
+  console.log("");
+  console.log("=== Activation Code Generated ===");
+  console.log("");
+  console.log(`  Code:    ${code}`);
+  console.log(`  ID:      ${id}`);
+  if (expiresAt) {
+    console.log(`  Expires: ${expiresAt.toISOString()}`);
+  } else {
+    console.log("  Expires: Never");
+  }
+  console.log("");
+  console.log("Deliver this code to the client. It is not stored in plaintext.");
+  console.log("");
+
+  await prisma.$disconnect();
+}
+
+main().catch((err) => {
+  console.error("Failed to generate activation code:", err);
+  process.exit(1);
+});
