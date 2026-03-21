@@ -42,7 +42,6 @@ export function initTelemetry(): void {
 
   try {
     // Dynamic import to avoid loading the SDK when not needed.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const appInsights = require("applicationinsights") as typeof import("applicationinsights");
 
     client = new appInsights.TelemetryClient(connectionString);

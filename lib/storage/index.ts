@@ -20,7 +20,6 @@ export function getStorage(): StorageProvider {
     if (useAzure) {
       // Dynamic import avoidance: we require at init time to keep this synchronous.
       // The Azure SDK is tree-shaken when not used in local dev.
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { AzureBlobStorageProvider } = require("./azure-blob");
       storage = new AzureBlobStorageProvider() as StorageProvider;
     } else {

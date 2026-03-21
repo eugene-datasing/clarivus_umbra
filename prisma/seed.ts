@@ -1,5 +1,8 @@
 import { PrismaClient } from "../lib/generated/prisma/client";
+import type { Prisma } from "../lib/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+
+type InputJsonValue = Prisma.InputJsonValue;
 
 const connectionString = process.env.DATABASE_URL || "postgresql://veil:veil_dev@localhost:5432/veil";
 const adapter = new PrismaPg({ connectionString });
@@ -257,12 +260,11 @@ async function main() {
   ];
 
   // Update documents with content JSON
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const contentMap: Record<string, any> = {
-    "doc-001": doc001Content,
-    "doc-002": doc002Content,
-    "doc-003": doc003Content,
-    "doc-005": doc005Content,
+  const contentMap: Record<string, InputJsonValue> = {
+    "doc-001": doc001Content as InputJsonValue,
+    "doc-002": doc002Content as InputJsonValue,
+    "doc-003": doc003Content as InputJsonValue,
+    "doc-005": doc005Content as InputJsonValue,
   };
 
   for (const [docId, content] of Object.entries(contentMap)) {
