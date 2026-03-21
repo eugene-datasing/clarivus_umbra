@@ -12,6 +12,9 @@ import {
   ChevronRight,
   FileText,
   ArrowRight,
+  Cloud,
+  FolderOpen,
+  Settings,
 } from "lucide-react";
 
 type DocStatus = "queued" | "processing" | "ready" | "error" | "pending" | "in-review" | "submitted" | "approved" | "rejected" | "released" | "complete" | "signed-off" | "reviewed";
@@ -32,10 +35,13 @@ interface DocItem {
   totalProcessingMs?: number;
 }
 
+type IngestSource = "upload" | "sharepoint";
+
 interface IngestClientProps {
   requestId: string;
   caseReference: string;
   existingDocs: DocItem[];
+  m365Configured?: boolean;
 }
 
 function StatusIcon({ status }: { status: DocStatus }) {
@@ -88,7 +94,9 @@ export default function IngestClient({
   requestId,
   caseReference,
   existingDocs,
+  m365Configured = false,
 }: IngestClientProps) {
+  const [activeSource, setActiveSource] = useState<IngestSource>("upload");
   const [dragActive, setDragActive] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -291,6 +299,42 @@ export default function IngestClient({
         </div>
       )}
 
+      {/* Source Tabs */}
+      <div className="flex items-center gap-1 border-b border-border mb-6">
+        <button
+          onClick={() => setActiveSource("upload")}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px",
+            activeSource === "upload"
+              ? "border-brand-primary text-brand-primary"
+              : "border-transparent text-txt-secondary hover:text-txt-primary hover:border-gray-300",
+          )}
+        >
+          <Upload className="w-4 h-4" />
+          File Upload
+        </button>
+        <button
+          onClick={() => m365Configured && setActiveSource("sharepoint")}
+          disabled={!m365Configured}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px",
+            activeSource === "sharepoint"
+              ? "border-brand-primary text-brand-primary"
+              : !m365Configured
+                ? "border-transparent text-gray-300 cursor-not-allowed"
+                : "border-transparent text-txt-secondary hover:text-txt-primary hover:border-gray-300",
+          )}
+        >
+          <Cloud className="w-4 h-4" />
+          Import from SharePoint
+          {!m365Configured && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-400 ml-1">
+              Not configured
+            </span>
+          )}
+        </button>
+      </div>
+
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
@@ -303,6 +347,7 @@ export default function IngestClient({
       />
 
       {/* Upload Zone */}
+      {activeSource === "upload" && (
       <div
         role="button"
         tabIndex={0}
@@ -361,6 +406,72 @@ export default function IngestClient({
           </div>
         </div>
       </div>
+      )}
+
+      {/* SharePoint Import Panel */}
+      {activeSource === "sharepoint" && (
+        <div className="mb-6">
+          {m365Configured ? (
+            <div className="card border-2 border-dashed border-blue-200 bg-blue-50/30">
+              <div className="flex flex-col items-center py-8">
+                <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mb-4">
+                  <FolderOpen className="w-8 h-8 text-blue-500" />
+                </div>
+                <h3 className="text-lg font-medium text-txt-primary mb-1">
+                  SharePoint Document Browser
+                </h3>
+                <p className="text-sm text-txt-secondary mb-6 text-center max-w-md">
+                  Browse your connected SharePoint site to select documents for import.
+                  Files will be downloaded and processed through the standard ingestion pipeline.
+                </p>
+                <div className="w-full max-w-lg">
+                  <div className="flex items-center gap-2 mb-4">
+                    <input
+                      type="text"
+                      placeholder="Enter folder path (e.g., /Shared Documents/LGOIMA)"
+                      className="flex-1 px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary"
+                      disabled
+                    />
+                    <button
+                      className="btn-primary text-sm flex items-center gap-1.5 opacity-50 cursor-not-allowed"
+                      disabled
+                    >
+                      <FolderOpen className="w-4 h-4" />
+                      Browse
+                    </button>
+                  </div>
+                  <div className="text-xs text-center text-blue-600 bg-blue-50 rounded-lg p-3 border border-blue-200">
+                    SharePoint browser will be available when connected to a Microsoft 365 tenant.
+                    The folder tree and file selection interface will appear here.
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="card border-2 border-dashed border-gray-200 text-center py-12">
+              <div className="flex flex-col items-center">
+                <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-4">
+                  <Cloud className="w-8 h-8 text-gray-300" />
+                </div>
+                <h3 className="text-lg font-medium text-txt-primary mb-1">
+                  Microsoft 365 Not Connected
+                </h3>
+                <p className="text-sm text-txt-secondary mb-4 max-w-md">
+                  To import documents from SharePoint or OneDrive, connect your
+                  Microsoft 365 account in Admin Settings.
+                </p>
+                <Link
+                  href="/admin/settings"
+                  className="btn-secondary flex items-center gap-2 text-sm"
+                >
+                  <Settings className="w-4 h-4" />
+                  Connect Microsoft 365 in Admin Settings
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Overall Progress (only show when there are documents) */}
       {totalCount > 0 && (

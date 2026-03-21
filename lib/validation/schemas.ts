@@ -52,6 +52,20 @@ export const confidenceThresholdSchema = z.object({
   threshold: z.number().int().min(0).max(100),
 });
 
+export const bulkApplyGroundToSimilarSchema = z.object({
+  caseId: z.string().min(1, "Case ID is required"),
+  entityText: z.string().min(1, "Entity text is required").max(5000),
+  ground: z.string().min(1, "Ground is required").max(30),
+  action: z.enum(["accept", "reject"]),
+});
+
+export const bulkApplyGroundByTypeSchema = z.object({
+  caseId: z.string().min(1, "Case ID is required"),
+  detectionType: z.string().min(1, "Detection type is required").max(100),
+  ground: z.string().min(1, "Ground is required").max(30),
+  action: z.enum(["accept", "reject"]),
+});
+
 // ---------------------------------------------------------------------------
 // Manual detection
 // ---------------------------------------------------------------------------

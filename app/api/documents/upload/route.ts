@@ -3,6 +3,7 @@ import { getStorage } from "@/lib/storage";
 import { prisma } from "@/lib/db/prisma";
 import { createAuditEntry } from "@/lib/data/audit";
 import { applyRateLimit } from "@/lib/api-utils";
+import { validateFile } from "@/lib/pipeline/file-validator";
 import { logger } from "@/lib/logger";
 import { trackException } from "@/lib/telemetry";
 import path from "path";
@@ -108,7 +109,7 @@ export async function POST(request: NextRequest) {
     }
 
     const storage = getStorage();
-    const results: { id: string; name: string; status: string }[] = [];
+    const results: { id: string; name: string; status: string; warnings?: string[] }[] = [];
 
     for (const file of files) {
       const ext = path.extname(file.name).toLowerCase() || ".bin";
@@ -127,6 +128,34 @@ export async function POST(request: NextRequest) {
 
       const { fileType, mimeType } = getFileTypeInfo(file.name);
       const buffer = Buffer.from(await file.arrayBuffer());
+
+      // -----------------------------------------------------------------
+      // Validate file for corruption / readability before storing
+      // -----------------------------------------------------------------
+      const validation = await validateFile(buffer, file.name, mimeType);
+
+      if (validation.corrupted) {
+        log.warn("Corrupted file rejected during upload", {
+          filename: file.name,
+          errors: validation.errors,
+          detectedType: validation.fileInfo.detectedType,
+        });
+        return NextResponse.json(
+          {
+            error: `File "${file.name}" appears to be corrupted or unreadable and cannot be processed.`,
+            code: "FILE_CORRUPTED",
+            details: validation.errors,
+            fileInfo: {
+              detectedType: validation.fileInfo.detectedType,
+              declaredType: validation.fileInfo.declaredType,
+              sizeBytes: validation.fileInfo.sizeBytes,
+            },
+            suggestion:
+              "Please verify the file opens correctly in its native application, then try uploading again. If the problem persists, try re-exporting or re-saving the file.",
+          },
+          { status: 422 },
+        );
+      }
 
       // Create the document record first to get a Prisma-generated ID
       const doc = await prisma.document.create({
@@ -150,11 +179,18 @@ export async function POST(request: NextRequest) {
         data: { originalPath: storageKey },
       });
 
-      results.push({
+      const result: { id: string; name: string; status: string; warnings?: string[] } = {
         id: doc.id,
         name: doc.name,
         status: doc.status,
-      });
+      };
+
+      // Include warnings (e.g., password-protected files) in the response
+      if (validation.warnings.length > 0) {
+        result.warnings = validation.warnings;
+      }
+
+      results.push(result);
     }
 
     // Update the case document count

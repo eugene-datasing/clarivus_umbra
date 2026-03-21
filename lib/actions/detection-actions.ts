@@ -12,6 +12,8 @@ import {
   bulkDetectionSchema,
   detectionIdSchema,
   confidenceThresholdSchema,
+  bulkApplyGroundToSimilarSchema,
+  bulkApplyGroundByTypeSchema,
 } from "@/lib/validation/schemas";
 import { authorizeForCase } from "@/lib/auth/authorize";
 
@@ -542,4 +544,193 @@ export async function applyConfidenceThreshold(caseId: string, threshold: number
   });
 
   return { accepted: detections.length, documentsAffected: docIds.length };
+}
+
+// ---------------------------------------------------------------------------
+// Bulk apply ground to similar entity text
+// ---------------------------------------------------------------------------
+
+/**
+ * Find all detections in a case where the detected text matches (case-insensitive)
+ * the given entityText, and apply the ground + status.
+ */
+export async function bulkApplyGroundToSimilar(
+  caseId: string,
+  entityText: string,
+  ground: string,
+  action: "accept" | "reject",
+): Promise<{ updatedCount: number }> {
+  const validated = bulkApplyGroundToSimilarSchema.parse({
+    caseId,
+    entityText,
+    ground,
+    action,
+  });
+
+  const user = await requireUser();
+  await authorizeForCase(user, validated.caseId);
+
+  // Find all pending detections in this case whose text matches (case-insensitive)
+  const detections = await prisma.detection.findMany({
+    where: {
+      document: { caseId: validated.caseId },
+      status: "pending",
+    },
+    select: {
+      id: true,
+      text: true,
+      type: true,
+      status: true,
+      appliedGround: true,
+      documentId: true,
+    },
+  });
+
+  // Filter case-insensitive match on text
+  const entityLower = validated.entityText.toLowerCase();
+  const matching = detections.filter(
+    (d) => d.text.toLowerCase() === entityLower,
+  );
+
+  if (matching.length === 0) {
+    return { updatedCount: 0 };
+  }
+
+  const matchingIds = matching.map((d) => d.id);
+  const newStatus = validated.action === "accept" ? "accepted" : "rejected";
+  const appliedGround = validated.action === "accept" ? validated.ground : null;
+
+  // Record history for each detection
+  for (const det of matching) {
+    await recordHistory(det.id, "status", det.status, newStatus, user.name);
+    if (det.appliedGround !== appliedGround) {
+      await recordHistory(
+        det.id,
+        "appliedGround",
+        det.appliedGround,
+        appliedGround,
+        user.name,
+      );
+    }
+  }
+
+  // Bulk update
+  await prisma.detection.updateMany({
+    where: { id: { in: matchingIds } },
+    data: {
+      status: newStatus,
+      appliedGround,
+      reviewedAt: new Date(),
+    },
+  });
+
+  // Recompute document statuses
+  const docIds = [...new Set(matching.map((d) => d.documentId))];
+  for (const docId of docIds) {
+    await recomputeDocumentStatus(docId);
+  }
+
+  // Audit trail
+  await createAuditEntry({
+    userName: user.name,
+    userRole: user.role,
+    type: "review",
+    description: `Bulk ${newStatus} ${matching.length} detection(s) matching "${validated.entityText}"`,
+    target: "Bulk Review",
+    caseId: validated.caseId,
+    detail: `Entity: "${validated.entityText}", Ground: ${validated.ground}, Action: ${validated.action}`,
+  });
+
+  return { updatedCount: matching.length };
+}
+
+// ---------------------------------------------------------------------------
+// Bulk apply ground by detection type
+// ---------------------------------------------------------------------------
+
+/**
+ * Find all detections in a case matching a detection type, and apply the
+ * ground + status.
+ */
+export async function bulkApplyGroundByType(
+  caseId: string,
+  detectionType: string,
+  ground: string,
+  action: "accept" | "reject",
+): Promise<{ updatedCount: number }> {
+  const validated = bulkApplyGroundByTypeSchema.parse({
+    caseId,
+    detectionType,
+    ground,
+    action,
+  });
+
+  const user = await requireUser();
+  await authorizeForCase(user, validated.caseId);
+
+  // Find all pending detections of this type in this case
+  const detections = await prisma.detection.findMany({
+    where: {
+      document: { caseId: validated.caseId },
+      status: "pending",
+      type: validated.detectionType,
+    },
+    select: {
+      id: true,
+      status: true,
+      appliedGround: true,
+      documentId: true,
+    },
+  });
+
+  if (detections.length === 0) {
+    return { updatedCount: 0 };
+  }
+
+  const matchingIds = detections.map((d) => d.id);
+  const newStatus = validated.action === "accept" ? "accepted" : "rejected";
+  const appliedGround = validated.action === "accept" ? validated.ground : null;
+
+  // Record history for each detection
+  for (const det of detections) {
+    await recordHistory(det.id, "status", det.status, newStatus, user.name);
+    if (det.appliedGround !== appliedGround) {
+      await recordHistory(
+        det.id,
+        "appliedGround",
+        det.appliedGround,
+        appliedGround,
+        user.name,
+      );
+    }
+  }
+
+  // Bulk update
+  await prisma.detection.updateMany({
+    where: { id: { in: matchingIds } },
+    data: {
+      status: newStatus,
+      appliedGround,
+      reviewedAt: new Date(),
+    },
+  });
+
+  // Recompute document statuses
+  const docIds = [...new Set(detections.map((d) => d.documentId))];
+  for (const docId of docIds) {
+    await recomputeDocumentStatus(docId);
+  }
+
+  // Audit trail
+  await createAuditEntry({
+    userName: user.name,
+    userRole: user.role,
+    type: "review",
+    description: `Bulk ${newStatus} ${detections.length} detection(s) of type "${validated.detectionType}"`,
+    target: "Bulk Review",
+    caseId: validated.caseId,
+    detail: `Type: "${validated.detectionType}", Ground: ${validated.ground}, Action: ${validated.action}`,
+  });
+
+  return { updatedCount: detections.length };
 }

@@ -21,7 +21,10 @@ import {
   bulkAcceptDetections,
   bulkRejectDetections,
   applyConfidenceThreshold,
+  bulkApplyGroundToSimilar,
+  bulkApplyGroundByType,
 } from "@/lib/actions/detection-actions";
+import { lgoimaGrounds } from "@/lib/lgoima-grounds";
 
 interface SnippetPart {
   text: string;
@@ -84,6 +87,20 @@ export default function BulkReviewClient({
   const [reviewed, setReviewed] = useState<Set<number>>(new Set());
   const [actionInProgress, setActionInProgress] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // Bulk ground apply state (per entity)
+  const [bulkGroundEntity, setBulkGroundEntity] = useState<number | null>(null);
+  const [bulkGroundValue, setBulkGroundValue] = useState("");
+  const [bulkGroundAction, setBulkGroundAction] = useState<"accept" | "reject">("accept");
+  const [bulkGroundApplying, setBulkGroundApplying] = useState(false);
+  const [bulkGroundSuccess, setBulkGroundSuccess] = useState<string | null>(null);
+
+  // Bulk ground apply state (by type)
+  const [bulkTypeGround, setBulkTypeGround] = useState<string | null>(null);
+  const [bulkTypeGroundValue, setBulkTypeGroundValue] = useState("");
+  const [bulkTypeGroundAction, setBulkTypeGroundAction] = useState<"accept" | "reject">("accept");
+  const [bulkTypeApplying, setBulkTypeApplying] = useState(false);
+  const [bulkTypeSuccess, setBulkTypeSuccess] = useState<string | null>(null);
 
   // Threshold state
   const [threshold, setThreshold] = useState(85);
@@ -194,6 +211,79 @@ export default function BulkReviewClient({
   const handleReviewEach = (group: EntityGroup) => {
     setReviewed((prev) => new Set(prev).add(group.id));
   };
+
+  const handleBulkApplyGroundToSimilar = async (group: EntityGroup) => {
+    if (!bulkGroundValue) return;
+    setBulkGroundApplying(true);
+    try {
+      const result = await bulkApplyGroundToSimilar(
+        requestId,
+        group.entity,
+        bulkGroundValue,
+        bulkGroundAction,
+      );
+      const groundLabel = lgoimaGrounds.find((g) => g.id === bulkGroundValue)?.reference || bulkGroundValue;
+      setBulkGroundSuccess(
+        `Applied ${groundLabel} to ${result.updatedCount} detections of "${group.entity}"`,
+      );
+      setReviewed((prev) => new Set(prev).add(group.id));
+      setBulkGroundEntity(null);
+      setBulkGroundValue("");
+      startTransition(() => router.refresh());
+      setTimeout(() => setBulkGroundSuccess(null), 5000);
+    } catch (err) {
+      console.error("Bulk apply ground failed:", err);
+    } finally {
+      setBulkGroundApplying(false);
+    }
+  };
+
+  const handleBulkApplyGroundByType = async (type: string) => {
+    if (!bulkTypeGroundValue) return;
+    setBulkTypeApplying(true);
+    try {
+      const result = await bulkApplyGroundByType(
+        requestId,
+        type,
+        bulkTypeGroundValue,
+        bulkTypeGroundAction,
+      );
+      const groundLabel = lgoimaGrounds.find((g) => g.id === bulkTypeGroundValue)?.reference || bulkTypeGroundValue;
+      setBulkTypeSuccess(
+        `Applied ${groundLabel} to ${result.updatedCount} detections of type "${type}"`,
+      );
+      setBulkTypeGround(null);
+      setBulkTypeGroundValue("");
+      startTransition(() => router.refresh());
+      setTimeout(() => setBulkTypeSuccess(null), 5000);
+    } catch (err) {
+      console.error("Bulk apply ground by type failed:", err);
+    } finally {
+      setBulkTypeApplying(false);
+    }
+  };
+
+  // Compute type summaries for the "apply by type" section
+  const typeSummary = useMemo(() => {
+    const byType = new Map<string, { count: number; entities: Set<string> }>();
+    for (const group of visibleGroups) {
+      const existing = byType.get(group.type);
+      if (existing) {
+        existing.count += group.occurrences;
+        existing.entities.add(group.entity);
+      } else {
+        byType.set(group.type, {
+          count: group.occurrences,
+          entities: new Set([group.entity]),
+        });
+      }
+    }
+    return Array.from(byType.entries()).map(([type, data]) => ({
+      type,
+      totalOccurrences: data.count,
+      uniqueEntities: data.entities.size,
+    })).sort((a, b) => b.totalOccurrences - a.totalOccurrences);
+  }, [visibleGroups]);
 
   const handleApplyThreshold = async () => {
     setApplyingThreshold(true);
@@ -510,6 +600,142 @@ export default function BulkReviewClient({
         </div>
       </div>
 
+      {/* Bulk ground success toast */}
+      {bulkGroundSuccess && (
+        <div className="card mb-6 !bg-green-50 border border-green-200">
+          <div className="flex items-center gap-3">
+            <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+            <div className="text-sm font-medium text-green-800 flex-1">
+              {bulkGroundSuccess}
+            </div>
+            <button
+              onClick={() => setBulkGroundSuccess(null)}
+              className="text-green-600 hover:text-green-800"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk type ground success toast */}
+      {bulkTypeSuccess && (
+        <div className="card mb-6 !bg-green-50 border border-green-200">
+          <div className="flex items-center gap-3">
+            <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+            <div className="text-sm font-medium text-green-800 flex-1">
+              {bulkTypeSuccess}
+            </div>
+            <button
+              onClick={() => setBulkTypeSuccess(null)}
+              className="text-green-600 hover:text-green-800"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Type Summary — Apply ground to all of a type */}
+      {typeSummary.length > 0 && (
+        <div className="card mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <BarChart3 className="w-5 h-5 text-brand-primary" />
+            <h2 className="text-base font-heading font-semibold text-txt-primary">
+              Detection Type Summary
+            </h2>
+          </div>
+          <div className="space-y-2">
+            {typeSummary.map((ts) => (
+              <div key={ts.type}>
+                <div className="flex items-center justify-between px-3 py-2.5 bg-surface-bg rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <span className="badge bg-blue-50 text-blue-700">
+                      {ts.type}
+                    </span>
+                    <span className="text-sm text-txt-secondary">
+                      {ts.totalOccurrences} occurrences across {ts.uniqueEntities} entities
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (bulkTypeGround === ts.type) {
+                        setBulkTypeGround(null);
+                      } else {
+                        setBulkTypeGround(ts.type);
+                        setBulkTypeGroundValue("");
+                        setBulkTypeGroundAction("accept");
+                      }
+                    }}
+                    className="btn-secondary text-xs flex items-center gap-1.5"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Apply ground to all {ts.type}
+                  </button>
+                </div>
+                {/* Inline form for applying ground by type */}
+                {bulkTypeGround === ts.type && (
+                  <div className="mt-2 ml-4 p-3 border border-border rounded-lg bg-white">
+                    <div className="flex items-end gap-3 flex-wrap">
+                      <div className="flex-1 min-w-[200px]">
+                        <label className="block text-xs font-medium text-txt-secondary mb-1">
+                          LGOIMA Ground
+                        </label>
+                        <select
+                          className="input-field text-sm"
+                          value={bulkTypeGroundValue}
+                          onChange={(e) => setBulkTypeGroundValue(e.target.value)}
+                        >
+                          <option value="">Select ground...</option>
+                          {lgoimaGrounds.map((g) => (
+                            <option key={g.id} value={g.id}>
+                              {g.reference} — {g.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="w-32">
+                        <label className="block text-xs font-medium text-txt-secondary mb-1">
+                          Action
+                        </label>
+                        <select
+                          className="input-field text-sm"
+                          value={bulkTypeGroundAction}
+                          onChange={(e) =>
+                            setBulkTypeGroundAction(e.target.value as "accept" | "reject")
+                          }
+                        >
+                          <option value="accept">Accept</option>
+                          <option value="reject">Reject</option>
+                        </select>
+                      </div>
+                      <button
+                        onClick={() => handleBulkApplyGroundByType(ts.type)}
+                        disabled={!bulkTypeGroundValue || bulkTypeApplying}
+                        className="btn-primary text-sm flex items-center gap-1.5 disabled:opacity-50"
+                      >
+                        {bulkTypeApplying ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Zap className="w-3.5 h-3.5" />
+                        )}
+                        Confirm
+                      </button>
+                      <button
+                        onClick={() => setBulkTypeGround(null)}
+                        className="btn-ghost text-sm"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Entity group cards */}
       <div className="space-y-5">
         {visibleGroups.map((group) => {
@@ -599,39 +825,120 @@ export default function BulkReviewClient({
 
               {/* Action buttons */}
               {!isReviewed && (
-                <div className="flex items-center gap-3 pt-3 border-t border-border">
-                  <button
-                    onClick={() => handleAcceptAll(group)}
-                    disabled={actionInProgress === group.id}
-                    className="btn-primary flex items-center gap-2"
-                  >
-                    {actionInProgress === group.id ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <CheckCircle className="w-4 h-4" />
-                    )}
-                    Apply to All
-                  </button>
-                  <button
-                    onClick={() => handleReviewEach(group)}
-                    disabled={actionInProgress === group.id}
-                    className="btn-secondary flex items-center gap-2"
-                  >
-                    <Eye className="w-4 h-4" />
-                    Review Each
-                  </button>
-                  <button
-                    onClick={() => handleSkip(group)}
-                    disabled={actionInProgress === group.id}
-                    className="btn-ghost flex items-center gap-2"
-                  >
-                    {actionInProgress === group.id ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <X className="w-4 h-4" />
-                    )}
-                    Skip
-                  </button>
+                <div>
+                  <div className="flex items-center gap-3 pt-3 border-t border-border">
+                    <button
+                      onClick={() => handleAcceptAll(group)}
+                      disabled={actionInProgress === group.id}
+                      className="btn-primary flex items-center gap-2"
+                    >
+                      {actionInProgress === group.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <CheckCircle className="w-4 h-4" />
+                      )}
+                      Apply to All
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (bulkGroundEntity === group.id) {
+                          setBulkGroundEntity(null);
+                        } else {
+                          setBulkGroundEntity(group.id);
+                          setBulkGroundValue(
+                            lgoimaGrounds.find((g) => g.id === group.groundRef || g.reference === group.groundRef)?.id || "",
+                          );
+                          setBulkGroundAction("accept");
+                        }
+                      }}
+                      disabled={actionInProgress === group.id}
+                      className="btn-secondary flex items-center gap-2"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      Apply to All Similar
+                    </button>
+                    <button
+                      onClick={() => handleReviewEach(group)}
+                      disabled={actionInProgress === group.id}
+                      className="btn-secondary flex items-center gap-2"
+                    >
+                      <Eye className="w-4 h-4" />
+                      Review Each
+                    </button>
+                    <button
+                      onClick={() => handleSkip(group)}
+                      disabled={actionInProgress === group.id}
+                      className="btn-ghost flex items-center gap-2"
+                    >
+                      {actionInProgress === group.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <X className="w-4 h-4" />
+                      )}
+                      Skip
+                    </button>
+                  </div>
+
+                  {/* Inline form for applying ground to similar */}
+                  {bulkGroundEntity === group.id && (
+                    <div className="mt-3 p-3 border border-border rounded-lg bg-surface-bg">
+                      <div className="text-xs font-semibold tracking-wider text-txt-secondary uppercase mb-2">
+                        Apply ground to all detections of &ldquo;{group.entity}&rdquo;
+                      </div>
+                      <div className="flex items-end gap-3 flex-wrap">
+                        <div className="flex-1 min-w-[200px]">
+                          <label className="block text-xs font-medium text-txt-secondary mb-1">
+                            LGOIMA Ground
+                          </label>
+                          <select
+                            className="input-field text-sm"
+                            value={bulkGroundValue}
+                            onChange={(e) => setBulkGroundValue(e.target.value)}
+                          >
+                            <option value="">Select ground...</option>
+                            {lgoimaGrounds.map((g) => (
+                              <option key={g.id} value={g.id}>
+                                {g.reference} — {g.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="w-32">
+                          <label className="block text-xs font-medium text-txt-secondary mb-1">
+                            Action
+                          </label>
+                          <select
+                            className="input-field text-sm"
+                            value={bulkGroundAction}
+                            onChange={(e) =>
+                              setBulkGroundAction(e.target.value as "accept" | "reject")
+                            }
+                          >
+                            <option value="accept">Accept</option>
+                            <option value="reject">Reject</option>
+                          </select>
+                        </div>
+                        <button
+                          onClick={() => handleBulkApplyGroundToSimilar(group)}
+                          disabled={!bulkGroundValue || bulkGroundApplying}
+                          className="btn-primary text-sm flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          {bulkGroundApplying ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Zap className="w-3.5 h-3.5" />
+                          )}
+                          Confirm
+                        </button>
+                        <button
+                          onClick={() => setBulkGroundEntity(null)}
+                          className="btn-ghost text-sm"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

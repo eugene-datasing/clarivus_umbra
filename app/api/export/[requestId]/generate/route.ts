@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { generateExportPackage, type PackageType } from "@/lib/pipeline/export";
+import { generateExportPackage, batchExport, type PackageType } from "@/lib/pipeline/export";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeForCase } from "@/lib/auth/authorize";
 import { applyRateLimit } from "@/lib/api-utils";
@@ -83,6 +83,26 @@ export async function POST(
     }
 
     // --- Generate ---
+
+    const batchMode = body.batch === true;
+    const maxPagesPerBatch: number | undefined = body.maxPagesPerBatch;
+
+    if (batchMode) {
+      const result = await batchExport(requestId, packageType, {
+        includeCoverLetter,
+        includeRightOfReview,
+        includeChainOfCustody,
+        documentIds,
+        generatedBy: user.name,
+        maxPagesPerBatch,
+      });
+
+      return NextResponse.json({
+        batch: true,
+        batchGroupId: result.batchGroupId,
+        exportIds: result.exportIds,
+      });
+    }
 
     const exportId = await generateExportPackage(requestId, packageType, {
       includeCoverLetter,

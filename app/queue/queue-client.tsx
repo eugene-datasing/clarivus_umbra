@@ -79,7 +79,7 @@ export default function QueueClient({ queueDocuments, cases }: QueueClientProps)
   const totalQueueCount = queueGroups.reduce((sum, g) => sum + g.docs.length, 0);
 
   return (
-    <div className="p-6 max-w-[1100px]">
+    <div>
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-heading font-bold text-txt-primary">My Review Queue</h1>

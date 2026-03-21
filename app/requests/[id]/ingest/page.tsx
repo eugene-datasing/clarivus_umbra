@@ -3,6 +3,7 @@ import { getDocumentsForCase } from "@/lib/data/documents";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeForCase } from "@/lib/auth/authorize";
+import { isM365Configured } from "@/lib/integrations/m365-connector";
 import IngestClient from "./ingest-client";
 
 export default async function IngestPage({
@@ -20,6 +21,8 @@ export default async function IngestPage({
 
   if (!caseData) notFound();
 
+  const m365Configured = isM365Configured();
+
   return (
     <IngestClient
       requestId={id}
@@ -35,6 +38,7 @@ export default async function IngestPage({
         duplicateGroup: d.duplicateGroup,
         totalProcessingMs: d.totalProcessingMs,
       }))}
+      m365Configured={m365Configured}
     />
   );
 }

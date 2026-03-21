@@ -3,6 +3,7 @@ import "./globals.css";
 import { SessionProvider } from "@/components/providers/session-provider";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { AppShell } from "@/components/layout/app-shell";
+import { ServiceWorkerRegister } from "@/components/sw-register";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { isActivated } from "@/lib/data/activation";
@@ -43,6 +44,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="en">
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#1e40af" />
+      </head>
       <body className="min-h-screen">
         <a href="#main-content" className="skip-link">
           Skip to main content
@@ -55,6 +60,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <AppShell>{children}</AppShell>
           </QueryProvider>
         </SessionProvider>
+        <ServiceWorkerRegister />
       </body>
     </html>
   );

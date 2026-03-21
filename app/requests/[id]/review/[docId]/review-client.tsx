@@ -40,6 +40,11 @@ import ManualDetectionPopover from "@/components/review/manual-detection-popover
 import AILearningPanel from "@/components/review/ai-learning-panel";
 import { lgoimaGrounds } from "@/lib/lgoima-grounds";
 import { cn } from "@/lib/utils";
+import {
+  type DetectionHistoryEntry,
+  formatFieldChange,
+  relativeTime,
+} from "@/lib/data/detection-history";
 
 /* -------------------------------------------------------------------------- */
 /*  Types                                                                     */
@@ -210,10 +215,11 @@ export default function ReviewClient({
   const [showSubmitSuccess, setShowSubmitSuccess] = useState(false);
   const [showOriginal, setShowOriginal] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [historyData, setHistoryData] = useState<
-    { id: string; field: string; previousValue: string | null; newValue: string | null; changedBy: string; changedAt: string }[]
-  >([]);
+  const [historyData, setHistoryData] = useState<DetectionHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Confidence popover for table badge
+  const [confidencePopoverId, setConfidencePopoverId] = useState<string | null>(null);
 
   // Keyboard shortcuts hint panel
   const [showKeyboardHints, setShowKeyboardHints] = useState(false);
@@ -261,9 +267,10 @@ export default function ReviewClient({
     return () => { cancelled = true; };
   }, [historyOpen, selectedDetectionId]);
 
-  // Reset history when detection selection changes
+  // Reset history and confidence popover when detection selection changes
   useEffect(() => {
     setHistoryOpen(false);
+    setConfidencePopoverId(null);
   }, [selectedDetectionId]);
 
   // ----- Panel resize drag handling -----
@@ -692,6 +699,35 @@ export default function ReviewClient({
     if (score >= 85) return "bg-confidence-high";
     if (score >= 50) return "bg-confidence-medium";
     return "bg-confidence-low";
+  }
+
+  function confBarColor(score: number): string {
+    if (score >= 90) return "bg-confidence-high";
+    if (score >= 75) return "bg-confidence-medium";
+    if (score >= 50) return "bg-amber-400";
+    return "bg-confidence-low";
+  }
+
+  function confLabel(score: number): string {
+    if (score >= 90) return "Very High";
+    if (score >= 75) return "High";
+    if (score >= 50) return "Medium";
+    return "Low";
+  }
+
+  function sourceLabel(source: string): string {
+    switch (source) {
+      case "ai":
+        return "AI Detection";
+      case "pattern":
+        return "Pattern Match";
+      case "manual":
+        return "Manual Entry";
+      case "custom-rule":
+        return "Custom Rule";
+      default:
+        return source;
+    }
   }
 
   // ----- Ground lookup -----
@@ -1256,22 +1292,88 @@ export default function ReviewClient({
 
                       {/* Confidence */}
                       <td className="px-2 py-2 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <span
+                        <div className="relative flex items-center justify-center">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setConfidencePopoverId(confidencePopoverId === det.id ? null : det.id);
+                            }}
                             className={cn(
-                              "w-1.5 h-1.5 rounded-full",
-                              confDotClass(det.confidence)
+                              "flex items-center gap-1.5 px-1.5 py-0.5 rounded-input border transition-colors cursor-pointer",
+                              confBgClass(det.confidence),
+                              "hover:ring-1 hover:ring-brand-primary/30"
                             )}
-                            aria-hidden="true"
-                          />
-                          <span
-                            className={cn("font-mono font-medium", confTextClass(det.confidence))}
+                            aria-label={`${det.confidence}% confidence - ${confLabel(det.confidence)} - click for details`}
+                            aria-expanded={confidencePopoverId === det.id}
                           >
-                            {det.confidence}%
-                          </span>
-                          <span className="sr-only">
-                            {det.confidence >= 85 ? "high" : det.confidence >= 50 ? "medium" : "low"} confidence
-                          </span>
+                            <span
+                              className={cn(
+                                "w-1.5 h-1.5 rounded-full",
+                                confDotClass(det.confidence)
+                              )}
+                              aria-hidden="true"
+                            />
+                            <span
+                              className={cn("font-mono font-medium text-[10px]", confTextClass(det.confidence))}
+                            >
+                              {det.confidence}%
+                            </span>
+                          </button>
+                          {/* Confidence explainability popover */}
+                          {confidencePopoverId === det.id && (
+                            <div
+                              className="absolute z-50 bottom-full mb-2 left-1/2 -translate-x-1/2 w-72 bg-surface-card border border-border rounded-card shadow-lg p-3"
+                              role="tooltip"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-[10px] font-semibold text-txt-primary uppercase tracking-wide">
+                                  Confidence Details
+                                </span>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setConfidencePopoverId(null); }}
+                                  className="text-txt-secondary hover:text-txt-primary"
+                                  aria-label="Close confidence details"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </div>
+                              {/* Confidence meter */}
+                              <div className="mb-2">
+                                <div className="flex items-center justify-between text-[10px] mb-1">
+                                  <span className={cn("font-semibold", confTextClass(det.confidence))}>
+                                    {confLabel(det.confidence)}
+                                  </span>
+                                  <span className="font-mono text-txt-secondary">{det.confidence}%</span>
+                                </div>
+                                <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                  <div
+                                    className={cn("h-full rounded-full transition-all", confBarColor(det.confidence))}
+                                    style={{ width: `${det.confidence}%` }}
+                                  />
+                                </div>
+                              </div>
+                              {/* Source */}
+                              <div className="flex items-center gap-1.5 mb-2 text-[10px]">
+                                <span className="text-txt-secondary">Source:</span>
+                                <span className="font-medium text-txt-primary">{sourceLabel(det.source)}</span>
+                              </div>
+                              {/* Reasoning */}
+                              {det.source === "pattern" || det.source === "custom-rule" ? (
+                                <p className="text-[10px] text-txt-secondary italic">
+                                  Rule-based match — no AI reasoning available
+                                </p>
+                              ) : det.reasoning ? (
+                                <div className="border-l-2 border-brand-primary/30 pl-2 mb-1">
+                                  <p className="text-[10px] text-txt-secondary leading-relaxed">
+                                    {det.reasoning}
+                                  </p>
+                                </div>
+                              ) : null}
+                              {/* Tail pointer */}
+                              <div className="absolute left-1/2 -translate-x-1/2 -bottom-1.5 w-3 h-3 bg-surface-card border-r border-b border-border rotate-45" />
+                            </div>
+                          )}
                         </div>
                       </td>
 
@@ -1488,49 +1590,126 @@ export default function ReviewClient({
         </div>
       )}
 
-      {/* ===== AI Explanation Popover (when a detection is selected) ===== */}
+      {/* ===== AI Explanation & Confidence Detail Panel (when a detection is selected) ===== */}
       {selectedDetectionId && (() => {
         const det = detectionById.get(selectedDetectionId);
         if (!det) return null;
-        const state = detectionStates[det.id];
         const typeConf = detectionTypeConfig[det.type as keyof typeof detectionTypeConfig];
         return (
-          <div style={{ bottom: panelHeight + 16 }} className="fixed right-6 w-80 bg-surface-card border border-border rounded-card shadow-lg p-4 z-40">
-            <div className="flex items-start justify-between mb-2">
+          <div style={{ bottom: panelHeight + 16 }} className="fixed right-6 w-80 bg-surface-card border border-border rounded-card shadow-lg p-4 z-40 max-h-[60vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-1.5">
                 <AlertCircle size={13} className="text-brand-primary" />
-                <span className="text-xs font-semibold text-txt-primary">AI Explanation</span>
+                <span className="text-xs font-semibold text-txt-primary">Detection Details</span>
               </div>
               <button
                 onClick={() => setSelectedDetectionId(null)}
                 className="text-txt-secondary hover:text-txt-primary"
+                aria-label="Close detection details"
               >
                 <X size={13} />
               </button>
             </div>
-            <div className="mb-2">
+
+            {/* Type & source badges */}
+            <div className="flex items-center gap-1.5 mb-3">
               <span className={cn("badge text-[10px]", typeConf?.color ?? "bg-gray-100 text-gray-700")}>
                 {typeConf?.label ?? det.type}
               </span>
-              {det.source === "custom-rule" && (
-                <span className="badge bg-teal-50 text-teal-700 text-[10px] ml-1">Rule</span>
-              )}
-              <span className={cn("ml-2 text-[11px] font-mono font-medium", confTextClass(det.confidence))}>
-                {det.confidence}% confidence
+              <span className="badge bg-gray-50 text-gray-600 text-[10px]">
+                {sourceLabel(det.source)}
               </span>
+              {det.source === "manual" && (
+                <span className="badge bg-gray-100 text-gray-600 text-[9px]">Manual</span>
+              )}
             </div>
-            <p className="text-[11px] leading-relaxed text-txt-secondary mb-3">
-              {det.aiExplanation}
-            </p>
+
+            {/* Confidence meter */}
+            <div className="mb-3">
+              <div className="flex items-center justify-between text-[11px] mb-1">
+                <span className="text-txt-secondary font-medium">Confidence</span>
+                <div className="flex items-center gap-1.5">
+                  <span className={cn("font-semibold text-[10px] px-1.5 py-0.5 rounded", confBgClass(det.confidence), confTextClass(det.confidence))}>
+                    {confLabel(det.confidence)}
+                  </span>
+                  <span className={cn("font-mono font-semibold", confTextClass(det.confidence))}>
+                    {det.confidence}%
+                  </span>
+                </div>
+              </div>
+              <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className={cn("h-full rounded-full transition-all duration-300", confBarColor(det.confidence))}
+                  style={{ width: `${det.confidence}%` }}
+                  role="meter"
+                  aria-valuenow={det.confidence}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label={`Confidence: ${det.confidence}%`}
+                />
+              </div>
+            </div>
+
+            {/* AI Reasoning */}
+            {det.source === "pattern" || det.source === "custom-rule" ? (
+              <div className="mb-3 px-2.5 py-2 bg-gray-50 border border-gray-200 rounded-input">
+                <p className="text-[10px] text-txt-secondary italic">
+                  Rule-based match — no AI reasoning available
+                </p>
+              </div>
+            ) : (
+              <>
+                {det.reasoning && (
+                  <div className="mb-3">
+                    <span className="text-[10px] font-semibold text-txt-secondary uppercase tracking-wider block mb-1">
+                      Reasoning
+                    </span>
+                    <blockquote className="border-l-2 border-brand-primary/40 pl-2.5 py-1 bg-brand-primary/5 rounded-r-input">
+                      <p className="text-[11px] leading-relaxed text-txt-secondary">
+                        {det.reasoning}
+                      </p>
+                    </blockquote>
+                  </div>
+                )}
+                {det.aiExplanation && (
+                  <div className="mb-3">
+                    <span className="text-[10px] font-semibold text-txt-secondary uppercase tracking-wider block mb-1">
+                      AI Explanation
+                    </span>
+                    <p className="text-[11px] leading-relaxed text-txt-secondary">
+                      {det.aiExplanation}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Public interest consideration */}
+            {det.piConsideration && (
+              <div className="mb-3">
+                <span className="text-[10px] font-semibold text-txt-secondary uppercase tracking-wider block mb-1">
+                  Public Interest Consideration
+                </span>
+                <div className="px-2.5 py-2 bg-amber-50 border border-amber-200 rounded-input">
+                  <p className="text-[10px] leading-relaxed text-amber-800">
+                    {det.piConsideration}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Suggested ground */}
             {det.suggestedGround && (
-              <div className="text-[10px] text-txt-secondary border-t border-border pt-2">
+              <div className="text-[10px] text-txt-secondary border-t border-border pt-2 mb-2">
                 <span className="uppercase tracking-wider font-semibold">Suggested ground: </span>
                 <span className="font-mono text-brand-primary">
                   {groundLabel(det.suggestedGround)}
                 </span>
               </div>
             )}
-            {/* Change History (WP12) */}
+
+            {/* Change History Timeline */}
             <div className="border-t border-border mt-2 pt-2">
               <button
                 onClick={() => setHistoryOpen((v) => !v)}
@@ -1540,33 +1719,47 @@ export default function ReviewClient({
               >
                 <History size={11} aria-hidden="true" />
                 <span className="uppercase tracking-wider font-semibold">Change History</span>
+                {historyData.length > 0 && !historyOpen && (
+                  <span className="ml-1 px-1.5 py-0.5 rounded-full bg-gray-100 text-txt-secondary text-[9px]">
+                    {historyData.length}
+                  </span>
+                )}
                 <ChevronRight size={10} className={cn("ml-auto transition-transform", historyOpen && "rotate-90")} aria-hidden="true" />
               </button>
               {historyOpen && (
-                <div className="mt-1.5 max-h-32 overflow-y-auto">
+                <div className="mt-2 max-h-40 overflow-y-auto">
                   {historyLoading ? (
-                    <p className="text-[10px] text-txt-secondary py-1">Loading...</p>
+                    <div className="flex items-center gap-2 py-2">
+                      <div className="w-3 h-3 border-2 border-brand-primary border-t-transparent rounded-full animate-spin" />
+                      <p className="text-[10px] text-txt-secondary">Loading history...</p>
+                    </div>
                   ) : historyData.length === 0 ? (
-                    <p className="text-[10px] text-txt-secondary py-1">No changes recorded yet.</p>
+                    <p className="text-[10px] text-txt-secondary py-2 pl-3">No changes recorded yet.</p>
                   ) : (
-                    <div className="space-y-1">
-                      {historyData.map((h) => (
-                        <div key={h.id} className="flex items-start gap-1.5 text-[10px]">
-                          <Clock size={9} className="text-txt-secondary mt-0.5 shrink-0" />
-                          <div>
-                            <span className="font-medium text-txt-primary">{h.changedBy}</span>
-                            <span className="text-txt-secondary"> changed </span>
-                            <span className="font-mono text-brand-primary">{h.field}</span>
-                            {h.previousValue && (
-                              <span className="text-txt-secondary"> from <span className="line-through">{h.previousValue}</span></span>
-                            )}
-                            <span className="text-txt-secondary"> to <span className="font-medium">{h.newValue ?? "none"}</span></span>
-                            <div className="text-txt-secondary/60 text-[9px]">
-                              {new Date(h.changedAt).toLocaleString()}
+                    <div className="relative pl-3">
+                      {/* Timeline left border */}
+                      <div className="absolute left-[5px] top-1 bottom-1 w-px bg-gray-300" aria-hidden="true" />
+                      <div className="space-y-2.5">
+                        {historyData.map((h) => (
+                          <div key={h.id} className="relative flex items-start gap-2.5">
+                            {/* Timeline dot */}
+                            <div className="absolute -left-3 top-1 w-2 h-2 rounded-full bg-brand-primary/60 border border-white ring-1 ring-gray-200" aria-hidden="true" />
+                            <div className="flex-1 bg-gray-50 rounded-input px-2.5 py-1.5 min-w-0">
+                              <div className="flex items-center justify-between gap-2 mb-0.5">
+                                <span className="font-medium text-[10px] text-txt-primary truncate">
+                                  {h.changedBy}
+                                </span>
+                                <span className="text-[9px] text-txt-secondary/60 shrink-0" title={new Date(h.changedAt).toLocaleString()}>
+                                  {relativeTime(h.changedAt)}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-txt-secondary leading-snug">
+                                {formatFieldChange(h)}
+                              </p>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>

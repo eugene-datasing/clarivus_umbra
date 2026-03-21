@@ -131,6 +131,21 @@ export default function ExportClient({
   const [includeRightOfReview, setIncludeRightOfReview] = useState(true);
   const [warningAcknowledged, setWarningAcknowledged] = useState(false);
 
+  // Batch export state
+  const [batchMode, setBatchMode] = useState(false);
+  const [batchGroupId, setBatchGroupId] = useState<string | null>(null);
+  const [batchExportIds, setBatchExportIds] = useState<string[]>([]);
+  const [batchStatuses, setBatchStatuses] = useState<{
+    batchNumber: number;
+    exportId: string;
+    status: string;
+    downloadKey?: string;
+    sha256?: string;
+    filename?: string;
+    pageCount: number;
+    docCount: number;
+  }[]>([]);
+
   const [exportState, setExportState] = useState<
     "idle" | "generating" | "verifying" | "complete" | "error"
   >("idle");
@@ -142,6 +157,7 @@ export default function ExportClient({
   const [exportFilename, setExportFilename] = useState<string | null>(null);
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const batchPollingRef = useRef<NodeJS.Timeout | null>(null);
 
   // Derived readiness stats
   const selectedDocs = useMemo(
@@ -174,6 +190,9 @@ export default function ExportClient({
     () => selectedDocs.reduce((sum, d) => sum + d.acceptedCount, 0),
     [selectedDocs],
   );
+
+  // Determine if batch export should be offered
+  const showBatchOption = selectedDocs.length > 50 || totalSelectedPages > 500;
 
   const hasWarnings = selectedWarnings.length > 0;
   const canGenerate =
@@ -239,11 +258,60 @@ export default function ExportClient({
     };
   }, [exportState, pollStatus]);
 
+  // Batch export polling
+  const pollBatchStatus = useCallback(async () => {
+    if (!batchGroupId) return;
+    try {
+      const res = await fetch(
+        `/api/export/${requestId}/batch-status?batchGroupId=${batchGroupId}`,
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+
+      setExportProgress(data.progress || 0);
+      setExportStep(data.currentStep || "");
+      setBatchStatuses(data.batches || []);
+
+      if (data.status === "complete") {
+        setExportState("complete");
+        if (batchPollingRef.current) {
+          clearInterval(batchPollingRef.current);
+          batchPollingRef.current = null;
+        }
+      }
+      if (data.status === "error") {
+        setExportState("error");
+        setExportError(data.error || "Batch export failed");
+        if (batchPollingRef.current) {
+          clearInterval(batchPollingRef.current);
+          batchPollingRef.current = null;
+        }
+      }
+    } catch {
+      // Keep polling
+    }
+  }, [batchGroupId, requestId]);
+
+  useEffect(() => {
+    if (batchMode && batchGroupId && exportState === "generating") {
+      batchPollingRef.current = setInterval(pollBatchStatus, 2000);
+    }
+    return () => {
+      if (batchPollingRef.current) {
+        clearInterval(batchPollingRef.current);
+        batchPollingRef.current = null;
+      }
+    };
+  }, [batchMode, batchGroupId, exportState, pollBatchStatus]);
+
   const handleGenerate = async () => {
     setExportState("generating");
     setExportProgress(0);
     setExportError("");
     setExportStep("Starting export...");
+    setBatchStatuses([]);
+    setBatchGroupId(null);
+    setBatchExportIds([]);
 
     try {
       const res = await fetch(`/api/export/${requestId}/generate`, {
@@ -254,6 +322,7 @@ export default function ExportClient({
           includeCoverLetter,
           includeRightOfReview,
           documentIds: Array.from(selectedDocIds),
+          batch: batchMode,
         }),
       });
 
@@ -263,7 +332,13 @@ export default function ExportClient({
       }
 
       const data = await res.json();
-      setExportId(data.exportId);
+
+      if (data.batch) {
+        setBatchGroupId(data.batchGroupId);
+        setBatchExportIds(data.exportIds);
+      } else {
+        setExportId(data.exportId);
+      }
     } catch (err) {
       setExportState("error");
       setExportError(err instanceof Error ? err.message : "Export failed");
@@ -281,6 +356,14 @@ export default function ExportClient({
     setSha256(null);
     setExportFilename(null);
     setWarningAcknowledged(false);
+    setBatchMode(false);
+    setBatchGroupId(null);
+    setBatchExportIds([]);
+    setBatchStatuses([]);
+  };
+
+  const handleBatchDownload = (batchExportId: string) => {
+    window.open(`/api/export/${requestId}/${batchExportId}/download`, "_blank");
   };
 
   return (
@@ -547,7 +630,7 @@ export default function ExportClient({
             <h2 className="text-xs font-semibold tracking-wider text-txt-secondary uppercase mb-4">
               Export Options
             </h2>
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-6 flex-wrap">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -566,7 +649,32 @@ export default function ExportClient({
                 />
                 <span className="text-sm text-txt-primary">Include right-of-review statement</span>
               </label>
+              {showBatchOption && (
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={batchMode}
+                    onChange={(e) => setBatchMode(e.target.checked)}
+                    className="w-4 h-4 rounded border-border text-brand-primary focus:ring-brand-primary/30"
+                  />
+                  <span className="text-sm text-txt-primary">Batch export</span>
+                  <span className="text-xs text-txt-secondary">(split into ~500-page ZIPs)</span>
+                </label>
+              )}
             </div>
+            {batchMode && (
+              <div className="mt-3 p-3 rounded-lg bg-blue-50/60 border border-blue-200">
+                <div className="flex items-start gap-2">
+                  <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-xs text-blue-700">
+                    <span className="font-semibold">Batch mode enabled.</span> Documents will be
+                    split into batches of approximately 500 pages each. Each batch will produce
+                    a separate ZIP file with an export manifest listing all batches.
+                    Estimated batches: <span className="font-mono font-semibold">{Math.max(1, Math.ceil(totalSelectedPages / 500))}</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Export summary */}
@@ -632,7 +740,11 @@ export default function ExportClient({
               <Loader className="w-5 h-5 text-brand-primary animate-spin" />
               <div>
                 <div className="text-sm font-semibold text-txt-primary">
-                  {exportState === "generating" ? "Generating export package..." : "Verifying redactions are permanent..."}
+                  {batchMode
+                    ? `Generating batch export...`
+                    : exportState === "generating"
+                      ? "Generating export package..."
+                      : "Verifying redactions are permanent..."}
                 </div>
                 <div className="text-xs text-txt-secondary">
                   {exportStep || (exportState === "generating"
@@ -645,6 +757,42 @@ export default function ExportClient({
               <div className="h-full bg-brand-primary rounded-full transition-all duration-200" style={{ width: `${exportProgress}%` }} />
             </div>
             <div className="text-xs text-txt-secondary text-right mt-1">{exportProgress}%</div>
+
+            {/* Batch progress details */}
+            {batchMode && batchStatuses.length > 0 && (
+              <div className="mt-4 space-y-2">
+                <div className="text-xs font-semibold text-txt-secondary uppercase tracking-wider">
+                  Batch Progress
+                </div>
+                {batchStatuses.map((batch) => (
+                  <div
+                    key={batch.batchNumber}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface-bg text-sm"
+                  >
+                    <span className="font-mono font-semibold text-txt-primary w-20">
+                      Batch {batch.batchNumber}
+                    </span>
+                    <span className="text-xs text-txt-secondary">
+                      {batch.docCount} docs, {batch.pageCount.toLocaleString()} pages
+                    </span>
+                    <span className="ml-auto">
+                      {batch.status === "complete" ? (
+                        <span className="badge bg-green-50 text-green-700 text-xs">Complete</span>
+                      ) : batch.status === "generating" ? (
+                        <span className="badge bg-blue-50 text-blue-700 text-xs flex items-center gap-1">
+                          <Loader className="w-3 h-3 animate-spin" />
+                          Generating
+                        </span>
+                      ) : batch.status === "error" ? (
+                        <span className="badge bg-red-50 text-red-700 text-xs">Error</span>
+                      ) : (
+                        <span className="badge bg-gray-50 text-gray-500 text-xs">Pending</span>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -655,29 +803,83 @@ export default function ExportClient({
                 <CheckCircle className="w-6 h-6 text-confidence-high" />
               </div>
               <div className="flex-1">
-                <div className="text-sm font-semibold text-txt-primary mb-1">Export Package Ready</div>
+                <div className="text-sm font-semibold text-txt-primary mb-1">
+                  {batchMode && batchStatuses.length > 1
+                    ? `Batch Export Complete (${batchStatuses.length} packages)`
+                    : "Export Package Ready"}
+                </div>
                 <div className="text-xs text-txt-secondary mb-3">
                   {selectedDocs.length} document{selectedDocs.length !== 1 ? "s" : ""} exported with {totalAccepted} withholding{totalAccepted !== 1 ? "s" : ""}.
-                  Package assembled and integrity hash generated.
+                  {batchMode && batchStatuses.length > 1
+                    ? ` Split across ${batchStatuses.length} batch packages.`
+                    : " Package assembled and integrity hash generated."}
                 </div>
                 <div className="flex items-center gap-2 mb-2">
                   <Shield className="w-4 h-4 text-confidence-high" />
                   <span className="text-xs font-medium text-confidence-high">Redaction verification: PASSED</span>
                 </div>
-                {sha256 && (
+
+                {/* Single export download */}
+                {!batchMode && sha256 && (
                   <div className="text-xs text-txt-secondary mb-3">
                     SHA-256: <span className="font-mono text-[10px]">{sha256.slice(0, 16)}...{sha256.slice(-4)}</span>
                   </div>
                 )}
-                <div className="flex items-center gap-3">
-                  <button onClick={handleDownload} className="btn-primary flex items-center gap-2">
-                    <Download className="w-4 h-4" />
-                    Download Package
-                  </button>
+                {!batchMode && (
+                  <div className="flex items-center gap-3">
+                    <button onClick={handleDownload} className="btn-primary flex items-center gap-2">
+                      <Download className="w-4 h-4" />
+                      Download Package
+                    </button>
+                    <button onClick={handleReset} className="btn-secondary text-sm">
+                      Generate Another
+                    </button>
+                  </div>
+                )}
+
+                {/* Batch export download links */}
+                {batchMode && batchStatuses.length > 0 && (
+                  <div className="space-y-2 mb-4">
+                    {batchStatuses.map((batch) => (
+                      <div
+                        key={batch.batchNumber}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white border border-green-200"
+                      >
+                        <FileText className="w-4 h-4 text-green-600 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-txt-primary">
+                            {batch.filename || `Batch ${batch.batchNumber}`}
+                          </div>
+                          <div className="text-xs text-txt-secondary">
+                            {batch.docCount} documents, {batch.pageCount.toLocaleString()} pages
+                            {batch.sha256 && (
+                              <span className="ml-2 font-mono text-[10px]">
+                                SHA-256: {batch.sha256.slice(0, 12)}...
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {batch.status === "complete" && (
+                          <button
+                            onClick={() => handleBatchDownload(batch.exportId)}
+                            className="btn-primary text-xs flex items-center gap-1.5 !px-3 !py-1.5"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            Download
+                          </button>
+                        )}
+                        {batch.status === "error" && (
+                          <span className="text-xs text-red-600 font-medium">Failed</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {batchMode && (
                   <button onClick={handleReset} className="btn-secondary text-sm">
                     Generate Another
                   </button>
-                </div>
+                )}
               </div>
             </div>
           </div>

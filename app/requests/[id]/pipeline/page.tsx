@@ -7,11 +7,13 @@ import {
   generateDefaultMilestones,
   PIPELINE_STAGES,
 } from "@/lib/data/pipeline";
+import { getCaseProcessingMetrics } from "@/lib/data/processing-metrics";
 import { initializePipeline } from "@/lib/actions/pipeline-actions";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeForCase } from "@/lib/auth/authorize";
 import PipelineClient from "./pipeline-client";
+import ProcessingPerformance from "./processing-performance";
 
 export default async function PipelineSetupPage({
   params,
@@ -28,12 +30,13 @@ export default async function PipelineSetupPage({
   await initializePipeline(id);
 
   // Fetch everything in parallel
-  const [departmentUsers, privilegedUsers, otherDepts, pipeline] =
+  const [departmentUsers, privilegedUsers, otherDepts, pipeline, processingMetrics] =
     await Promise.all([
       getUsersByDepartment(caseData.department),
       getPrivilegedUsers(),
       getOtherDepartments(caseData.department),
       getCasePipeline(id),
+      getCaseProcessingMetrics(id),
     ]);
 
   // Build stage definitions with metadata for the client
@@ -55,18 +58,29 @@ export default async function PipelineSetupPage({
   });
 
   return (
-    <PipelineClient
-      caseId={id}
-      caseReference={caseData.reference}
-      casePriority={caseData.priority}
-      departmentUsers={departmentUsers}
-      privilegedUsers={privilegedUsers}
-      otherDepartments={otherDepts.map((d) => ({
-        id: d.id,
-        name: d.name,
-        users: d.users,
-      }))}
-      stages={stages}
-    />
+    <>
+      <PipelineClient
+        caseId={id}
+        caseReference={caseData.reference}
+        casePriority={caseData.priority}
+        departmentUsers={departmentUsers}
+        privilegedUsers={privilegedUsers}
+        otherDepartments={otherDepts.map((d) => ({
+          id: d.id,
+          name: d.name,
+          users: d.users,
+        }))}
+        stages={stages}
+      />
+      {/* Processing Performance Section */}
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 pb-8">
+        <ProcessingPerformance
+          documents={processingMetrics.documents}
+          totalPages={processingMetrics.totalPages}
+          avgTotalMs={processingMetrics.avgTotalMs}
+          totalProcessingMs={processingMetrics.totalProcessingMs}
+        />
+      </div>
+    </>
   );
 }

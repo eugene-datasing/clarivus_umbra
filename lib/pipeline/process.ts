@@ -16,7 +16,8 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { getStorage } from "@/lib/storage";
-import { extractText, OCRUnavailableError } from "./extract";
+import { extractText, OCRUnavailableError, ExtractionCorruptionError } from "./extract";
+import { validateFile } from "./file-validator";
 import { detectPatterns } from "./patterns";
 import { detectWithAI } from "./ai-detect";
 import { detectDuplicates } from "./duplicate-detect";
@@ -115,6 +116,85 @@ export async function processDocument(docId: string): Promise<void> {
     }
 
     // ------------------------------------------------------------------
+    // 2.6 File integrity validation
+    // ------------------------------------------------------------------
+    log.info("Validating file integrity", { docId, filename: doc.name });
+    const validation = await validateFile(buffer, doc.name, doc.mimeType);
+
+    if (validation.corrupted) {
+      const errorMsg =
+        `File is corrupted or unreadable: ${validation.errors.join("; ")}`;
+      log.error("File validation failed — corrupted file", {
+        docId,
+        errors: validation.errors,
+        detectedType: validation.fileInfo.detectedType,
+      });
+
+      await prisma.document.update({
+        where: { id: docId },
+        data: {
+          status: "error",
+          processingError: errorMsg.slice(0, 2000),
+        },
+      });
+
+      await createAuditEntry({
+        userName: "Veil AI",
+        userRole: "system",
+        type: "document_error",
+        description: `File validation failed: corrupted or unreadable file`,
+        target: doc.name,
+        caseId,
+        detail: [
+          `Detected type: ${validation.fileInfo.detectedType}`,
+          `Declared type: ${validation.fileInfo.declaredType}`,
+          `Errors: ${validation.errors.join("; ")}`,
+        ].join("; "),
+      });
+
+      return; // Skip further processing
+    }
+
+    if (validation.fileInfo.isEncrypted || validation.fileInfo.isPasswordProtected) {
+      const warnMsg =
+        `File is encrypted or password-protected. Processing may fail or produce empty results. ${validation.warnings.join("; ")}`;
+      log.warn("File is encrypted/password-protected", {
+        docId,
+        warnings: validation.warnings,
+      });
+
+      await prisma.document.update({
+        where: { id: docId },
+        data: {
+          status: "error",
+          processingError: warnMsg.slice(0, 2000),
+        },
+      });
+
+      await createAuditEntry({
+        userName: "Veil AI",
+        userRole: "system",
+        type: "document_error",
+        description: `File is encrypted or password-protected`,
+        target: doc.name,
+        caseId,
+        detail: [
+          `Detected type: ${validation.fileInfo.detectedType}`,
+          `Warnings: ${validation.warnings.join("; ")}`,
+        ].join("; "),
+      });
+
+      return; // Skip further processing
+    }
+
+    if (validation.warnings.length > 0) {
+      log.warn("File validation passed with warnings", {
+        docId,
+        warnings: validation.warnings,
+      });
+    }
+
+    // ------------------------------------------------------------------
     // 3. Update status to "processing"
     // ------------------------------------------------------------------
     await prisma.document.update({
@@ -142,6 +222,34 @@ export async function processDocument(docId: string): Promise<void> {
             processingError: "OCR service temporarily unavailable. The document will be retried when the service recovers.",
           },
         });
+        return;
+      }
+      if (extractError instanceof ExtractionCorruptionError) {
+        // File passed initial validation but failed during content extraction
+        // due to corruption or password protection detected by the extractor.
+        const corruptionMsg = extractError.message;
+        log.error("File corruption detected during extraction", {
+          docId,
+          error: corruptionMsg,
+        });
+        await prisma.document.update({
+          where: { id: docId },
+          data: {
+            status: "error",
+            processingError: corruptionMsg.slice(0, 2000),
+          },
+        });
+
+        await createAuditEntry({
+          userName: "Veil AI",
+          userRole: "system",
+          type: "document_error",
+          description: `Extraction failed: file corrupted or unreadable`,
+          target: doc.name,
+          caseId,
+          detail: corruptionMsg,
+        });
+
         return;
       }
       throw extractError;
@@ -518,6 +626,10 @@ export async function processDocument(docId: string): Promise<void> {
       userMessage = `AI service rate limit exceeded. The document will be retried automatically.`;
     } else if (rawMessage.includes("timeout") || rawMessage.includes("ETIMEDOUT")) {
       userMessage = `Processing timed out. The document may be too large or the service is under heavy load.`;
+    } else if (rawMessage.includes("corrupted") || rawMessage.includes("corrupt") || rawMessage.includes("unreadable")) {
+      userMessage = `File is corrupted or unreadable. ${rawMessage.slice(0, 200)}`;
+    } else if (rawMessage.includes("password") || rawMessage.includes("encrypted")) {
+      userMessage = `File is password-protected or encrypted. Please remove protection and re-upload.`;
     } else if (rawMessage.includes("unsupported") || rawMessage.includes("Unsupported")) {
       userMessage = `Unsupported file format. ${rawMessage}`;
     } else {

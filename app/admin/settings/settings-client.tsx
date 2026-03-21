@@ -18,6 +18,9 @@ import {
   Save,
   Loader2,
   Building2,
+  Plug,
+  XCircle,
+  AlertTriangle,
 } from "lucide-react";
 import {
   saveDetectionToggles,
@@ -36,7 +39,7 @@ import type {
 /*  Tab configuration                                                 */
 /* ------------------------------------------------------------------ */
 
-type TabId = "organisation" | "departments" | "users" | "detection" | "workflow" | "notifications" | "health";
+type TabId = "organisation" | "departments" | "users" | "detection" | "workflow" | "notifications" | "integrations" | "health";
 
 const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "organisation", label: "Organisation", icon: Building2 },
@@ -45,6 +48,7 @@ const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "detection", label: "Detection Settings", icon: Brain },
   { id: "workflow", label: "Workflow", icon: Settings2 },
   { id: "notifications", label: "Notifications", icon: Activity },
+  { id: "integrations", label: "Integrations", icon: Plug },
   { id: "health", label: "System Health", icon: Server },
 ];
 
@@ -99,6 +103,15 @@ interface SettingsDepartment {
   userCount: number;
 }
 
+interface M365StatusInfo {
+  configured: boolean;
+  connected: boolean;
+  provider?: string;
+  siteName?: string;
+  tenantId?: string;
+  missingVars: string[];
+}
+
 interface SettingsClientProps {
   initialDetectionToggles: DetectionToggle[];
   initialWorkflowConfig: WorkflowConfig;
@@ -106,6 +119,7 @@ interface SettingsClientProps {
   orgIdentity: OrgIdentity;
   thresholds: ConfidenceThresholds;
   departments: SettingsDepartment[];
+  m365Status?: M365StatusInfo;
 }
 
 /* ------------------------------------------------------------------ */
@@ -119,6 +133,7 @@ export default function SettingsClient({
   orgIdentity,
   thresholds,
   departments,
+  m365Status,
 }: SettingsClientProps) {
   const [activeTab, setActiveTab] = useState<TabId>("organisation");
   const [detectionToggles, setDetectionToggles] = useState(initialDetectionToggles);
@@ -527,6 +542,146 @@ export default function SettingsClient({
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* TAB: Integrations */}
+      {activeTab === "integrations" && (
+        <div className="space-y-6">
+          {/* Microsoft 365 Integration */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                  <Cloud className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-heading font-semibold text-txt-primary">
+                    Microsoft 365
+                  </h2>
+                  <p className="text-xs text-txt-secondary">
+                    SharePoint &amp; OneDrive document import
+                  </p>
+                </div>
+              </div>
+              {m365Status?.configured && m365Status.connected ? (
+                <span className="badge bg-green-50 text-green-700 flex items-center gap-1.5">
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  Connected
+                </span>
+              ) : m365Status?.configured && !m365Status.connected ? (
+                <span className="badge bg-amber-50 text-amber-700 flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  Configured — connection failed
+                </span>
+              ) : (
+                <span className="badge bg-gray-100 text-gray-500 flex items-center gap-1.5">
+                  <XCircle className="w-3.5 h-3.5" />
+                  Not Configured
+                </span>
+              )}
+            </div>
+
+            {m365Status?.configured && m365Status.connected && (
+              <div className="p-4 rounded-lg bg-green-50/50 border border-green-200">
+                <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                  <div>
+                    <dt className="text-txt-secondary text-xs">Provider</dt>
+                    <dd className="font-medium text-txt-primary capitalize">
+                      {m365Status.provider || "SharePoint"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-txt-secondary text-xs">Organisation</dt>
+                    <dd className="font-medium text-txt-primary">
+                      {m365Status.siteName || "--"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-txt-secondary text-xs">Tenant ID</dt>
+                    <dd className="font-medium text-txt-primary font-mono text-xs">
+                      {m365Status.tenantId || "--"}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            )}
+
+            {!m365Status?.configured && (
+              <div className="p-4 rounded-lg bg-gray-50 border border-border">
+                <p className="text-sm text-txt-secondary mb-3">
+                  To enable Microsoft 365 integration, configure the following environment variables:
+                </p>
+                <div className="space-y-2">
+                  {(m365Status?.missingVars ?? ["M365_TENANT_ID", "M365_CLIENT_ID", "M365_CLIENT_SECRET"]).map(
+                    (envVar) => (
+                      <div
+                        key={envVar}
+                        className="flex items-center gap-2 px-3 py-2 rounded bg-white border border-border"
+                      >
+                        <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                        <code className="text-xs font-mono text-txt-primary">{envVar}</code>
+                        <span className="text-xs text-red-500 ml-auto">Not set</span>
+                      </div>
+                    ),
+                  )}
+                </div>
+                <div className="mt-3 p-3 rounded bg-blue-50/60 border border-blue-200">
+                  <p className="text-xs text-blue-700">
+                    <span className="font-semibold">Setup guide:</span> Register an app in Azure AD
+                    with Microsoft Graph API permissions (Sites.Read.All, Files.Read.All).
+                    Optionally set <code className="font-mono">M365_SITE_URL</code> to target a specific
+                    SharePoint site.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {m365Status?.configured && !m365Status.connected && (
+              <div className="p-4 rounded-lg bg-amber-50/50 border border-amber-200">
+                <p className="text-sm text-amber-700">
+                  Environment variables are configured but the connection to Microsoft Graph API
+                  could not be established. Verify that the client credentials are correct and the
+                  app registration has the required permissions.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Additional integrations placeholder */}
+          <div className="card">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center">
+                <Plug className="w-5 h-5 text-gray-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-heading font-semibold text-txt-primary">
+                  Records Management System
+                </h2>
+                <p className="text-xs text-txt-secondary">
+                  Integration with external records management systems
+                </p>
+              </div>
+              <span className="badge bg-gray-100 text-gray-500 ml-auto">Coming Soon</span>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center">
+                <Plug className="w-5 h-5 text-gray-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-heading font-semibold text-txt-primary">
+                  eDiscovery
+                </h2>
+                <p className="text-xs text-txt-secondary">
+                  eDiscovery platform integration for legal workflows
+                </p>
+              </div>
+              <span className="badge bg-gray-100 text-gray-500 ml-auto">Coming Soon</span>
+            </div>
+          </div>
         </div>
       )}
 

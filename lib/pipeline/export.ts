@@ -319,6 +319,323 @@ async function doGenerate(
   });
 }
 
+/* ------------------------------------------------------------------ */
+/*  Batch export support                                               */
+/* ------------------------------------------------------------------ */
+
+export interface BatchExportProgress {
+  status: "pending" | "generating" | "complete" | "error";
+  progress: number;
+  currentStep: string;
+  error?: string;
+  batches: {
+    batchNumber: number;
+    exportId: string;
+    status: "pending" | "generating" | "complete" | "error";
+    downloadKey?: string;
+    sha256?: string;
+    filename?: string;
+    pageCount: number;
+    docCount: number;
+  }[];
+  totalBatches: number;
+}
+
+const globalForBatchExport = globalThis as unknown as {
+  __batchExportProgressStore?: Map<string, BatchExportProgress>;
+};
+if (!globalForBatchExport.__batchExportProgressStore) {
+  globalForBatchExport.__batchExportProgressStore = new Map<string, BatchExportProgress>();
+}
+const batchProgressStore = globalForBatchExport.__batchExportProgressStore;
+
+export function getBatchExportProgress(batchGroupId: string): BatchExportProgress | null {
+  return batchProgressStore.get(batchGroupId) ?? null;
+}
+
+function setBatchProgress(batchGroupId: string, update: Partial<BatchExportProgress>) {
+  const current = batchProgressStore.get(batchGroupId) ?? {
+    status: "pending" as const,
+    progress: 0,
+    currentStep: "Initializing",
+    batches: [],
+    totalBatches: 0,
+  };
+  batchProgressStore.set(batchGroupId, { ...current, ...update });
+}
+
+/**
+ * Split documents into page-based batches. Default threshold is 500 pages per batch.
+ */
+function splitIntoBatches(
+  documents: { id: string; name: string; pageCount: number }[],
+  maxPagesPerBatch: number,
+): { id: string; name: string; pageCount: number }[][] {
+  const batches: { id: string; name: string; pageCount: number }[][] = [];
+  let currentBatch: { id: string; name: string; pageCount: number }[] = [];
+  let currentPageCount = 0;
+
+  for (const doc of documents) {
+    // If adding this doc would exceed the limit and we already have docs in the batch,
+    // start a new batch. Always allow at least one doc per batch.
+    if (currentBatch.length > 0 && currentPageCount + doc.pageCount > maxPagesPerBatch) {
+      batches.push(currentBatch);
+      currentBatch = [];
+      currentPageCount = 0;
+    }
+    currentBatch.push(doc);
+    currentPageCount += doc.pageCount;
+  }
+
+  if (currentBatch.length > 0) {
+    batches.push(currentBatch);
+  }
+
+  return batches;
+}
+
+/**
+ * Generate a batch export. Splits documents into page-based batches
+ * and generates a separate ZIP for each batch.
+ *
+ * Returns the batchGroupId immediately; use getBatchExportProgress() to poll.
+ *
+ * If total pages fall below the batch threshold, falls back to a single-batch export.
+ */
+export async function batchExport(
+  caseId: string,
+  packageType: PackageType,
+  options: {
+    includeCoverLetter?: boolean;
+    includeRightOfReview?: boolean;
+    includeChainOfCustody?: boolean;
+    documentIds?: string[];
+    generatedBy?: string;
+    maxPagesPerBatch?: number;
+  } = {},
+): Promise<{ batchGroupId: string; exportIds: string[] }> {
+  const maxPages = options.maxPagesPerBatch ?? 500;
+  const batchGroupId = `bgrp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  // Fetch documents with page counts
+  const documentWhere = options.documentIds
+    ? { id: { in: options.documentIds }, caseId }
+    : { caseId, status: { in: ["signed-off", "reviewed"] } };
+
+  const documents = await prisma.document.findMany({
+    where: documentWhere,
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, pageCount: true },
+  });
+
+  const totalPages = documents.reduce((sum, d) => sum + (d.pageCount ?? 0), 0);
+
+  // If total pages < threshold, produce a single ZIP (existing behavior)
+  if (totalPages <= maxPages) {
+    const exportId = await generateExportPackage(caseId, packageType, options);
+    setBatchProgress(batchGroupId, {
+      status: "generating",
+      progress: 0,
+      currentStep: "Generating single package (below batch threshold)",
+      totalBatches: 1,
+      batches: [{
+        batchNumber: 1,
+        exportId,
+        status: "generating",
+        pageCount: totalPages,
+        docCount: documents.length,
+      }],
+    });
+
+    // Poll the single export to update batch progress
+    pollSingleExportForBatch(batchGroupId, exportId);
+
+    return { batchGroupId, exportIds: [exportId] };
+  }
+
+  // Split into batches
+  const docBatches = splitIntoBatches(
+    documents.map((d) => ({ id: d.id, name: d.name, pageCount: d.pageCount ?? 0 })),
+    maxPages,
+  );
+
+  const exportIds: string[] = [];
+  const batchEntries: BatchExportProgress["batches"] = [];
+
+  for (let i = 0; i < docBatches.length; i++) {
+    const batch = docBatches[i];
+    const batchPages = batch.reduce((s, d) => s + d.pageCount, 0);
+    const exportId = `exp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    exportIds.push(exportId);
+    batchEntries.push({
+      batchNumber: i + 1,
+      exportId,
+      status: "pending",
+      pageCount: batchPages,
+      docCount: batch.length,
+    });
+  }
+
+  setBatchProgress(batchGroupId, {
+    status: "generating",
+    progress: 0,
+    currentStep: `Starting batch export (${docBatches.length} batches)`,
+    totalBatches: docBatches.length,
+    batches: batchEntries,
+  });
+
+  // Run batch generation in background
+  doBatchGenerate(batchGroupId, caseId, packageType, docBatches, exportIds, options).catch(
+    (err) => {
+      console.error("Batch export generation failed:", err);
+      setBatchProgress(batchGroupId, {
+        status: "error",
+        error: err instanceof Error ? err.message : "Batch export failed",
+      });
+    },
+  );
+
+  return { batchGroupId, exportIds };
+}
+
+async function doBatchGenerate(
+  batchGroupId: string,
+  caseId: string,
+  packageType: PackageType,
+  docBatches: { id: string; name: string; pageCount: number }[][],
+  exportIds: string[],
+  options: {
+    includeCoverLetter?: boolean;
+    includeRightOfReview?: boolean;
+    includeChainOfCustody?: boolean;
+    generatedBy?: string;
+  },
+) {
+  const caseData = await prisma.case.findUniqueOrThrow({ where: { id: caseId } });
+
+  // Build the manifest that will be included in each batch
+  const manifest = {
+    caseReference: caseData.reference,
+    totalBatches: docBatches.length,
+    generatedAt: new Date().toISOString(),
+    generatedBy: options.generatedBy ?? "System",
+    batches: docBatches.map((batch, i) => ({
+      batchNumber: i + 1,
+      filename: `${caseData.reference}_batch_${i + 1}.zip`,
+      documents: batch.map((d) => d.name),
+      pageCount: batch.reduce((s, d) => s + d.pageCount, 0),
+    })),
+  };
+
+  for (let i = 0; i < docBatches.length; i++) {
+    const batch = docBatches[i];
+    const exportId = exportIds[i];
+
+    // Update batch status
+    const currentProgress = getBatchExportProgress(batchGroupId);
+    if (currentProgress) {
+      currentProgress.batches[i].status = "generating";
+      currentProgress.currentStep = `Generating batch ${i + 1} of ${docBatches.length}`;
+      currentProgress.progress = Math.round((i / docBatches.length) * 100);
+      batchProgressStore.set(batchGroupId, { ...currentProgress });
+    }
+
+    // Use the standard export pipeline for each batch, injecting the manifest
+    setProgress(exportId, {
+      status: "generating",
+      progress: 0,
+      currentStep: `Batch ${i + 1}: Preparing export`,
+    });
+
+    try {
+      await doGenerate(exportId, caseId, packageType, {
+        ...options,
+        documentIds: batch.map((d) => d.id),
+      });
+
+      // After generation, read the exported zip and inject manifest
+      // The doGenerate function stores the result with setProgress, so we can read it
+      const exportProgress = getExportProgress(exportId);
+
+      // Update batch entry with results
+      const batchProgress = getBatchExportProgress(batchGroupId);
+      if (batchProgress) {
+        batchProgress.batches[i].status = "complete";
+        batchProgress.batches[i].downloadKey = exportProgress?.downloadKey;
+        batchProgress.batches[i].sha256 = exportProgress?.sha256;
+        batchProgress.batches[i].filename = exportProgress?.filename
+          ? exportProgress.filename.replace(".zip", `_batch_${i + 1}.zip`)
+          : `${caseData.reference}_batch_${i + 1}.zip`;
+        batchProgressStore.set(batchGroupId, { ...batchProgress });
+      }
+    } catch (err) {
+      const batchProgress = getBatchExportProgress(batchGroupId);
+      if (batchProgress) {
+        batchProgress.batches[i].status = "error";
+        batchProgressStore.set(batchGroupId, { ...batchProgress });
+      }
+      console.error(`Batch ${i + 1} failed:`, err);
+    }
+  }
+
+  // Store manifest in each batch's storage location
+  const storage = getStorage();
+  const manifestBuffer = Buffer.from(JSON.stringify(manifest, null, 2), "utf-8");
+  for (let i = 0; i < exportIds.length; i++) {
+    const ep = getExportProgress(exportIds[i]);
+    if (ep?.downloadKey) {
+      const manifestKey = ep.downloadKey.replace(/[^/]+\.zip$/, "export-manifest.json");
+      try {
+        await storage.upload(manifestKey, manifestBuffer, "application/json");
+      } catch {
+        // Non-critical — manifest storage is best-effort
+      }
+    }
+  }
+
+  // Mark overall batch export as complete
+  setBatchProgress(batchGroupId, {
+    status: "complete",
+    progress: 100,
+    currentStep: "Batch export complete",
+  });
+}
+
+/**
+ * For single-export batches, poll the underlying export progress
+ * and mirror it into the batch progress store.
+ */
+function pollSingleExportForBatch(batchGroupId: string, exportId: string) {
+  const interval = setInterval(() => {
+    const ep = getExportProgress(exportId);
+    if (!ep) return;
+
+    const bp = getBatchExportProgress(batchGroupId);
+    if (!bp) { clearInterval(interval); return; }
+
+    bp.progress = ep.progress;
+    bp.currentStep = ep.currentStep;
+
+    if (ep.status === "complete") {
+      bp.status = "complete";
+      bp.batches[0].status = "complete";
+      bp.batches[0].downloadKey = ep.downloadKey;
+      bp.batches[0].sha256 = ep.sha256;
+      bp.batches[0].filename = ep.filename;
+      batchProgressStore.set(batchGroupId, { ...bp });
+      clearInterval(interval);
+    } else if (ep.status === "error") {
+      bp.status = "error";
+      bp.error = ep.error;
+      bp.batches[0].status = "error";
+      batchProgressStore.set(batchGroupId, { ...bp });
+      clearInterval(interval);
+    } else {
+      batchProgressStore.set(batchGroupId, { ...bp });
+    }
+  }, 1000);
+}
+
 /**
  * Assemble a ZIP buffer from named parts.
  */

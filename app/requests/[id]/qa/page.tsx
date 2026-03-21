@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getCase } from "@/lib/data/cases";
 import { getDocumentsForCase } from "@/lib/data/documents";
 import { getWithholdingItems } from "@/lib/data/detections";
+import { getQASimulation } from "@/lib/data/qa-simulation";
 import { prisma } from "@/lib/db/prisma";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeForCase } from "@/lib/auth/authorize";
@@ -16,10 +17,11 @@ export default async function QAPage({
   const user = await requireUser();
   await authorizeForCase(user, id);
 
-  const [caseData, documents, withholdingItems] = await Promise.all([
+  const [caseData, documents, withholdingItems, simulation] = await Promise.all([
     getCase(id),
     getDocumentsForCase(id),
     getWithholdingItems(id),
+    getQASimulation(id),
   ]);
 
   if (!caseData) {
@@ -84,6 +86,7 @@ export default async function QAPage({
         detail: verificationAudit.detail ?? "",
         checkedAt: verificationAudit.timestamp.toISOString(),
       } : null}
+      simulation={simulation}
     />
   );
 }

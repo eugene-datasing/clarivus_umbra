@@ -8,7 +8,11 @@ import {
   XCircle,
   Shield,
   ArrowLeft,
+  Eye,
+  FileText,
+  BarChart3,
 } from "lucide-react";
+import type { SimulationResult } from "@/lib/data/qa-simulation";
 
 interface QAItem {
   label: string;
@@ -58,6 +62,7 @@ interface QAClientProps {
   pendingDetections: number;
   processedDocCount: number;
   verificationResult: VerificationData | null;
+  simulation: SimulationResult;
 }
 
 const statusIcon = {
@@ -229,7 +234,7 @@ function buildQAGroups(
   ];
 }
 
-export default function QAClient({ requestId, caseData, documents, withholdingItems, s7Stats, pendingDetections, processedDocCount, verificationResult }: QAClientProps) {
+export default function QAClient({ requestId, caseData, documents, withholdingItems, s7Stats, pendingDetections, processedDocCount, verificationResult, simulation }: QAClientProps) {
   const qaGroups = buildQAGroups(caseData, documents, withholdingItems, s7Stats, pendingDetections, processedDocCount, verificationResult);
 
   const caseReference = caseData?.reference ?? "Unknown";
@@ -330,6 +335,204 @@ export default function QAClient({ requestId, caseData, documents, withholdingIt
         >
           Proceed to Export
         </Link>
+      </div>
+
+      {/* ------------------------------------------------------------------ */}
+      {/*  Simulate Release Section                                           */}
+      {/* ------------------------------------------------------------------ */}
+      <div className="card mb-6">
+        <div className="flex items-center gap-3 mb-5">
+          <Eye className="w-5 h-5 text-brand-primary" />
+          <div>
+            <h2 className="text-sm font-semibold text-txt-primary">
+              Release Simulation
+            </h2>
+            <p className="text-[11px] text-txt-secondary mt-0.5">
+              Preview what the requester will receive, including redacted documents and withholding schedule
+            </p>
+          </div>
+        </div>
+
+        {/* Stats overview */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+          <div className="bg-surface-bg rounded-lg p-3 text-center">
+            <div className="text-lg font-heading font-bold text-txt-primary">
+              {simulation.releasedDocuments.length}
+            </div>
+            <div className="text-[11px] text-txt-secondary">Documents</div>
+          </div>
+          <div className="bg-surface-bg rounded-lg p-3 text-center">
+            <div className="text-lg font-heading font-bold text-txt-primary">
+              {simulation.totalPages}
+            </div>
+            <div className="text-[11px] text-txt-secondary">Total Pages</div>
+          </div>
+          <div className="bg-surface-bg rounded-lg p-3 text-center">
+            <div className="text-lg font-heading font-bold text-txt-primary">
+              {simulation.totalRedactions}
+            </div>
+            <div className="text-[11px] text-txt-secondary">Redactions Applied</div>
+          </div>
+          <div className="bg-surface-bg rounded-lg p-3 text-center">
+            <div className="text-lg font-heading font-bold text-brand-primary">
+              {simulation.percentageRedacted}%
+            </div>
+            <div className="text-[11px] text-txt-secondary">Pages Affected</div>
+          </div>
+        </div>
+
+        {/* Simulation warnings */}
+        {simulation.warnings.length > 0 && (
+          <div className="mb-5">
+            <h3 className="text-xs font-semibold tracking-wider text-txt-secondary uppercase mb-3">
+              Warnings ({simulation.warnings.length})
+            </h3>
+            <div className="space-y-2">
+              {simulation.warnings.map((warning, idx) => {
+                const isError = warning.type === "no-ground" || warning.type === "pending-detections";
+                const bgColor = isError ? "bg-red-50" : "bg-amber-50";
+                const iconColor = isError ? "text-confidence-low" : "text-confidence-medium";
+                const WarnIcon = isError ? XCircle : AlertTriangle;
+                return (
+                  <div
+                    key={idx}
+                    className={`flex items-start gap-3 px-4 py-2.5 rounded-lg ${bgColor}`}
+                  >
+                    <WarnIcon className={`w-4 h-4 flex-shrink-0 mt-0.5 ${iconColor}`} />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs font-medium text-txt-primary">
+                        {warning.documentName}
+                      </span>
+                      <span className="text-xs text-txt-secondary ml-2">
+                        {warning.message}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {simulation.warnings.length === 0 && (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-green-50 mb-5">
+            <CheckCircle className="w-4 h-4 text-confidence-high" />
+            <span className="text-xs text-txt-primary font-medium">
+              No warnings -- all documents are ready for release
+            </span>
+          </div>
+        )}
+
+        {/* Document-by-document release preview */}
+        <div className="mb-5">
+          <h3 className="text-xs font-semibold tracking-wider text-txt-secondary uppercase mb-3">
+            Document Release Preview
+          </h3>
+          <div className="border border-border rounded-lg overflow-hidden">
+            <div className="grid grid-cols-[1fr,80px,80px,80px,80px] gap-2 px-4 py-2 bg-surface-bg text-[10px] font-semibold text-txt-secondary uppercase tracking-wide">
+              <div>Document</div>
+              <div className="text-center">Pages</div>
+              <div className="text-center">Redacted</div>
+              <div className="text-center">Redactions</div>
+              <div className="text-center">Status</div>
+            </div>
+            <div className="divide-y divide-border">
+              {simulation.releasedDocuments.map((doc, idx) => {
+                const hasWarnings = simulation.warnings.some(
+                  (w) => w.documentName === doc.name,
+                );
+                const hasErrors = simulation.warnings.some(
+                  (w) =>
+                    w.documentName === doc.name &&
+                    (w.type === "no-ground" || w.type === "pending-detections"),
+                );
+                return (
+                  <div
+                    key={idx}
+                    className="grid grid-cols-[1fr,80px,80px,80px,80px] gap-2 px-4 py-2.5 items-center hover:bg-surface-hover transition-colors"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="w-3.5 h-3.5 text-txt-secondary flex-shrink-0" />
+                      <span className="text-xs text-txt-primary truncate">
+                        {doc.name}
+                      </span>
+                      {doc.hasFullWithholding && (
+                        <span className="badge bg-red-100 text-red-700 text-[9px] flex-shrink-0">
+                          Full withhold
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-txt-secondary text-center">
+                      {doc.originalPages}
+                    </div>
+                    <div className="text-xs text-txt-secondary text-center">
+                      {doc.redactedPages}
+                    </div>
+                    <div className="text-xs text-txt-secondary text-center">
+                      {doc.redactionCount}
+                    </div>
+                    <div className="flex justify-center">
+                      {hasErrors ? (
+                        <XCircle className="w-4 h-4 text-confidence-low" />
+                      ) : hasWarnings ? (
+                        <AlertTriangle className="w-4 h-4 text-confidence-medium" />
+                      ) : (
+                        <CheckCircle className="w-4 h-4 text-confidence-high" />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Withholding schedule preview */}
+        <div>
+          <h3 className="text-xs font-semibold tracking-wider text-txt-secondary uppercase mb-3">
+            Withholding Schedule Preview
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="bg-surface-bg rounded-lg p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <BarChart3 className="w-4 h-4 text-brand-primary" />
+                <span className="text-xs font-medium text-txt-primary">
+                  Schedule Entries
+                </span>
+              </div>
+              <div className="text-lg font-heading font-bold text-txt-primary">
+                {simulation.withholdingScheduleEntries}
+              </div>
+              <div className="text-[11px] text-txt-secondary mt-0.5">
+                items with statutory grounds
+              </div>
+            </div>
+            <div className="bg-surface-bg rounded-lg p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Shield className="w-4 h-4 text-brand-primary" />
+                <span className="text-xs font-medium text-txt-primary">
+                  Grounds Used
+                </span>
+              </div>
+              {simulation.groundsUsed.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {simulation.groundsUsed.map((ground) => (
+                    <span
+                      key={ground}
+                      className="badge bg-brand-primary/10 text-brand-primary text-[10px]"
+                    >
+                      {ground}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-txt-secondary mt-1">
+                  No withholding grounds applied yet
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

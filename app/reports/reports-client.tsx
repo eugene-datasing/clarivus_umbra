@@ -14,6 +14,8 @@ import {
   Users,
   ArrowUpRight,
   ArrowDownRight,
+  X,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SummaryStats, GroundUsageItem, RecentExport } from "@/lib/data/reports";
@@ -28,9 +30,19 @@ const reportTemplates = [
   { name: "AI Detection Accuracy", description: "False positive/negative rates, model governance metrics, and confidence score distributions.", icon: TrendingUp, format: "PDF" },
   { name: "Chain of Custody Report", description: "Immutable audit trail export — user actions, timestamps, and document access history.", icon: FileText, format: "CSV/PDF" },
   { name: "Reviewer Workload Analysis", description: "Cases per reviewer, average review time, approval rates, and queue depth over time.", icon: Users, format: "PDF" },
-  { name: "Cost Recovery Report", description: "Processing costs, time allocation, and charge-back calculations per LGOIMA request.", icon: PieChart, format: "XLSX" },
+  { name: "Cost Recovery Report", description: "Processing costs, time allocation, and charge-back calculations per LGOIMA request.", icon: PieChart, format: "PDF", actionable: true },
   { name: "Withholding Schedule Export", description: "Consolidated withholding schedules with statutory grounds and reasoning for Ombudsman review.", icon: Calendar, format: "PDF" },
 ];
+
+/* -------------------------------------------------------------------------- */
+/*  Types                                                                      */
+/* -------------------------------------------------------------------------- */
+
+export interface CaseOption {
+  id: string;
+  reference: string;
+  requesterName: string;
+}
 
 /* -------------------------------------------------------------------------- */
 /*  Props                                                                      */
@@ -41,6 +53,7 @@ interface ReportsClientProps {
   groundUsage: GroundUsageItem[];
   recentExports: RecentExport[];
   aiMetrics: AIMetrics;
+  cases: CaseOption[];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -52,8 +65,12 @@ export default function ReportsClient({
   groundUsage,
   recentExports,
   aiMetrics,
+  cases,
 }: ReportsClientProps) {
   const [activeSection, setActiveSection] = useState<"templates" | "recent">("templates");
+  const [costRecoveryOpen, setCostRecoveryOpen] = useState(false);
+  const [selectedCaseId, setSelectedCaseId] = useState("");
+  const [generating, setGenerating] = useState(false);
 
   const summaryCards = [
     {
@@ -195,8 +212,13 @@ export default function ReportsClient({
             <div className="divide-y divide-border">
               {reportTemplates.map((tpl) => {
                 const TplIcon = tpl.icon;
+                const isCostRecovery = tpl.name === "Cost Recovery Report";
                 return (
-                  <div key={tpl.name} className="flex items-center gap-4 px-4 py-3 hover:bg-surface-hover transition-colors cursor-pointer">
+                  <div
+                    key={tpl.name}
+                    className="flex items-center gap-4 px-4 py-3 hover:bg-surface-hover transition-colors cursor-pointer"
+                    onClick={isCostRecovery ? () => setCostRecoveryOpen(true) : undefined}
+                  >
                     <div className="w-9 h-9 rounded-lg bg-surface-bg flex items-center justify-center shrink-0">
                       <TplIcon size={16} className="text-txt-secondary" />
                     </div>
@@ -205,7 +227,11 @@ export default function ReportsClient({
                       <p className="text-[11px] text-txt-secondary mt-0.5 line-clamp-1">{tpl.description}</p>
                     </div>
                     <span className="badge bg-gray-100 text-txt-secondary text-[10px]">{tpl.format}</span>
-                    <button className="btn-ghost p-1.5 shrink-0" title="Generate report">
+                    <button
+                      className="btn-ghost p-1.5 shrink-0"
+                      title="Generate report"
+                      onClick={isCostRecovery ? (e) => { e.stopPropagation(); setCostRecoveryOpen(true); } : undefined}
+                    >
                       <Download size={14} />
                     </button>
                   </div>
@@ -274,6 +300,91 @@ export default function ReportsClient({
           </p>
         </div>
       </div>
+
+      {/* Cost Recovery Report Modal */}
+      {costRecoveryOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
+            <button
+              onClick={() => { setCostRecoveryOpen(false); setSelectedCaseId(""); }}
+              className="absolute top-3 right-3 btn-ghost p-1.5"
+              title="Close"
+            >
+              <X size={16} />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-lg bg-brand-primary/10 flex items-center justify-center">
+                <PieChart size={18} className="text-brand-primary" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-txt-primary">Cost Recovery Report</h3>
+                <p className="text-[11px] text-txt-secondary">Select a case to generate a cost recovery PDF</p>
+              </div>
+            </div>
+
+            <label className="block text-xs font-medium text-txt-primary mb-1.5">
+              Select Case
+            </label>
+            <select
+              value={selectedCaseId}
+              onChange={(e) => setSelectedCaseId(e.target.value)}
+              className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-txt-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/30 mb-4"
+            >
+              <option value="">-- Choose a case --</option>
+              {cases.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.reference} -- {c.requesterName}
+                </option>
+              ))}
+            </select>
+
+            <button
+              disabled={!selectedCaseId || generating}
+              onClick={async () => {
+                if (!selectedCaseId) return;
+                setGenerating(true);
+                try {
+                  const url = `/api/reports/cost-recovery?caseId=${encodeURIComponent(selectedCaseId)}`;
+                  const res = await fetch(url);
+                  if (!res.ok) throw new Error("Failed to generate report");
+                  const blob = await res.blob();
+                  const blobUrl = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = blobUrl;
+                  a.download = "cost-recovery-report.pdf";
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(blobUrl);
+                  setCostRecoveryOpen(false);
+                  setSelectedCaseId("");
+                } catch {
+                  alert("Failed to generate cost recovery report. Please try again.");
+                } finally {
+                  setGenerating(false);
+                }
+              }}
+              className={cn(
+                "w-full btn-primary flex items-center justify-center gap-2",
+                (!selectedCaseId || generating) && "opacity-50 cursor-not-allowed"
+              )}
+            >
+              {generating ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Download size={14} />
+                  Generate PDF
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

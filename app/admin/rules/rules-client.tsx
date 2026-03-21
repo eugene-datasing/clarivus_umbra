@@ -12,7 +12,10 @@ import {
   Trash2,
   ChevronDown,
   ChevronUp,
+  FlaskConical,
+  X,
 } from "lucide-react";
+import { testRule, type RuleTestResult } from "@/lib/rules/rule-tester";
 import {
   createRule,
   updateRule,
@@ -77,6 +80,11 @@ export default function RulesClient({ rules }: RulesClientProps) {
   const [editKeywords, setEditKeywords] = useState("");
   const [editPriority, setEditPriority] = useState("");
   const [editDescription, setEditDescription] = useState("");
+
+  // Test panel state
+  const [testingRule, setTestingRule] = useState<RuleRow | null>(null);
+  const [testSampleText, setTestSampleText] = useState("");
+  const [testResult, setTestResult] = useState<RuleTestResult | null>(null);
 
   const filtered = rules.filter(
     (r) =>
@@ -157,6 +165,70 @@ export default function RulesClient({ rules }: RulesClientProps) {
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleOpenTest(rule: RuleRow) {
+    setTestingRule(rule);
+    setTestSampleText("");
+    setTestResult(null);
+  }
+
+  function handleRunTest() {
+    if (!testingRule || !testSampleText) return;
+    const result = testRule(
+      testingRule.keywords,
+      testingRule.matchMode,
+      testSampleText,
+    );
+    setTestResult(result);
+  }
+
+  function renderHighlightedText(text: string, result: RuleTestResult) {
+    if (result.matches.length === 0) {
+      return <span className="text-txt-secondary">{text}</span>;
+    }
+
+    // Merge overlapping matches and sort
+    const sorted = [...result.matches].sort((a, b) => a.start - b.start);
+    const merged: Array<{ start: number; end: number }> = [];
+    for (const m of sorted) {
+      const last = merged[merged.length - 1];
+      if (last && m.start <= last.end) {
+        last.end = Math.max(last.end, m.end);
+      } else {
+        merged.push({ start: m.start, end: m.end });
+      }
+    }
+
+    const parts: Array<{ text: string; highlight: boolean }> = [];
+    let cursor = 0;
+    for (const m of merged) {
+      if (cursor < m.start) {
+        parts.push({ text: text.slice(cursor, m.start), highlight: false });
+      }
+      parts.push({ text: text.slice(m.start, m.end), highlight: true });
+      cursor = m.end;
+    }
+    if (cursor < text.length) {
+      parts.push({ text: text.slice(cursor), highlight: false });
+    }
+
+    return (
+      <>
+        {parts.map((part, idx) =>
+          part.highlight ? (
+            <mark
+              key={idx}
+              className="bg-amber-200 text-amber-900 px-0.5 rounded"
+            >
+              {part.text}
+            </mark>
+          ) : (
+            <span key={idx}>{part.text}</span>
+          ),
+        )}
+      </>
+    );
   }
 
   return (
@@ -387,6 +459,13 @@ export default function RulesClient({ rules }: RulesClientProps) {
                     <div className="flex items-center justify-end gap-1">
                       <button
                         className="btn-ghost p-1.5"
+                        title="Test rule"
+                        onClick={() => handleOpenTest(rule)}
+                      >
+                        <FlaskConical className="w-4 h-4" />
+                      </button>
+                      <button
+                        className="btn-ghost p-1.5"
                         title="Edit rule"
                         onClick={() => {
                           loadEditForm(rule);
@@ -528,6 +607,155 @@ export default function RulesClient({ rules }: RulesClientProps) {
                 disabled={saving}
               >
                 {saving ? "Saving..." : "Save & Activate"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Test Rule Modal */}
+      {testingRule && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <div>
+                <h3 className="text-lg font-heading font-semibold text-txt-primary">
+                  Test Rule: {testingRule.name}
+                </h3>
+                <div className="flex items-center gap-2 mt-1">
+                  <span
+                    className={cn(
+                      "badge text-xs",
+                      typeBadge[testingRule.type] ?? "bg-gray-100 text-gray-700",
+                    )}
+                  >
+                    {testingRule.type}
+                  </span>
+                  <span className="text-xs text-txt-secondary">
+                    Match mode: {testingRule.matchMode}
+                  </span>
+                  <span className="text-xs font-mono text-txt-secondary bg-gray-50 px-1.5 py-0.5 rounded">
+                    {testingRule.keywords.length > 60
+                      ? testingRule.keywords.slice(0, 60) + "..."
+                      : testingRule.keywords}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setTestingRule(null);
+                  setTestResult(null);
+                  setTestSampleText("");
+                }}
+                className="btn-ghost p-1.5"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal body */}
+            <div className="px-6 py-4 flex-1 overflow-y-auto space-y-4">
+              {/* Sample text input */}
+              <div>
+                <label className="block text-sm font-medium text-txt-primary mb-1.5">
+                  Sample Text
+                </label>
+                <textarea
+                  className="input-field min-h-[120px] font-mono text-xs"
+                  value={testSampleText}
+                  onChange={(e) => {
+                    setTestSampleText(e.target.value);
+                    setTestResult(null);
+                  }}
+                  placeholder="Paste sample text here to test the rule against..."
+                />
+              </div>
+
+              {/* Run test button */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleRunTest}
+                  disabled={!testSampleText.trim()}
+                  className="btn-primary flex items-center gap-2 disabled:opacity-50"
+                >
+                  <FlaskConical className="w-4 h-4" />
+                  Run Test
+                </button>
+                {testResult && (
+                  <span
+                    className={cn(
+                      "text-sm font-medium",
+                      testResult.matchCount > 0
+                        ? "text-amber-700"
+                        : "text-green-700",
+                    )}
+                  >
+                    {testResult.matchCount} match{testResult.matchCount !== 1 ? "es" : ""} found
+                  </span>
+                )}
+              </div>
+
+              {/* Results */}
+              {testResult && (
+                <div className="space-y-4">
+                  {/* Highlighted text preview */}
+                  <div>
+                    <div className="text-xs font-semibold tracking-wider text-txt-secondary uppercase mb-2">
+                      Result Preview
+                    </div>
+                    <div className="p-4 bg-surface-bg rounded-lg text-sm leading-relaxed whitespace-pre-wrap break-words border border-border">
+                      {renderHighlightedText(testSampleText, testResult)}
+                    </div>
+                  </div>
+
+                  {/* Match details */}
+                  {testResult.matchCount > 0 && (
+                    <div>
+                      <div className="text-xs font-semibold tracking-wider text-txt-secondary uppercase mb-2">
+                        Match Details ({testResult.matchCount})
+                      </div>
+                      <div className="max-h-[200px] overflow-y-auto space-y-1">
+                        {testResult.matches.map((match, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-3 px-3 py-1.5 bg-amber-50 rounded text-xs"
+                          >
+                            <span className="font-mono text-amber-600 w-8 text-right flex-shrink-0">
+                              #{idx + 1}
+                            </span>
+                            <span className="font-mono font-medium text-amber-800">
+                              &ldquo;{match.text}&rdquo;
+                            </span>
+                            <span className="text-txt-secondary ml-auto flex-shrink-0">
+                              position {match.start}&ndash;{match.end}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {testResult.matchCount === 0 && (
+                    <div className="text-center py-6 text-sm text-txt-secondary">
+                      No matches found in the sample text.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Modal footer */}
+            <div className="px-6 py-3 border-t border-border flex justify-end">
+              <button
+                onClick={() => {
+                  setTestingRule(null);
+                  setTestResult(null);
+                  setTestSampleText("");
+                }}
+                className="btn-ghost"
+              >
+                Close
               </button>
             </div>
           </div>

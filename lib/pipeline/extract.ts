@@ -22,6 +22,9 @@ import {
   CircuitOpenError,
 } from "@/lib/resilience/azure-services";
 import { extractMsg, emailContentToExtractionResult } from "./email-extract";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ module: "extract" });
 
 // ---------------------------------------------------------------------------
 // Types
@@ -317,20 +320,86 @@ export async function extractText(
           // to "error" status with a clear message.
           throw new OCRUnavailableError(ft);
         }
+        // Classify PDF/image extraction errors for better user messaging
+        const msg = error instanceof Error ? error.message : String(error);
+        log.error("PDF/image extraction failed", { fileType: ft, error: msg });
+        if (msg.includes("Invalid PDF") || msg.includes("invalid pdf")) {
+          throw new ExtractionCorruptionError(
+            `The ${ft} file is invalid and could not be parsed. It may be corrupted, truncated, or not a genuine ${ft} file.`,
+          );
+        }
+        if (msg.includes("password") || msg.includes("encrypted")) {
+          throw new ExtractionCorruptionError(
+            `The ${ft} file is password-protected or encrypted. Please remove the password protection and re-upload.`,
+          );
+        }
+        if (msg.includes("corrupted") || msg.includes("corrupt")) {
+          throw new ExtractionCorruptionError(
+            `The ${ft} file appears to be corrupted and cannot be read. Please try re-exporting or re-saving the original file.`,
+          );
+        }
         throw error;
       }
 
     case "DOCX":
-      return extractFromDocx(buffer);
+      try {
+        return await extractFromDocx(buffer);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        log.error("DOCX extraction failed", { error: msg });
+        if (msg.includes("Could not find file") || msg.includes("corrupt") || msg.includes("End of data")) {
+          throw new ExtractionCorruptionError(
+            "The DOCX file is corrupted or has an invalid internal structure. Please try re-saving the document in Microsoft Word and re-uploading.",
+          );
+        }
+        if (msg.includes("password") || msg.includes("encrypted")) {
+          throw new ExtractionCorruptionError(
+            "The DOCX file is password-protected. Please remove the password protection and re-upload.",
+          );
+        }
+        throw error;
+      }
 
     case "XLSX":
-      return extractFromXlsx(buffer);
+      try {
+        return await extractFromXlsx(buffer);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        log.error("XLSX extraction failed", { error: msg });
+        if (msg.includes("cfb") || msg.includes("corrupt") || msg.includes("invalid") || msg.includes("Unexpected")) {
+          throw new ExtractionCorruptionError(
+            "The XLSX file is corrupted or has an invalid internal structure. Please try re-saving the spreadsheet in Microsoft Excel and re-uploading.",
+          );
+        }
+        if (msg.includes("password") || msg.includes("encrypted")) {
+          throw new ExtractionCorruptionError(
+            "The XLSX file is password-protected. Please remove the password protection and re-upload.",
+          );
+        }
+        throw error;
+      }
 
     case "EML":
-      return extractFromEmail(buffer);
+      try {
+        return await extractFromEmail(buffer);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        log.error("EML extraction failed", { error: msg });
+        throw new ExtractionCorruptionError(
+          `The EML file could not be parsed. It may be corrupted or in an unsupported encoding. Details: ${msg.slice(0, 200)}`,
+        );
+      }
 
     case "MSG":
-      return extractFromMsgFile(buffer);
+      try {
+        return await extractFromMsgFile(buffer);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        log.error("MSG extraction failed", { error: msg });
+        throw new ExtractionCorruptionError(
+          `The MSG file could not be parsed. It may be corrupted or in an unsupported format. Details: ${msg.slice(0, 200)}`,
+        );
+      }
 
     case "TXT":
       return extractFromText(buffer);
@@ -342,6 +411,22 @@ export async function extractText(
 
     default:
       throw new Error(`Unsupported file type for text extraction: ${fileType}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Custom error for extraction-time corruption detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Thrown when a file that passed initial upload validation fails during
+ * content extraction due to corruption, password protection, or structural
+ * issues detected by the extraction library.
+ */
+export class ExtractionCorruptionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ExtractionCorruptionError";
   }
 }
 
