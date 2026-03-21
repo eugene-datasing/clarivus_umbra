@@ -21,6 +21,7 @@ import { detectPatterns } from "./patterns";
 import { detectWithAI } from "./ai-detect";
 import { detectDuplicates } from "./duplicate-detect";
 import { executeCustomRules } from "./custom-rules";
+import { calculateBBox } from "./bbox";
 import { buildContent } from "./content-builder";
 import { buildFeedbackPromptSection } from "./feedback-examples";
 import { createAuditEntry } from "@/lib/data/audit";
@@ -223,6 +224,20 @@ export async function processDocument(docId: string): Promise<void> {
     }
 
     // ------------------------------------------------------------------
+    // 5.6 Build page layout lookup for bounding box calculation
+    // ------------------------------------------------------------------
+    const pageLayouts = new Map<number, { words: Array<{ text: string; confidence: number; polygon?: number[] }>; width?: number; height?: number }>();
+    for (const page of extraction.pages) {
+      if (page.words) {
+        pageLayouts.set(page.pageNumber, {
+          words: page.words,
+          width: page.width,
+          height: page.height,
+        });
+      }
+    }
+
+    // ------------------------------------------------------------------
     // 6. Pattern detection
     // ------------------------------------------------------------------
     console.log("[pipeline] Running pattern detection...");
@@ -273,6 +288,10 @@ export async function processDocument(docId: string): Promise<void> {
     // Store pattern detections
     const patternDetectionRecords = [];
     for (const match of patternMatches) {
+      const layout = pageLayouts.get(match.page);
+      const bbox = layout
+        ? calculateBBox(match.text, layout.words, layout.width, layout.height)
+        : { posX: 0, posY: 0, posW: 0, posH: 0 };
       const record = await prisma.detection.create({
         data: {
           documentId: docId,
@@ -286,6 +305,7 @@ export async function processDocument(docId: string): Promise<void> {
           aiExplanation: `Pattern-detected ${match.type}. ${match.reasoning}`,
           source: "pattern",
           status: "pending",
+          ...bbox,
         },
       });
       patternDetectionRecords.push(record);
@@ -294,6 +314,10 @@ export async function processDocument(docId: string): Promise<void> {
     // Store AI detections
     const aiDetectionRecords = [];
     for (const det of aiDetections) {
+      const layout = pageLayouts.get(det.page);
+      const bbox = layout
+        ? calculateBBox(det.text, layout.words, layout.width, layout.height)
+        : { posX: 0, posY: 0, posW: 0, posH: 0 };
       const record = await prisma.detection.create({
         data: {
           documentId: docId,
@@ -307,6 +331,7 @@ export async function processDocument(docId: string): Promise<void> {
           aiExplanation: det.aiExplanation,
           source: "ai",
           status: "pending",
+          ...bbox,
         },
       });
       aiDetectionRecords.push(record);
@@ -315,6 +340,10 @@ export async function processDocument(docId: string): Promise<void> {
     // Store custom rule detections
     const customRuleRecords = [];
     for (const crm of customRuleMatches) {
+      const layout = pageLayouts.get(crm.page);
+      const bbox = layout
+        ? calculateBBox(crm.text, layout.words, layout.width, layout.height)
+        : { posX: 0, posY: 0, posW: 0, posH: 0 };
       const record = await prisma.detection.create({
         data: {
           documentId: docId,
@@ -328,6 +357,7 @@ export async function processDocument(docId: string): Promise<void> {
           aiExplanation: `Custom rule: ${crm.ruleName}. ${crm.reasoning}`,
           source: "custom-rule",
           status: "pending",
+          ...bbox,
         },
       });
       customRuleRecords.push(record);

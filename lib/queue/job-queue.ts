@@ -1,10 +1,12 @@
 /**
- * In-process job queue for document processing with concurrency control,
+ * Database-backed job queue for document processing with concurrency control,
  * progress tracking, and automatic retry.
  *
- * Uses globalThis to survive HMR in development.
+ * Jobs are persisted in the `processing_jobs` table so state survives restarts.
+ * The in-process runner uses globalThis to avoid duplicate pollers during HMR.
  */
 
+import { prisma } from "@/lib/db/prisma";
 import { processDocument } from "@/lib/pipeline/process";
 
 // ---------------------------------------------------------------------------
@@ -46,168 +48,252 @@ export function getProcessingQueue(): ProcessingQueue {
 // ---------------------------------------------------------------------------
 
 class ProcessingQueue {
-  private jobs = new Map<string, JobInfo>();
-  private pending: string[] = [];
   private active = new Set<string>();
   private concurrency: number;
   private maxAttempts: number;
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
 
+  /** Poll interval for picking up queued jobs (seconds). */
+  private static readonly POLL_INTERVAL_MS = 3_000;
   /** Time after which completed/errored jobs are purged (15 minutes). */
   private static readonly JOB_TTL_MS = 15 * 60 * 1000;
-  /** Cleanup interval (5 minutes). */
-  private static readonly CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
   constructor(concurrency = 2, maxAttempts = 3) {
     this.concurrency = concurrency;
     this.maxAttempts = maxAttempts;
-
-    // Periodically purge finished jobs to prevent unbounded memory growth
-    const cleanup = setInterval(() => this.purgeFinishedJobs(), ProcessingQueue.CLEANUP_INTERVAL_MS);
-    if (typeof cleanup === "object" && "unref" in cleanup) cleanup.unref();
+    this.startPoller();
+    // Recover any jobs that were "processing" when the process last exited.
+    this.recoverStaleJobs();
   }
 
-  /**
-   * Remove completed and errored jobs older than JOB_TTL_MS.
-   */
-  private purgeFinishedJobs(): void {
-    const cutoff = Date.now() - ProcessingQueue.JOB_TTL_MS;
-    for (const [docId, job] of this.jobs) {
-      if (
-        (job.status === "complete" || job.status === "error") &&
-        job.completedAt &&
-        job.completedAt < cutoff
-      ) {
-        this.jobs.delete(docId);
-      }
-    }
-  }
+  // -------------------------------------------------------------------------
+  // Public API
+  // -------------------------------------------------------------------------
 
   /**
-   * Enqueue a document for processing. If the document is already in the
-   * queue (queued or processing), this is a no-op.
+   * Enqueue a document for processing. If it already has an active job
+   * (queued or processing), returns the existing job info.
    */
-  enqueue(docId: string): JobInfo {
-    const existing = this.jobs.get(docId);
-    if (existing && (existing.status === "queued" || existing.status === "processing")) {
-      return existing;
+  async enqueue(docId: string): Promise<JobInfo> {
+    // Check for existing active job
+    const existing = await prisma.processingJob.findFirst({
+      where: {
+        docId,
+        status: { in: ["queued", "processing"] },
+      },
+    });
+
+    if (existing) {
+      return this.toJobInfo(existing);
     }
 
-    const job: JobInfo = {
-      docId,
-      status: "queued",
-      step: "Waiting in queue",
-      progress: 0,
-      attempt: 0,
-      maxAttempts: this.maxAttempts,
-      enqueuedAt: Date.now(),
-    };
+    const job = await prisma.processingJob.create({
+      data: {
+        docId,
+        status: "queued",
+        step: "Waiting in queue",
+        progress: 0,
+        attempt: 0,
+        maxAttempts: this.maxAttempts,
+      },
+    });
 
-    this.jobs.set(docId, job);
-    this.pending.push(docId);
+    // Kick the drain loop immediately instead of waiting for next poll
     this.drain();
 
-    return job;
+    return this.toJobInfo(job);
   }
 
   /**
-   * Get the current status of a single job.
+   * Get the current status of a single job (most recent for this docId).
    */
-  getJob(docId: string): JobInfo | null {
-    return this.jobs.get(docId) ?? null;
+  async getJob(docId: string): Promise<JobInfo | null> {
+    const job = await prisma.processingJob.findFirst({
+      where: { docId },
+      orderBy: { enqueuedAt: "desc" },
+    });
+    return job ? this.toJobInfo(job) : null;
   }
 
   /**
-   * Get the status of all jobs (optionally filtered by docIds).
+   * Get the status of all recent jobs (optionally filtered by docIds).
    */
-  getAllJobs(docIds?: string[]): JobInfo[] {
-    if (docIds) {
-      return docIds
-        .map((id) => this.jobs.get(id))
-        .filter((j): j is JobInfo => j !== undefined);
-    }
-    return Array.from(this.jobs.values());
+  async getAllJobs(docIds?: string[]): Promise<JobInfo[]> {
+    const where = docIds ? { docId: { in: docIds } } : {};
+    const jobs = await prisma.processingJob.findMany({
+      where,
+      orderBy: { enqueuedAt: "desc" },
+    });
+
+    // Deduplicate: if a docId appears multiple times, keep the most recent
+    const seen = new Set<string>();
+    const deduped = jobs.filter((j) => {
+      if (seen.has(j.docId)) return false;
+      seen.add(j.docId);
+      return true;
+    });
+
+    return deduped.map((j) => this.toJobInfo(j));
   }
 
   /**
    * Get queue statistics.
    */
-  getStats(): {
+  async getStats(): Promise<{
     queued: number;
     processing: number;
     complete: number;
     error: number;
     concurrency: number;
-  } {
-    let queued = 0;
-    let processing = 0;
-    let complete = 0;
-    let error = 0;
+  }> {
+    const counts = await prisma.processingJob.groupBy({
+      by: ["status"],
+      _count: true,
+    });
 
-    for (const job of this.jobs.values()) {
-      switch (job.status) {
-        case "queued": queued++; break;
-        case "processing": processing++; break;
-        case "complete": complete++; break;
-        case "error": error++; break;
+    const result = { queued: 0, processing: 0, complete: 0, error: 0, concurrency: this.concurrency };
+    for (const row of counts) {
+      const key = row.status as keyof typeof result;
+      if (key in result && key !== "concurrency") {
+        result[key] = row._count;
       }
     }
-
-    return { queued, processing, complete, error, concurrency: this.concurrency };
+    return result;
   }
 
   // -------------------------------------------------------------------------
   // Internal
   // -------------------------------------------------------------------------
 
-  private drain(): void {
-    while (this.active.size < this.concurrency && this.pending.length > 0) {
-      const docId = this.pending.shift()!;
-      this.runJob(docId);
+  private toJobInfo(job: {
+    docId: string;
+    status: string;
+    step: string;
+    progress: number;
+    attempt: number;
+    maxAttempts: number;
+    error: string | null;
+    enqueuedAt: Date;
+    startedAt: Date | null;
+    completedAt: Date | null;
+  }): JobInfo {
+    return {
+      docId: job.docId,
+      status: job.status as JobStatus,
+      step: job.step,
+      progress: job.progress,
+      attempt: job.attempt,
+      maxAttempts: job.maxAttempts,
+      error: job.error ?? undefined,
+      enqueuedAt: job.enqueuedAt.getTime(),
+      startedAt: job.startedAt?.getTime(),
+      completedAt: job.completedAt?.getTime(),
+    };
+  }
+
+  private startPoller(): void {
+    if (this.pollTimer) return;
+    this.pollTimer = setInterval(() => {
+      this.drain();
+      this.purgeFinishedJobs();
+    }, ProcessingQueue.POLL_INTERVAL_MS);
+    if (typeof this.pollTimer === "object" && "unref" in this.pollTimer) {
+      this.pollTimer.unref();
     }
   }
 
-  private async runJob(docId: string): Promise<void> {
-    const job = this.jobs.get(docId);
-    if (!job) return;
+  /**
+   * On startup, reset any "processing" jobs back to "queued" so they get
+   * retried. This handles the case where the process crashed mid-job.
+   */
+  private async recoverStaleJobs(): Promise<void> {
+    try {
+      const result = await prisma.processingJob.updateMany({
+        where: { status: "processing" },
+        data: { status: "queued", step: "Retrying after restart" },
+      });
+      if (result.count > 0) {
+        console.log(`[queue] Recovered ${result.count} stale processing job(s)`);
+        this.drain();
+      }
+    } catch (err) {
+      console.error("[queue] Failed to recover stale jobs:", err);
+    }
+  }
 
-    this.active.add(docId);
-    job.status = "processing";
-    job.attempt++;
-    job.startedAt = Date.now();
-    job.step = "Starting processing";
-    job.progress = 5;
+  private async drain(): Promise<void> {
+    while (this.active.size < this.concurrency) {
+      const nextJob = await prisma.processingJob.findFirst({
+        where: { status: "queued" },
+        orderBy: { enqueuedAt: "asc" },
+      });
 
+      if (!nextJob) break;
+
+      // Optimistic claim: set to "processing" so other pollers skip it
+      const claimed = await prisma.processingJob.updateMany({
+        where: { id: nextJob.id, status: "queued" },
+        data: {
+          status: "processing",
+          attempt: { increment: 1 },
+          startedAt: new Date(),
+          step: "Starting processing",
+          progress: 5,
+        },
+      });
+
+      if (claimed.count === 0) continue; // Another poller claimed it
+
+      this.active.add(nextJob.docId);
+      this.runJob(nextJob.id, nextJob.docId);
+    }
+  }
+
+  private async runJob(jobId: string, docId: string): Promise<void> {
     try {
       await processDocument(docId);
 
-      job.status = "complete";
-      job.step = "Processing complete";
-      job.progress = 100;
-      job.completedAt = Date.now();
+      await prisma.processingJob.update({
+        where: { id: jobId },
+        data: {
+          status: "complete",
+          step: "Processing complete",
+          progress: 100,
+          completedAt: new Date(),
+        },
+      });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
 
-      if (job.attempt < job.maxAttempts && this.isRetryable(errorMessage)) {
+      // Re-read job to get current attempt count
+      const job = await prisma.processingJob.findUnique({ where: { id: jobId } });
+
+      if (job && job.attempt < job.maxAttempts && this.isRetryable(errorMessage)) {
         console.warn(
           `[queue] Job ${docId} failed (attempt ${job.attempt}/${job.maxAttempts}), retrying: ${errorMessage}`,
         );
-        job.status = "queued";
-        job.step = `Retrying (attempt ${job.attempt + 1})`;
-        job.progress = 0;
-        this.active.delete(docId);
-        this.pending.push(docId);
-        this.drain();
-        return;
+        await prisma.processingJob.update({
+          where: { id: jobId },
+          data: {
+            status: "queued",
+            step: `Retrying (attempt ${job.attempt + 1})`,
+            progress: 0,
+          },
+        });
+      } else {
+        console.error(
+          `[queue] Job ${docId} failed permanently after ${job?.attempt ?? "?"} attempt(s): ${errorMessage}`,
+        );
+        await prisma.processingJob.update({
+          where: { id: jobId },
+          data: {
+            status: "error",
+            step: "Processing failed",
+            error: errorMessage,
+            completedAt: new Date(),
+          },
+        });
       }
-
-      job.status = "error";
-      job.step = "Processing failed";
-      job.error = errorMessage;
-      job.completedAt = Date.now();
-
-      console.error(
-        `[queue] Job ${docId} failed permanently after ${job.attempt} attempt(s): ${errorMessage}`,
-      );
     }
 
     this.active.delete(docId);
@@ -227,5 +313,22 @@ class ProcessingQueue {
     ];
     const lower = error.toLowerCase();
     return transientPatterns.some((p) => lower.includes(p.toLowerCase()));
+  }
+
+  /**
+   * Remove completed and errored jobs older than JOB_TTL_MS.
+   */
+  private async purgeFinishedJobs(): Promise<void> {
+    try {
+      const cutoff = new Date(Date.now() - ProcessingQueue.JOB_TTL_MS);
+      await prisma.processingJob.deleteMany({
+        where: {
+          status: { in: ["complete", "error"] },
+          completedAt: { lt: cutoff },
+        },
+      });
+    } catch {
+      // Non-critical — will retry on next interval
+    }
   }
 }

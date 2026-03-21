@@ -14,6 +14,7 @@ import { verifyRedactedPdf, type VerificationResult } from "./verify-redaction";
 import { buildWithholdingSchedule } from "./schedule";
 import { buildCoverLetterPdf } from "./cover-letter";
 import { buildAuditTrailPdf } from "./audit-pdf";
+import { buildChainOfCustodyReport } from "./chain-of-custody";
 import { sanitiseMetadata } from "./sanitise-metadata";
 
 export type PackageType = "requester" | "internal" | "ombudsman";
@@ -63,7 +64,9 @@ export async function generateExportPackage(
   options: {
     includeCoverLetter?: boolean;
     includeRightOfReview?: boolean;
+    includeChainOfCustody?: boolean;
     documentIds?: string[];
+    generatedBy?: string;
   } = {},
 ): Promise<string> {
   const exportId = `exp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -93,7 +96,9 @@ async function doGenerate(
   options: {
     includeCoverLetter?: boolean;
     includeRightOfReview?: boolean;
+    includeChainOfCustody?: boolean;
     documentIds?: string[];
+    generatedBy?: string;
   },
 ) {
   const caseData = await prisma.case.findUniqueOrThrow({ where: { id: caseId } });
@@ -192,6 +197,19 @@ async function doGenerate(
     });
     const auditPdf = await buildAuditTrailPdf(caseId);
     zipParts.push({ name: `audit_trail.pdf`, data: auditPdf });
+  }
+
+  // 4b. Add chain-of-custody report if requested, or for ombudsman/internal packages
+  if (options.includeChainOfCustody || packageType === "internal" || packageType === "ombudsman") {
+    setProgress(exportId, {
+      progress: Math.round((completed / totalSteps) * 80),
+      currentStep: "Generating chain-of-custody report",
+    });
+    const custodyReport = await buildChainOfCustodyReport(
+      caseId,
+      options.generatedBy ?? "System",
+    );
+    zipParts.push({ name: `chain_of_custody.pdf`, data: custodyReport.pdfBytes });
   }
 
   // 5. For ombudsman, include original files (with metadata sanitised)

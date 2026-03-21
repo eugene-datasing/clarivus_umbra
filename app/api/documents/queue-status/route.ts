@@ -14,8 +14,10 @@ export async function GET(request: NextRequest) {
   const docIds = idsParam ? idsParam.split(",").filter(Boolean) : undefined;
 
   const queue = getProcessingQueue();
-  const jobs = queue.getAllJobs(docIds);
-  const stats = queue.getStats();
+  const [jobs, stats] = await Promise.all([
+    queue.getAllJobs(docIds),
+    queue.getStats(),
+  ]);
 
   return NextResponse.json({ jobs, stats });
 }

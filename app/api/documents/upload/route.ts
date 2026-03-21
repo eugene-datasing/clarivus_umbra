@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStorage } from "@/lib/storage";
 import { prisma } from "@/lib/db/prisma";
 import { createAuditEntry } from "@/lib/data/audit";
+import { applyRateLimit } from "@/lib/api-utils";
 import path from "path";
 
 /** Map file extension to fileType label and MIME type */
@@ -49,6 +50,13 @@ function getFileTypeInfo(filename: string): { fileType: string; mimeType: string
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit by IP address (no auth on this route) — 20 req/min
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+      ?? request.headers.get("x-real-ip")
+      ?? "anonymous";
+    const rateLimitResponse = applyRateLimit(`upload:${ip}`, 20);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const formData = await request.formData();
     const caseId = formData.get("caseId") as string | null;
 

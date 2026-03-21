@@ -18,6 +18,19 @@ export const authConfig = {
     strategy: "jwt",
   },
   callbacks: {
+    /**
+     * jwt callback — maps user fields onto the JWT token.
+     *
+     * For Azure AD (microsoft-entra-id) sign-ins the signIn callback in
+     * auth-options.ts resolves the local DB user first, then attaches the
+     * local id and role to the user object. By the time this callback
+     * fires, user.id and user.role are already correct for both
+     * credentials and Azure AD flows.
+     *
+     * NOTE: This callback is overridden in auth-options.ts with an
+     * identical implementation so that the full NextAuth instance uses it.
+     * It is kept here for completeness (middleware Edge import).
+     */
     jwt({ token, user }) {
       if (user) {
         token.role = (user as { role?: string }).role ?? "reviewer";

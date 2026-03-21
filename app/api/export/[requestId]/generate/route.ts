@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { generateExportPackage, type PackageType } from "@/lib/pipeline/export";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeForCase } from "@/lib/auth/authorize";
+import { applyRateLimit } from "@/lib/api-utils";
 
 export async function POST(
   request: NextRequest,
@@ -11,12 +12,18 @@ export async function POST(
   try {
     const { requestId } = await params;
     const user = await requireUser();
+
+    // Rate limit by authenticated user — 10 req/min
+    const rateLimitResponse = applyRateLimit(user.id, 10);
+    if (rateLimitResponse) return rateLimitResponse;
+
     await authorizeForCase(user, requestId);
     const body = await request.json();
 
     const packageType: PackageType = body.packageType || "internal";
     const includeCoverLetter = body.includeCoverLetter !== false;
     const includeRightOfReview = body.includeRightOfReview !== false;
+    const includeChainOfCustody: boolean = body.includeChainOfCustody === true;
     const documentIds: string[] | undefined = body.documentIds;
 
     // --- Server-side validation ---
@@ -76,7 +83,9 @@ export async function POST(
     const exportId = await generateExportPackage(requestId, packageType, {
       includeCoverLetter,
       includeRightOfReview,
+      includeChainOfCustody,
       documentIds,
+      generatedBy: user.name,
     });
 
     return NextResponse.json({ exportId });

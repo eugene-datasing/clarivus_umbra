@@ -5,11 +5,13 @@
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { prisma } from "@/lib/db/prisma";
 import { getOrgBranding } from "@/lib/data/org-config";
+import { verifyAuditIntegrity } from "@/lib/data/audit";
 
 export async function buildAuditTrailPdf(caseId: string): Promise<Uint8Array> {
-  const [caseData, orgBranding] = await Promise.all([
+  const [caseData, orgBranding, integrityResult] = await Promise.all([
     prisma.case.findUniqueOrThrow({ where: { id: caseId } }),
     getOrgBranding(),
+    verifyAuditIntegrity(caseId),
   ]);
 
   const entries = await prisma.auditEntry.findMany({
@@ -61,6 +63,32 @@ export async function buildAuditTrailPdf(caseId: string): Promise<Uint8Array> {
     font,
     color: rgb(0.4, 0.4, 0.4),
   });
+
+  // Integrity verification status
+  yPos -= 14;
+  if (integrityResult.valid) {
+    page.drawText(
+      `Integrity verification: PASSED (${integrityResult.totalEntries} entries verified) — SHA-256 hash chain intact`,
+      {
+        x: margin,
+        y: yPos,
+        size: 9,
+        font: boldFont,
+        color: rgb(0, 0.5, 0),
+      },
+    );
+  } else {
+    page.drawText(
+      `Integrity verification: FAILED at entry ${integrityResult.brokenAt} — hash chain broken`,
+      {
+        x: margin,
+        y: yPos,
+        size: 9,
+        font: boldFont,
+        color: rgb(0.8, 0, 0),
+      },
+    );
+  }
 
   yPos -= 25;
   page.drawLine({

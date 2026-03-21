@@ -189,6 +189,8 @@ model AuditEntry {
   detail        String?
   previousValue String?
   newValue      String?
+  integrityHash String?  // SHA-256 hash of this entry + previous hash
+  previousHash  String?  // Hash of the prior entry (null for first entry)
 
   user User? @relation(fields: [userId], references: [id])
   case Case? @relation(fields: [caseId], references: [id])
@@ -339,4 +341,22 @@ model ActivationCode {
 
   @@index([status])
   @@map("activation_codes")
+}
+
+model ProcessingJob {
+  id          String    @id @default(cuid())
+  docId       String
+  status      String    @default("queued") // "queued" | "processing" | "complete" | "error"
+  step        String    @default("Waiting in queue")
+  progress    Int       @default(0) // 0-100
+  attempt     Int       @default(0)
+  maxAttempts Int       @default(3)
+  error       String?
+  enqueuedAt  DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  @@index([docId])
+  @@index([status])
+  @@map("processing_jobs")
 }

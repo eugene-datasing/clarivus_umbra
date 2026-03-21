@@ -9,5 +9,5 @@ export default async function LoginPage() {
     redirect("/activate");
   }
 
-  return <LoginClient />;
+  return <LoginClient ssoEnabled={!!process.env.AZURE_AD_CLIENT_ID} />;
 }

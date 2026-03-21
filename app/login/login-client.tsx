@@ -5,12 +5,17 @@ import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { EyeOff, LogIn } from "lucide-react";
 
-export default function LoginClient() {
+interface LoginClientProps {
+  ssoEnabled?: boolean;
+}
+
+export default function LoginClient({ ssoEnabled = false }: LoginClientProps) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [ssoLoading, setSsoLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,6 +42,12 @@ export default function LoginClient() {
     }
   }
 
+  function handleMicrosoftSignIn() {
+    setSsoLoading(true);
+    // Redirect-based flow — the page will navigate away to Microsoft login
+    signIn("microsoft-entra-id", { callbackUrl: "/" });
+  }
+
   return (
     <div className="min-h-screen bg-surface-bg flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
@@ -59,6 +70,48 @@ export default function LoginClient() {
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-card text-sm text-red-700">
               {error}
             </div>
+          )}
+
+          {/* ---- Azure AD / Microsoft SSO ---- */}
+          {ssoEnabled && (
+            <>
+              <button
+                type="button"
+                onClick={handleMicrosoftSignIn}
+                disabled={ssoLoading}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-border rounded-card text-sm font-medium text-txt-primary bg-white hover:bg-gray-50 transition-colors disabled:opacity-60"
+              >
+                {ssoLoading ? (
+                  <span>Redirecting...</span>
+                ) : (
+                  <>
+                    {/* Microsoft logo SVG */}
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 21 21"
+                      aria-hidden="true"
+                    >
+                      <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+                      <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+                      <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+                      <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+                    </svg>
+                    Sign in with Microsoft
+                  </>
+                )}
+              </button>
+
+              <div className="relative my-5">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-white px-3 text-txt-secondary">or</span>
+                </div>
+              </div>
+            </>
           )}
 
           <div className="space-y-4">
