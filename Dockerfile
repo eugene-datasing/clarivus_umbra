@@ -12,13 +12,14 @@ COPY . .
 RUN npx prisma generate
 RUN npm run build
 
-# Stage 3: Production runtime
-FROM node:20-alpine AS runner
+# Stage 3: Production runtime (Debian slim — PyMuPDF has no Alpine wheels)
+FROM node:20-slim AS runner
 WORKDIR /app
 
 # Install Python3 + PyMuPDF for PDF redaction
-RUN apk add --no-cache python3 py3-pip && \
-    pip3 install --break-system-packages --prefer-binary PyMuPDF
+RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-pip && \
+    pip3 install --break-system-packages PyMuPDF && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
 ENV PORT=3000
