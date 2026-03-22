@@ -7,11 +7,12 @@
 
 ### Option A: Azure (Recommended for External Demos)
 
-1. Open https://app-veil-prototype.azurewebsites.net in Edge or Chrome (full-screen, no bookmarks bar)
-2. Sign in with credentials (or Azure AD once configured)
-3. Ensure sidebar is expanded (not collapsed)
-4. Have a test document ready (PDF or DOCX with some PII) for the live upload demo
-5. Have this script on a second screen or printed
+1. Open https://veil.datasing.nz in Edge or Chrome (full-screen, no bookmarks bar)
+2. Click **"Sign in with Microsoft"** to authenticate via Azure AD
+3. If this is the first time the instance has been set up, you will be prompted for an activation code (format: `VEIL-XXXX-XXXX-XXXX`). Enter the code provided by DataSing -- this is a one-time step. Skip if already activated.
+4. Ensure sidebar is expanded (not collapsed)
+5. Have a test document ready (PDF or DOCX with some PII) for the live upload demo
+6. Have this script on a second screen or printed
 
 **Note:** The Azure deployment uses a clean database. Create demo data live during the demo for maximum impact.
 
@@ -20,10 +21,11 @@
 1. Ensure Docker is running: `docker compose up -d`
 2. Run `npm run dev` from the `veil-prototype/` directory
 3. Open http://localhost:3000 in Edge or Chrome (full-screen, no bookmarks bar)
-4. Sign in with demo credentials from the login page
-5. Ensure sidebar is expanded (not collapsed)
-6. Have a test document ready (PDF or DOCX with some PII) for the live upload demo
-7. Have this script on a second screen or printed
+4. Sign in with the demo credentials available on the login page (credentials login is available in local development)
+5. If this is the first time running locally, you will be prompted for an activation code (format: `VEIL-XXXX-XXXX-XXXX`). Enter any valid code -- this is a one-time step. Skip if already activated.
+6. Ensure sidebar is expanded (not collapsed)
+7. Have a test document ready (PDF or DOCX with some PII) for the live upload demo
+8. Have this script on a second screen or printed
 
 **Pre-demo data reset (optional, local only):**
 ```bash
@@ -53,8 +55,9 @@ DATABASE_URL="postgresql://veil:veil_dev@localhost:5434/veil" npx prisma migrate
   - Status badge (In Review, Ingestion, etc.)
   - Days remaining with colour coding (green = safe, amber = soon, red = urgent)
   - Progress bar showing documents reviewed vs. total
-- **Recent Activity feed** — shows who did what and when, including AI actions
+- **Recent Activity feed** — shows real entries from the audit trail (not hardcoded), including AI actions
   - Point out: "Notice that AI actions are logged alongside human actions — full transparency"
+- **Notifications bell** (top-right) — shows real audit trail entries, not mock data
 
 ### What to click:
 - Hover over a case card to show the interactive highlight
@@ -94,12 +97,17 @@ DATABASE_URL="postgresql://veil:veil_dev@localhost:5434/veil" npx prisma migrate
 1. **Drag and drop** a real PDF or DOCX into the upload zone
 2. **Watch the processing pipeline** in real time:
    - File uploads to the server
+   - File validation checks format and integrity
+   - Format conversion to standardised review format
    - Status shows "Processing"
+   - Duplicate detection checks against existing documents in the case
+   - Metadata sanitisation strips hidden content
    - Azure Document Intelligence extracts text (OCR)
    - Regex patterns detect structured PII (IRD numbers, phones, emails)
    - GPT-4o analyses text for contextual detections (names, commercial content)
    - Status changes to "Ready for Review"
-3. Point out: "That entire pipeline — OCR, pattern matching, and AI analysis — just ran against real Azure services. The detections are now stored in the database."
+3. Point out: "That entire pipeline — validation, deduplication, OCR, pattern matching, and AI analysis — just ran against real Azure services. The detections are now stored in the database."
+4. **Resilience point:** "The job queue has built-in retry logic — if any step fails, Veil retries up to 3 times before flagging an error. This is important for bulk processing at scale."
 
 ### Then navigate to Case Detail: `/requests/[case-id]`
 
@@ -149,17 +157,30 @@ DATABASE_URL="postgresql://veil:veil_dev@localhost:5434/veil" npx prisma migrate
    - "This decision is immediately saved to the database and recorded in the audit trail"
 
 3. **Reject a detection** — click the red X on an item
+   - The rejected detection shows with a dashed border and reduced opacity (not strikethrough)
    - "Not every AI detection is correct. The reviewer rejects this — and that decision is also logged."
 
-4. **Accept all remaining detections** to show the workflow progression
+4. **Keyboard shortcuts** — mention for efficiency:
+   - Press **A** to accept the selected detection
+   - Press **R** to reject the selected detection
+   - Use **arrow keys** to navigate between detections
+   - "Power users can fly through detections without touching the mouse"
+
+5. **Manual detection** — select text in the document to add a detection manually
+   - "If the AI missed something, reviewers can highlight text and add their own detection with a ground"
+
+6. **Version comparison** — click the **Compare** tab
+   - "Reviewers can compare the original, draft redacted, and final redacted versions side by side"
+
+7. **Accept all remaining detections** to show the workflow progression
    - "Notice the stats in the header update: accepted, rejected, pending counts"
    - When all detections are actioned, point out: "The document status has automatically moved to 'Reviewed'"
 
-5. **Submit to Senior Review**
+8. **Submit to Senior Review**
    - Click the "Submit to Senior Review" button
    - "The initial reviewer has completed their work. Now it goes to the senior reviewer for sign-off."
 
-6. **Show the Senior Review workflow**
+9. **Show the Senior Review workflow**
    - The button area now shows "Awaiting Senior Review" with two options:
    - **Sign Off** (green) — "The senior reviewer approves all decisions"
    - **Request Changes** — "Or they can send it back with a reason, which moves it back to 'In Review'"
@@ -202,6 +223,8 @@ DATABASE_URL="postgresql://veil:veil_dev@localhost:5434/veil" npx prisma migrate
 
 ### What to highlight:
 - **WORM banner** at top — "Immutable Audit Trail"
+- **Hash chain integrity** — each entry is cryptographically linked to the previous one
+  - "Every entry includes a hash that chains to the prior entry. If anyone tampered with the trail, the chain would break — and Veil would flag it."
 - **Timeline entries** — each shows:
   - Timestamp
   - User who performed the action (and their role)
@@ -212,6 +235,8 @@ DATABASE_URL="postgresql://veil:veil_dev@localhost:5434/veil" npx prisma migrate
 ### What to click:
 - Scroll through entries
 - Use the type filter to show only "Review" or "Status" actions
+- **Generate chain-of-custody PDF** — click to produce a downloadable PDF of the full audit trail
+  - "This PDF can be submitted directly to the Ombudsman as evidence of your process"
 
 ---
 
@@ -249,6 +274,9 @@ DATABASE_URL="postgresql://veil:veil_dev@localhost:5434/veil" npx prisma migrate
 - **Accuracy metrics** — Precision, Recall, F1 Score
 - **Per-entity breakdown** — accuracy varies by type (names vs. IRD numbers vs. addresses)
 - **Model governance** — which model is in use, data residency confirmation
+- **Settings page** (`/settings`) — shows real users from the database, not mock data
+  - **"Edit in Setup Wizard" links** — the setup wizard can be re-entered from Settings to update configuration
+- **Custom rules** — can be created, tested against sample text, and toggled on/off
 
 ### Closing statement:
 > "Veil is purpose-built for LGOIMA. It understands your statutory grounds, your workflow, and your compliance requirements. Built on Azure NZ North, your data never leaves New Zealand. Every AI suggestion is transparent, every human decision is auditable, and your Ombudsman responses are defensible from day one."
@@ -307,9 +335,10 @@ DOCUMENT STATUSES:
 - **Slow first load:** First page load after `npm run dev` compiles on-demand — allow a few seconds
 
 ### Azure Deployment
-- **503 error after deploy:** App Service container startup can take 30-60 seconds after a restart. Wait and refresh.
+- **503 error after deploy:** App Service container startup can take 30-60 seconds after a restart. Wait and refresh. URL: https://veil.datasing.nz
 - **AI detection failing:** Check Key Vault secret values for `azure-openai-key` and `azure-di-key` are current
-- **File uploads not persisting:** Azure deployment currently uses local filesystem storage (ephemeral). Files are lost on container restart. Blob Storage integration is pending.
+- **First login requires activation code:** If you see the activation page, enter the activation code provided by DataSing (format: `VEIL-XXXX-XXXX-XXXX`). This is a one-time setup step.
+- **Profile banner:** If you see a "Complete your profile" banner, click the link or click your name in the sidebar to set your department. This only appears until profile setup is complete.
 
 ### General
 - **Sidebar obscuring content:** Click the collapse arrow at the bottom of the sidebar
