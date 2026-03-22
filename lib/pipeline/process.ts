@@ -353,12 +353,12 @@ export async function processDocument(docId: string): Promise<void> {
     // ------------------------------------------------------------------
     // 5. Store pages in DocumentPage table
     // ------------------------------------------------------------------
-    // Delete any existing pages first (in case of reprocessing)
-    await prisma.documentPage.deleteMany({ where: { documentId: docId } });
-
-    for (const page of extraction.pages) {
-      await prisma.documentPage.create({
-        data: {
+    // Wrap in a transaction to prevent race conditions when processing
+    // is triggered concurrently (e.g. double-click).
+    await prisma.$transaction(async (tx) => {
+      await tx.documentPage.deleteMany({ where: { documentId: docId } });
+      await tx.documentPage.createMany({
+        data: extraction.pages.map((page) => ({
           documentId: docId,
           pageNumber: page.pageNumber,
           text: page.text,
@@ -367,9 +367,10 @@ export async function processDocument(docId: string): Promise<void> {
           layoutJson: page.words
             ? JSON.parse(JSON.stringify(page.words))
             : null,
-        },
+        })),
+        skipDuplicates: true,
       });
-    }
+    });
 
     // Update document page count
     await prisma.document.update({
