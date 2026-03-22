@@ -101,6 +101,31 @@ export async function createAuditEntry(data: {
 }
 
 /**
+ * Get the most recent audit entries for the dashboard activity feed.
+ */
+export async function getRecentActivity(limit = 10) {
+  const entries = await prisma.auditEntry.findMany({
+    orderBy: { timestamp: "desc" },
+    take: limit,
+  });
+
+  return entries.map((e) => ({
+    time: e.timestamp.toLocaleTimeString("en-NZ", { hour: "2-digit", minute: "2-digit", hour12: false }),
+    user: e.userName,
+    action: e.description,
+    type: mapAuditType(e.type),
+  }));
+}
+
+function mapAuditType(type: string): "approval" | "review" | "detection" | "ingestion" | "system" {
+  if (type.includes("approv") || type.includes("release")) return "approval";
+  if (type.includes("review") || type.includes("reject") || type.includes("accept")) return "review";
+  if (type.includes("detect") || type.includes("process")) return "detection";
+  if (type.includes("upload") || type.includes("ingest") || type.includes("creat")) return "ingestion";
+  return "system";
+}
+
+/**
  * Verify the integrity of the audit hash chain.
  * Walks all entries in chronological order, recomputing each hash and
  * verifying it matches the stored value and that previousHash links are correct.

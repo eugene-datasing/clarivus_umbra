@@ -13,8 +13,13 @@ import { getDepartments } from "@/lib/data/departments";
 import { prisma } from "@/lib/db/prisma";
 import SetupWizardClient from "./setup-wizard-client";
 
-export default async function SetupPage() {
+export default async function SetupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ edit?: string }>;
+}) {
   await requireUser();
+  const params = await searchParams;
   const [
     wizardState,
     orgIdentity,
@@ -37,7 +42,8 @@ export default async function SetupPage() {
     prisma.userInvitation.findMany({ orderBy: { createdAt: "desc" } }),
   ]);
 
-  if (wizardState.completedAt) {
+  // Allow re-entry when navigating from Settings (?edit=true)
+  if (wizardState.completedAt && params.edit !== "true") {
     redirect("/");
   }
 

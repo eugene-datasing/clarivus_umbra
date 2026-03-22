@@ -13,6 +13,7 @@ import {
   getConfidenceThresholds,
 } from "@/lib/data/org-config";
 import { getAllDepartments } from "@/lib/data/departments";
+import { prisma } from "@/lib/db/prisma";
 import { isM365Configured, getMissingM365Vars, getM365Status } from "@/lib/integrations/m365-connector";
 import { isRecordsConfigured, getRecordsStatus } from "@/lib/integrations/records-connector";
 import { isEDiscoveryConfigured, getEDiscoveryStatus } from "@/lib/integrations/ediscovery-connector";
@@ -20,7 +21,7 @@ import { getBackupStatus, getBackupHistory } from "@/lib/data/backup-restore";
 import SettingsClient from "./settings-client";
 
 export default async function SettingsPage() {
-  const [detectionToggles, workflowConfig, notificationPrefs, orgIdentity, thresholds, departments] =
+  const [detectionToggles, workflowConfig, notificationPrefs, orgIdentity, thresholds, departments, dbUsers] =
     await Promise.all([
       getSetting<DetectionToggle[]>(
         SETTING_KEYS.DETECTION_TOGGLES,
@@ -37,6 +38,18 @@ export default async function SettingsPage() {
       getOrgIdentity(),
       getConfidenceThresholds(),
       getAllDepartments(),
+      prisma.user.findMany({
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          isActive: true,
+          updatedAt: true,
+          department: { select: { name: true } },
+        },
+      }),
     ]);
 
   // Fetch M365 status (gracefully handle errors)
@@ -176,6 +189,14 @@ export default async function SettingsPage() {
         headName: d.headName,
         isActive: d.isActive,
         userCount: d._count.users,
+      }))}
+      users={dbUsers.map((u) => ({
+        name: u.name,
+        email: u.email ?? "",
+        role: u.role,
+        department: u.department?.name ?? null,
+        isActive: u.isActive,
+        lastLogin: u.updatedAt.toISOString(),
       }))}
       m365Status={m365Status}
       recordsStatus={recordsStatus}

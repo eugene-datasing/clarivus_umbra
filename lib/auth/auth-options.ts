@@ -156,12 +156,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             return false;
           }
 
-          // Auto-provision from invitation or as bootstrap user
+          // Auto-provision from invitation or as bootstrap user.
+          // First user (userCount === 0, no invitation) is the bootstrap admin.
+          const bootstrapRole = invitation?.role ?? (userCount === 0 ? "admin" : "reviewer");
           dbUser = await prisma.user.create({
             data: {
               name: invitation?.name ?? user.name ?? email.split("@")[0],
               email,
-              role: invitation?.role ?? "reviewer",
+              role: bootstrapRole,
               departmentId: invitation?.departmentId ?? null,
               azureAdOid: oid || null,
             },

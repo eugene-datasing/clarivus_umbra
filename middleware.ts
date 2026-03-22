@@ -26,7 +26,10 @@ export default auth((req) => {
   if (
     pathname.startsWith("/login") ||
     pathname.startsWith("/api/auth") ||
-    pathname === "/api/activation-status"
+    pathname === "/api/activation-status" ||
+    pathname === "/manifest.json" ||
+    pathname === "/sw.js" ||
+    pathname === "/offline.html"
   ) {
     const requestHeaders = new Headers(req.headers);
     requestHeaders.set("x-pathname", pathname);

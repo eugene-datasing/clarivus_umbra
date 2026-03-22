@@ -61,27 +61,24 @@ const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
 ];
 
 /* ------------------------------------------------------------------ */
-/*  Mock data (Users + Health — not persisted)                        */
+/*  Role display helpers                                              */
 /* ------------------------------------------------------------------ */
 
-interface MockUser {
-  name: string;
-  email: string;
-  azureGroup: string;
-  role: string;
-  roleBadge: string;
-  status: "Active" | "Inactive";
-  lastLogin: string;
-}
+const roleBadgeMap: Record<string, string> = {
+  admin: "bg-red-50 text-red-700",
+  "request-manager": "bg-purple-50 text-purple-700",
+  "senior-reviewer": "bg-teal-50 text-teal-700",
+  "final-approver": "bg-amber-50 text-amber-700",
+  reviewer: "bg-blue-50 text-blue-700",
+};
 
-const mockUsers: MockUser[] = [
-  { name: "A. Richardson", email: "a.richardson@npdc.govt.nz", azureGroup: "NPDC-Disclosure-Managers", role: "Request Manager", roleBadge: "bg-purple-50 text-purple-700", status: "Active", lastLogin: "18 Mar 2026, 09:12" },
-  { name: "K. Williams", email: "k.williams@npdc.govt.nz", azureGroup: "NPDC-Disclosure-Reviewers", role: "Reviewer", roleBadge: "bg-blue-50 text-blue-700", status: "Active", lastLogin: "18 Mar 2026, 10:15" },
-  { name: "M. Patel", email: "m.patel@npdc.govt.nz", azureGroup: "NPDC-Disclosure-Reviewers", role: "Reviewer", roleBadge: "bg-blue-50 text-blue-700", status: "Active", lastLogin: "18 Mar 2026, 10:30" },
-  { name: "J. Chen", email: "j.chen@npdc.govt.nz", azureGroup: "NPDC-Senior-Reviewers", role: "Senior Reviewer", roleBadge: "bg-teal-50 text-teal-700", status: "Active", lastLogin: "18 Mar 2026, 10:42" },
-  { name: "D. Harper", email: "d.harper@npdc.govt.nz", azureGroup: "NPDC-Final-Approvers", role: "Final Approver", roleBadge: "bg-amber-50 text-amber-700", status: "Active", lastLogin: "17 Mar 2026, 16:45" },
-  { name: "S. Kumar", email: "s.kumar@npdc.govt.nz", azureGroup: "NPDC-IT-Admins", role: "System Administrator", roleBadge: "bg-red-50 text-red-700", status: "Active", lastLogin: "18 Mar 2026, 08:00" },
-];
+const roleLabelMap: Record<string, string> = {
+  admin: "Administrator",
+  "request-manager": "Request Manager",
+  "senior-reviewer": "Senior Reviewer",
+  "final-approver": "Final Approver",
+  reviewer: "Reviewer",
+};
 
 interface ServiceStatus {
   name: string;
@@ -136,6 +133,15 @@ interface EDiscoveryStatusInfo {
   error?: string;
 }
 
+interface SettingsUser {
+  name: string;
+  email: string;
+  role: string;
+  department: string | null;
+  isActive: boolean;
+  lastLogin: string;
+}
+
 interface SettingsClientProps {
   initialDetectionToggles: DetectionToggle[];
   initialWorkflowConfig: WorkflowConfig;
@@ -143,6 +149,7 @@ interface SettingsClientProps {
   orgIdentity: OrgIdentity;
   thresholds: ConfidenceThresholds;
   departments: SettingsDepartment[];
+  users: SettingsUser[];
   m365Status?: M365StatusInfo;
   recordsStatus?: RecordsStatusInfo;
   ediscoveryStatus?: EDiscoveryStatusInfo;
@@ -161,6 +168,7 @@ export default function SettingsClient({
   orgIdentity,
   thresholds,
   departments,
+  users,
   m365Status,
   recordsStatus,
   ediscoveryStatus,
@@ -285,7 +293,7 @@ export default function SettingsClient({
           <div className="card">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-heading font-semibold text-txt-primary">Organisation Identity</h2>
-              <a href="/setup" className="btn-secondary text-xs">Edit in Setup Wizard</a>
+              <a href="/setup?edit=true" className="btn-secondary text-xs">Edit in Setup Wizard</a>
             </div>
             <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
               <div>
@@ -332,7 +340,7 @@ export default function SettingsClient({
             <p className="text-sm text-txt-secondary">
               <span className="font-medium text-txt-primary">{departments.length}</span> departments configured
             </p>
-            <a href="/setup" className="btn-secondary text-xs">Manage in Setup Wizard</a>
+            <a href="/setup?edit=true" className="btn-secondary text-xs">Manage in Setup Wizard</a>
           </div>
           <div className="card p-0 overflow-hidden">
             <table className="w-full text-sm">
@@ -377,42 +385,44 @@ export default function SettingsClient({
         <div>
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-txt-secondary">
-              Last synced: <span className="font-medium text-txt-primary">3 minutes ago</span> &mdash; <span className="font-medium text-txt-primary">23 users</span> active
+              <span className="font-medium text-txt-primary">{users.filter((u) => u.isActive).length}</span> active user{users.filter((u) => u.isActive).length !== 1 ? "s" : ""}
             </p>
-            <button className="btn-secondary flex items-center gap-1.5">
-              <RefreshCw className="w-4 h-4" /> Sync Now
-            </button>
+            <a href="/setup?edit=true" className="btn-secondary text-xs">Manage in Setup Wizard</a>
           </div>
 
           <div className="card p-0 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-surface-bg">
-                  <th className="text-left px-6 py-3 font-medium text-txt-secondary">Name</th>
-                  <th className="text-left px-6 py-3 font-medium text-txt-secondary">Email</th>
-                  <th className="text-left px-6 py-3 font-medium text-txt-secondary">Azure AD Group</th>
-                  <th className="text-left px-6 py-3 font-medium text-txt-secondary">Veil Role</th>
-                  <th className="text-left px-6 py-3 font-medium text-txt-secondary">Status</th>
-                  <th className="text-left px-6 py-3 font-medium text-txt-secondary">Last Login</th>
-                </tr>
-              </thead>
-              <tbody>
-                {mockUsers.map((user) => (
-                  <tr key={user.email} className="border-b border-border last:border-0 hover:bg-surface-hover transition-colors">
-                    <td className="px-6 py-3.5 font-medium text-txt-primary">{user.name}</td>
-                    <td className="px-6 py-3.5 text-txt-secondary font-mono text-xs">{user.email}</td>
-                    <td className="px-6 py-3.5 text-txt-secondary text-xs">{user.azureGroup}</td>
-                    <td className="px-6 py-3.5">
-                      <span className={cn("badge", user.roleBadge)}>{user.role}</span>
-                    </td>
-                    <td className="px-6 py-3.5">
-                      <span className="badge bg-green-50 text-green-700">{user.status}</span>
-                    </td>
-                    <td className="px-6 py-3.5 text-txt-secondary text-xs">{user.lastLogin}</td>
+            {users.length === 0 ? (
+              <p className="text-sm text-txt-secondary py-8 text-center">No users provisioned yet.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-surface-bg">
+                    <th className="text-left px-6 py-3 font-medium text-txt-secondary">Name</th>
+                    <th className="text-left px-6 py-3 font-medium text-txt-secondary">Email</th>
+                    <th className="text-left px-6 py-3 font-medium text-txt-secondary">Department</th>
+                    <th className="text-left px-6 py-3 font-medium text-txt-secondary">Role</th>
+                    <th className="text-left px-6 py-3 font-medium text-txt-secondary">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {users.map((user) => (
+                    <tr key={user.email} className="border-b border-border last:border-0 hover:bg-surface-hover transition-colors">
+                      <td className="px-6 py-3.5 font-medium text-txt-primary">{user.name}</td>
+                      <td className="px-6 py-3.5 text-txt-secondary font-mono text-xs">{user.email}</td>
+                      <td className="px-6 py-3.5 text-txt-secondary text-xs">{user.department ?? "—"}</td>
+                      <td className="px-6 py-3.5">
+                        <span className={cn("badge", roleBadgeMap[user.role] ?? "bg-gray-50 text-gray-700")}>{roleLabelMap[user.role] ?? user.role}</span>
+                      </td>
+                      <td className="px-6 py-3.5">
+                        <span className={cn("badge", user.isActive ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500")}>
+                          {user.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       )}

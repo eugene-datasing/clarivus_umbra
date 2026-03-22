@@ -27,12 +27,15 @@ export async function authorizeForCase(
   user: SessionUser,
   caseId: string,
 ): Promise<void> {
-  if (PRIVILEGED_ROLES.has(user.role)) return;
-
+  // Re-read role from DB rather than trusting the JWT claim, because the JWT
+  // can be stale after role promotions (e.g. activation → admin).
   const dbUser = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { departmentId: true },
+    select: { role: true, departmentId: true },
   });
+
+  const role = dbUser?.role ?? user.role;
+  if (PRIVILEGED_ROLES.has(role)) return;
 
   if (!dbUser?.departmentId) {
     throw new Error("Access denied: user has no department assignment");
@@ -65,20 +68,20 @@ export async function authorizeForDocument(
   user: SessionUser,
   documentId: string,
 ): Promise<string> {
-  if (PRIVILEGED_ROLES.has(user.role)) {
-    const doc = await prisma.document.findUnique({
-      where: { id: documentId },
-      select: { caseId: true },
-    });
-    if (!doc) throw new Error("Document not found");
-    return doc.caseId;
-  }
-
   const doc = await prisma.document.findUnique({
     where: { id: documentId },
     select: { caseId: true },
   });
   if (!doc) throw new Error("Document not found");
+
+  // Re-read role from DB (JWT may be stale after role promotion)
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { role: true },
+  });
+  const role = dbUser?.role ?? user.role;
+  if (PRIVILEGED_ROLES.has(role)) return doc.caseId;
+
   await authorizeForCase(user, doc.caseId);
   return doc.caseId;
 }
@@ -100,7 +103,13 @@ export async function authorizeForDetection(
   });
   if (!detection) throw new Error("Detection not found");
 
-  if (!PRIVILEGED_ROLES.has(user.role)) {
+  // Re-read role from DB (JWT may be stale after role promotion)
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { role: true },
+  });
+  const role = dbUser?.role ?? user.role;
+  if (!PRIVILEGED_ROLES.has(role)) {
     await authorizeForCase(user, detection.document.caseId);
   }
 

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { isActivated } from "@/lib/data/activation";
 import { getCases, getDashboardStats } from "@/lib/data/cases";
+import { getRecentActivity } from "@/lib/data/audit";
 import DashboardClient from "./dashboard-client";
 
 export const dynamic = "force-dynamic";
@@ -14,10 +15,11 @@ export default async function DashboardPage() {
     redirect("/activate");
   }
 
-  const [cases, dashboardStats] = await Promise.all([
+  const [cases, dashboardStats, recentActivity] = await Promise.all([
     getCases(),
     getDashboardStats(),
+    getRecentActivity(10),
   ]);
 
-  return <DashboardClient cases={cases} dashboardStats={dashboardStats} />;
+  return <DashboardClient cases={cases} dashboardStats={dashboardStats} recentActivity={recentActivity} />;
 }

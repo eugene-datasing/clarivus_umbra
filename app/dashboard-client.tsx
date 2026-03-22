@@ -30,21 +30,20 @@ interface DashboardStats {
   casesByStatus: Record<string, number>;
 }
 
+interface ActivityItem {
+  time: string;
+  user: string;
+  action: string;
+  type: "approval" | "review" | "detection" | "ingestion" | "system";
+}
+
 interface DashboardClientProps {
   cases: CaseItem[];
   dashboardStats: DashboardStats;
+  recentActivity: ActivityItem[];
 }
 
-const recentActivity = [
-  { time: "10:42", user: "J. Chen", action: "approved LGOIMA-2026-042 export for release", type: "approval" as const },
-  { time: "10:15", user: "M. Patel", action: "submitted 5 documents to Senior Review", type: "review" as const },
-  { time: "09:58", user: "Veil AI", action: "detection complete: LGOIMA-2026-045 (213 docs, 1,847 detections)", type: "detection" as const },
-  { time: "09:30", user: "A. Richardson", action: "uploaded 213 documents to LGOIMA-2026-045", type: "ingestion" as const },
-  { time: "09:15", user: "K. Williams", action: "rejected detection: \"Councillor M. Bridges\" — public official", type: "review" as const },
-  { time: "08:45", user: "D. Harper", action: "approved final release of LGOIMA-2026-038", type: "approval" as const },
-];
-
-export default function DashboardClient({ cases, dashboardStats }: DashboardClientProps) {
+export default function DashboardClient({ cases, dashboardStats, recentActivity }: DashboardClientProps) {
   // Compute dynamic stat cards from real data
   const activeCases = cases.filter((r) => r.status !== "released" && r.status !== "draft");
   const pendingDocs = cases
@@ -151,15 +150,19 @@ export default function DashboardClient({ cases, dashboardStats }: DashboardClie
             <h2 className="text-lg font-heading font-semibold">Recent Activity</h2>
           </div>
           <div className="space-y-0">
-            {recentActivity.map((entry, i) => (
-              <div key={i} className="flex gap-3 py-3 border-b border-border last:border-0">
-                <span className="text-xs text-txt-secondary font-mono w-10 flex-shrink-0 pt-0.5">{entry.time}</span>
-                <div className="text-sm">
-                  <span className="font-medium text-txt-primary">{entry.user}</span>{" "}
-                  <span className="text-txt-secondary">{entry.action}</span>
+            {recentActivity.length === 0 ? (
+              <p className="text-sm text-txt-secondary py-6 text-center">No activity yet</p>
+            ) : (
+              recentActivity.map((entry, i) => (
+                <div key={i} className="flex gap-3 py-3 border-b border-border last:border-0">
+                  <span className="text-xs text-txt-secondary font-mono w-10 flex-shrink-0 pt-0.5">{entry.time}</span>
+                  <div className="text-sm">
+                    <span className="font-medium text-txt-primary">{entry.user}</span>{" "}
+                    <span className="text-txt-secondary">{entry.action}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>
