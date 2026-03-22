@@ -29,11 +29,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     pathname.startsWith("/activate") ||
     pathname.startsWith("/login") ||
     pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/activation-status") ||
     pathname.startsWith("/setup");
+
+  console.log(`[layout] pathname="${pathname}" skipActivationCheck=${skipActivationCheck}`);
 
   if (!skipActivationCheck) {
     try {
       const activated = await isActivated();
+      console.log(`[layout] isActivated() returned: ${activated}`);
       if (!activated) {
         redirect("/activate");
       }

@@ -23,7 +23,11 @@ export default auth((req) => {
   const isLoggedIn = !!req.auth?.user;
 
   // Public paths — always allow without auth
-  if (pathname.startsWith("/login") || pathname.startsWith("/api/auth")) {
+  if (
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/api/auth") ||
+    pathname === "/api/activation-status"
+  ) {
     const requestHeaders = new Headers(req.headers);
     requestHeaders.set("x-pathname", pathname);
     return NextResponse.next({ request: { headers: requestHeaders } });
