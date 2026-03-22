@@ -24,9 +24,11 @@ export default auth((req) => {
 
   // Public paths — always allow without auth
   if (
+    pathname === "/" ||
     pathname.startsWith("/login") ||
     pathname.startsWith("/api/auth") ||
     pathname === "/api/activation-status" ||
+    pathname.startsWith("/api/demo-request") ||
     pathname === "/manifest.json" ||
     pathname === "/sw.js" ||
     pathname === "/offline.html"

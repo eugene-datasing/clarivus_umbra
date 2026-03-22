@@ -26,10 +26,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // /login and /api/auth are the auth flow pages
   // /setup is the post-activation wizard
   const skipActivationCheck =
+    pathname === "/" ||
     pathname.startsWith("/activate") ||
     pathname.startsWith("/login") ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/activation-status") ||
+    pathname.startsWith("/api/demo-request") ||
     pathname.startsWith("/setup");
 
   console.log(`[layout] pathname="${pathname}" skipActivationCheck=${skipActivationCheck}`);

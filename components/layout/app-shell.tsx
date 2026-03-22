@@ -47,8 +47,13 @@ function ProfileNudge() {
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { status } = useSession();
   const [collapsed, setCollapsed] = useState(false);
-  const isFullScreenRoute = pathname === "/login" || pathname.startsWith("/setup") || pathname.startsWith("/activate");
+  const isFullScreenRoute =
+    pathname === "/login" ||
+    pathname.startsWith("/setup") ||
+    pathname.startsWith("/activate") ||
+    (pathname === "/" && status !== "authenticated");
 
   if (isFullScreenRoute) {
     return (
