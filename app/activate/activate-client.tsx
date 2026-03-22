@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Image from "next/image";
 import { EyeOff, KeyRound, CheckCircle2, AlertCircle, User } from "lucide-react";
 import { redeemActivationCode } from "@/lib/actions/activation-actions";
@@ -45,6 +46,7 @@ interface ActivateClientProps {
 
 export default function ActivateClient({ userName }: ActivateClientProps) {
   const router = useRouter();
+  const { update: updateSession } = useSession();
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -66,6 +68,8 @@ export default function ActivateClient({ userName }: ActivateClientProps) {
 
       if (result.success) {
         setSuccess(true);
+        // Refresh the session so the JWT picks up the admin role promotion
+        await updateSession();
         // Redirect to setup wizard after a brief success message
         setTimeout(() => {
           router.push("/setup");

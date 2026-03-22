@@ -193,12 +193,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
      * jwt callback fires, user.id and user.role are already set correctly
      * for both credentials and Azure AD flows, so the base callback works
      * as-is.
+     *
+     * When trigger is "update" (client called session.update()), re-read
+     * the user's current role from the database so that role promotions
+     * (e.g. activation → admin) take effect without requiring a full
+     * sign-out/sign-in cycle.
      */
-    jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.role = (user as { role?: string }).role ?? "reviewer";
         token.userId = (user as { id?: string }).id;
       }
+
+      // Re-read role from DB when session.update() is called
+      if (trigger === "update" && token.userId) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.userId as string },
+          select: { role: true },
+        });
+        if (dbUser) {
+          token.role = dbUser.role;
+        }
+      }
+
       return token;
     },
   },
