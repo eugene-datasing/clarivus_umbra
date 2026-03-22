@@ -19,7 +19,7 @@ export async function createRule(data: {
 }) {
   const validated = createRuleSchema.parse(data);
   const user = await requireUser();
-  requireAdmin(user);
+  await requireAdmin(user);
   const rule = await prisma.customRule.create({
     data: {
       name: validated.name,
@@ -61,7 +61,7 @@ export async function updateRule(
 ) {
   const validated = updateRuleSchema.parse(data);
   const user = await requireUser();
-  requireAdmin(user);
+  await requireAdmin(user);
   await prisma.customRule.update({
     where: { id: ruleId },
     data: validated,
@@ -72,7 +72,7 @@ export async function updateRule(
 
 export async function deleteRule(ruleId: string) {
   const user = await requireUser();
-  requireAdmin(user);
+  await requireAdmin(user);
   const rule = await prisma.customRule.findUnique({
     where: { id: ruleId },
     select: { name: true },
@@ -95,7 +95,7 @@ export async function deleteRule(ruleId: string) {
 
 export async function toggleRuleStatus(ruleId: string) {
   const user = await requireUser();
-  requireAdmin(user);
+  await requireAdmin(user);
   const rule = await prisma.customRule.findUnique({
     where: { id: ruleId },
     select: { status: true, name: true },

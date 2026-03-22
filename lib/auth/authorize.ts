@@ -111,11 +111,21 @@ export async function authorizeForDetection(
 }
 
 /**
- * Require admin-level role.  Throws if the user is not admin or
- * request-manager.
+ * Require admin-level role.
+ *
+ * Re-reads the role from the database rather than trusting the JWT claim,
+ * because the JWT can be stale after role promotions (e.g. activation →
+ * admin).  This adds one lightweight SELECT but ensures authorisation is
+ * always correct.
  */
-export function requireAdmin(user: SessionUser): void {
-  if (user.role !== "admin" && user.role !== "request-manager") {
+export async function requireAdmin(user: SessionUser): Promise<void> {
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { role: true },
+  });
+
+  const role = dbUser?.role ?? user.role;
+  if (role !== "admin" && role !== "request-manager") {
     throw new Error("Access denied: admin role required");
   }
 }

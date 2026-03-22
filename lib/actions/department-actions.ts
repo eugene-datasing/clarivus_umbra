@@ -21,7 +21,7 @@ export async function createDepartment(data: {
 }) {
   const validated = createDepartmentSchema.parse(data);
   const user = await requireUser();
-  requireAdmin(user);
+  await requireAdmin(user);
 
   try {
     const dept = await prisma.$transaction(async (tx) => {
@@ -53,7 +53,7 @@ export async function updateDepartment(
 ) {
   const validated = updateDepartmentSchema.parse(data);
   const user = await requireUser();
-  requireAdmin(user);
+  await requireAdmin(user);
 
   try {
     await prisma.department.update({
@@ -77,7 +77,7 @@ export async function updateDepartment(
 
 export async function deleteDepartment(id: string) {
   const user = await requireUser();
-  requireAdmin(user);
+  await requireAdmin(user);
 
   // Move users in this department to no department
   await prisma.user.updateMany({
@@ -92,7 +92,7 @@ export async function deleteDepartment(id: string) {
 
 export async function reorderDepartments(orderedIds: string[]) {
   const user = await requireUser();
-  requireAdmin(user);
+  await requireAdmin(user);
 
   for (let i = 0; i < orderedIds.length; i++) {
     await prisma.department.update({
@@ -106,7 +106,7 @@ export async function reorderDepartments(orderedIds: string[]) {
 
 export async function seedDefaultDepartments() {
   const user = await requireUser();
-  requireAdmin(user);
+  await requireAdmin(user);
 
   const defaults = [
     "Mayor and Councillors",
