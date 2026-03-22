@@ -37,14 +37,20 @@ export default function CaseError({
   }, [error]);
 
   // Classify the error to provide helpful suggestions
-  const message = error.message || "An unexpected error occurred while loading this page.";
+  const rawMessage = error.message || "";
+  const isAccessDenied = rawMessage.includes("Access denied");
+  const message = isAccessDenied
+    ? "You don't have permission to access this resource."
+    : rawMessage || "An unexpected error occurred while loading this page.";
   let suggestion: string | undefined;
 
-  if (message.includes("not found") || message.includes("Not found")) {
+  if (isAccessDenied) {
+    suggestion = "Your account may not be assigned to the correct department for this case. Contact your administrator to update your access.";
+  } else if (rawMessage.includes("not found") || rawMessage.includes("Not found")) {
     suggestion = "This case may have been deleted or the URL may be incorrect. Check the case reference and try again.";
-  } else if (message.includes("database") || message.includes("prisma") || message.includes("connect")) {
+  } else if (rawMessage.includes("database") || rawMessage.includes("prisma") || rawMessage.includes("connect")) {
     suggestion = "There may be a temporary database connection issue. Please wait a moment and try again.";
-  } else if (message.includes("timeout") || message.includes("ETIMEDOUT")) {
+  } else if (rawMessage.includes("timeout") || rawMessage.includes("ETIMEDOUT")) {
     suggestion = "The request timed out. This may be due to heavy processing load. Please try again.";
   }
 

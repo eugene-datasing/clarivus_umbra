@@ -1,6 +1,7 @@
 import { PrismaClient } from "../lib/generated/prisma/client";
 import type { Prisma } from "../lib/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import bcrypt from "bcryptjs";
 
 type InputJsonValue = Prisma.InputJsonValue;
 
@@ -11,24 +12,43 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   console.log("Seeding Veil database...");
 
-  // --- Users (with department assignments) ---
+  // --- Departments ---
+  const departments = [
+    { id: "dept-001", name: "Infrastructure" },
+    { id: "dept-002", name: "Planning" },
+    { id: "dept-003", name: "Legal" },
+  ];
+
+  for (const d of departments) {
+    await prisma.department.upsert({
+      where: { id: d.id },
+      update: { name: d.name },
+      create: d,
+    });
+  }
+  console.log(`  ✓ ${departments.length} departments`);
+
+  // --- Users (with department assignments + dev passwords) ---
+  // All seeded users get password "password" for local credentials login
+  const devPasswordHash = await bcrypt.hash("password", 10);
+
   const users = [
-    { id: "u-001", name: "A. Richardson", email: "a.richardson@npdc.govt.nz", role: "request-manager", departmentId: "dept-003" },
-    { id: "u-002", name: "B. Mitchell", email: "b.mitchell@npdc.govt.nz", role: "request-manager", departmentId: "dept-001" },
-    { id: "u-003", name: "K. Williams", email: "k.williams@npdc.govt.nz", role: "reviewer", departmentId: "dept-001" },
-    { id: "u-004", name: "M. Patel", email: "m.patel@npdc.govt.nz", role: "reviewer", departmentId: "dept-002" },
-    { id: "u-005", name: "J. Chen", email: "j.chen@npdc.govt.nz", role: "senior-reviewer", departmentId: "dept-003" },
-    { id: "u-006", name: "D. Harper", email: "d.harper@npdc.govt.nz", role: "final-approver", departmentId: "dept-003" },
+    { id: "u-001", name: "A. Richardson", email: "a.richardson@npdc.govt.nz", role: "request-manager", departmentId: "dept-003", passwordHash: devPasswordHash },
+    { id: "u-002", name: "B. Mitchell", email: "b.mitchell@npdc.govt.nz", role: "request-manager", departmentId: "dept-001", passwordHash: devPasswordHash },
+    { id: "u-003", name: "K. Williams", email: "k.williams@npdc.govt.nz", role: "reviewer", departmentId: "dept-001", passwordHash: devPasswordHash },
+    { id: "u-004", name: "M. Patel", email: "m.patel@npdc.govt.nz", role: "reviewer", departmentId: "dept-002", passwordHash: devPasswordHash },
+    { id: "u-005", name: "J. Chen", email: "j.chen@npdc.govt.nz", role: "senior-reviewer", departmentId: "dept-003", passwordHash: devPasswordHash },
+    { id: "u-006", name: "D. Harper", email: "d.harper@npdc.govt.nz", role: "final-approver", departmentId: "dept-003", passwordHash: devPasswordHash },
   ];
 
   for (const u of users) {
     await prisma.user.upsert({
       where: { id: u.id },
-      update: { name: u.name, email: u.email, role: u.role, departmentId: u.departmentId },
+      update: { name: u.name, email: u.email, role: u.role, departmentId: u.departmentId, passwordHash: u.passwordHash },
       create: u,
     });
   }
-  console.log(`  ✓ ${users.length} users`);
+  console.log(`  ✓ ${users.length} users (password: "password")`);
 
   // --- Cases ---
   const cases = [
