@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { statusConfig, docTypeConfig, type RequestStatus, type DocType } from "@/lib/db/mappers";
 import { workingDaysRemaining, deadlineColor, formatDate, cn, confidenceColor } from "@/lib/utils";
 import {
@@ -68,6 +69,7 @@ interface CaseDetailClientProps {
 }
 
 export default function CaseDetailClient({ caseData, documents }: CaseDetailClientProps) {
+  const router = useRouter();
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -349,7 +351,10 @@ export default function CaseDetailClient({ caseData, documents }: CaseDetailClie
             <CheckCircle className="w-4 h-4" />
             Assign Reviewer
           </button>
-          <button className="text-sm hover:underline flex items-center gap-1.5">
+          <button
+            onClick={() => router.push(`/requests/${caseData.id}/bulk-review`)}
+            className="text-sm hover:underline flex items-center gap-1.5"
+          >
             <ArrowRight className="w-4 h-4" />
             Bulk Review
           </button>

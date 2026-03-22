@@ -22,13 +22,20 @@ const navItems = [
   { label: "Settings", href: "/admin/settings", icon: Cog, section: "system" },
 ];
 
-const notifications = [
-  { id: 1, icon: AlertTriangle, color: "text-amber-600 bg-amber-50", text: "LGOIMA-2026-042 deadline in 3 days", time: "10 min ago" },
-  { id: 2, icon: CheckCircle, color: "text-green-600 bg-green-50", text: "K. Williams completed review of doc-009", time: "25 min ago" },
-  { id: 3, icon: FileText, color: "text-blue-600 bg-blue-50", text: "12 new detections in Coastal Walkway case", time: "1 hr ago" },
-  { id: 4, icon: Clock, color: "text-purple-600 bg-purple-50", text: "Senior review requested for LGOIMA-2026-039", time: "2 hr ago" },
-  { id: 5, icon: CheckCircle, color: "text-green-600 bg-green-50", text: "Export package verified for LGOIMA-2026-038", time: "3 hr ago" },
-];
+interface NotificationItem {
+  user: string;
+  action: string;
+  time: string;
+  type: "approval" | "review" | "detection" | "ingestion" | "system";
+}
+
+const notifIconMap: Record<string, { icon: typeof AlertTriangle; color: string }> = {
+  approval: { icon: CheckCircle, color: "text-green-600 bg-green-50" },
+  review: { icon: FileText, color: "text-blue-600 bg-blue-50" },
+  detection: { icon: AlertTriangle, color: "text-amber-600 bg-amber-50" },
+  ingestion: { icon: Clock, color: "text-purple-600 bg-purple-50" },
+  system: { icon: FileText, color: "text-gray-600 bg-gray-50" },
+};
 
 const roleLabels: Record<string, string> = {
   reviewer: "Reviewer",
@@ -49,11 +56,26 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
   const pathname = usePathname();
   const { data: session } = useSession();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [notifLoaded, setNotifLoaded] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
   const userName = session?.user?.name ?? "User";
   const userRole = (session?.user as { role?: string })?.role ?? "reviewer";
   const initials = getInitials(userName);
+
+  // Fetch notifications when panel is opened
+  useEffect(() => {
+    if (showNotifications && !notifLoaded) {
+      fetch("/api/notifications")
+        .then((r) => r.json())
+        .then((data) => {
+          if (Array.isArray(data)) setNotifications(data);
+          setNotifLoaded(true);
+        })
+        .catch(() => setNotifLoaded(true));
+    }
+  }, [showNotifications, notifLoaded]);
 
   // Close notifications when clicking outside
   useEffect(() => {
@@ -226,33 +248,41 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
               </button>
             </div>
             <div className="max-h-[300px] overflow-y-auto">
-              {notifications.map((n) => {
-                const NIcon = n.icon;
-                return (
-                  <div key={n.id} className="flex items-start gap-2.5 px-4 py-2.5 hover:bg-gray-50 border-b border-gray-50 last:border-0 cursor-pointer">
-                    <div className={cn("w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5", n.color.split(" ")[1])}>
-                      <NIcon size={12} className={n.color.split(" ")[0]} />
+              {notifications.length === 0 ? (
+                <p className="text-xs text-txt-secondary py-6 text-center">No recent activity</p>
+              ) : (
+                notifications.map((n, i) => {
+                  const cfg = notifIconMap[n.type] ?? notifIconMap.system;
+                  const NIcon = cfg.icon;
+                  return (
+                    <div key={i} className="flex items-start gap-2.5 px-4 py-2.5 hover:bg-gray-50 border-b border-gray-50 last:border-0 cursor-pointer">
+                      <div className={cn("w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5", cfg.color.split(" ")[1])}>
+                        <NIcon size={12} className={cfg.color.split(" ")[0]} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs text-txt-primary leading-snug">
+                          <span className="font-medium">{n.user}</span>{" "}
+                          <span className="text-txt-secondary">{n.action}</span>
+                        </p>
+                        <p className="text-[10px] text-txt-secondary mt-0.5">{n.time}</p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-xs text-txt-primary leading-snug">{n.text}</p>
-                      <p className="text-[10px] text-txt-secondary mt-0.5">{n.time}</p>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </div>
         )}
 
         <div className="flex items-center gap-3 px-2 py-2">
-          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0 text-xs font-bold">
+          <Link href="/profile" className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0 text-xs font-bold hover:bg-white/30 transition-colors" title="My Profile">
             {initials}
-          </div>
+          </Link>
           {!collapsed && (
-            <div className="flex-1 min-w-0">
+            <Link href="/profile" className="flex-1 min-w-0 hover:opacity-80 transition-opacity" title="My Profile">
               <div className="text-sm font-medium truncate">{userName}</div>
               <div className="text-xs text-white/50">{roleLabels[userRole] ?? userRole}</div>
-            </div>
+            </Link>
           )}
           {!collapsed && (
             <div className="flex items-center gap-1">
@@ -266,7 +296,9 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
                 )}
               >
                 <Bell className="w-4 h-4" aria-hidden="true" />
-                <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-red-500 rounded-full text-[9px] flex items-center justify-center" aria-label="3 unread notifications">3</span>
+                {notifications.length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-red-500 rounded-full text-[9px] flex items-center justify-center" aria-label={`${notifications.length} notifications`}>{notifications.length}</span>
+                )}
               </button>
               <button
                 onClick={() => signOut({ callbackUrl: "/login" })}

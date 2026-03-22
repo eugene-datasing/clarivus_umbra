@@ -798,7 +798,7 @@ export default function ReviewClient({
                 className={cn(
                   "relative cursor-pointer inline rounded-sm px-0.5 -mx-0.5 border transition-all duration-150",
                   isRejected
-                    ? "line-through opacity-40 bg-gray-100 border-gray-300"
+                    ? "opacity-50 bg-transparent border-dashed border-gray-300"
                     : confBgClass(det.confidence),
                   isSelected && !isRejected && "ring-2 ring-brand-primary ring-offset-1",
                   isAccepted && !isRejected && "ring-1 ring-confidence-high"
@@ -1265,7 +1265,7 @@ export default function ReviewClient({
                           <span
                             className={cn(
                               "font-medium",
-                              isRejected && "line-through text-txt-secondary"
+                              isRejected && "text-txt-secondary"
                             )}
                           >
                             {det.text.length > 60 ? det.text.slice(0, 60) + "..." : det.text}
