@@ -38,6 +38,17 @@ import {
 import { createManualDetection, deleteManualDetection } from "@/lib/actions/manual-detection-actions";
 import ManualDetectionPopover from "@/components/review/manual-detection-popover";
 import AILearningPanel from "@/components/review/ai-learning-panel";
+import dynamic from "next/dynamic";
+
+const PdfViewer = dynamic(() => import("@/components/review/pdf-viewer"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center py-20">
+      <div className="w-8 h-8 border-3 border-brand-primary border-t-transparent rounded-full animate-spin" />
+      <span className="ml-3 text-sm text-txt-secondary">Loading PDF viewer...</span>
+    </div>
+  ),
+});
 import { lgoimaGrounds } from "@/lib/lgoima-grounds";
 import { cn } from "@/lib/utils";
 import {
@@ -86,6 +97,8 @@ export interface ReviewClientProps {
   detections: Detection[];
   documentIds: string[];
   currentDocIndex: number;
+  isPdf?: boolean;
+  pdfUrl?: string;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -169,6 +182,8 @@ export default function ReviewClient({
   detections,
   documentIds,
   currentDocIndex,
+  isPdf,
+  pdfUrl,
 }: ReviewClientProps) {
   const router = useRouter();
 
@@ -1073,83 +1088,99 @@ export default function ReviewClient({
         {/* --- Document Panels (single scroll container) --- */}
         <div className="flex-1 overflow-y-auto min-h-0">
           <div className="flex min-h-full review-split-pane">
-            {/* LEFT PANEL -- Original Document (hideable) */}
-            {showOriginal && (
-              <div className="w-1/2 border-r border-border">
-                <div className="sticky top-0 z-10 px-4 py-2 border-b border-border bg-surface-card flex items-center gap-2">
-                  <Eye size={13} className="text-txt-secondary" />
-                  <span className="text-xs font-semibold text-txt-secondary uppercase tracking-wider">
-                    Original Document
-                  </span>
-                </div>
-                <div className="max-w-[640px] mx-auto px-8 py-6">
-                  <div className="bg-white border border-gray-200 rounded shadow-sm px-10 py-8 min-h-[600px]">
-                    <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200">
-                      <div className="w-8 h-8 rounded-full bg-brand-primary flex items-center justify-center">
-                        <span className="text-white font-heading text-xs font-bold">
-                          {header.title.split(" ").map(w => w[0]).slice(0, 2).join("")}
-                        </span>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-txt-secondary uppercase tracking-widest font-semibold">
-                          {header.title}
-                        </p>
-                        <p className="text-[9px] text-txt-secondary/60">
-                          {header.subtitle}
-                        </p>
-                      </div>
-                      <span className="ml-auto text-[9px] text-txt-secondary/50">{header.date}</span>
-                    </div>
-                    {documentContent.map((para, i) => renderOriginalParagraph(para, i))}
-                  </div>
-                </div>
+            {isPdf && pdfUrl ? (
+              /* ===== PDF MODE: single panel with detection overlays ===== */
+              <div className="w-full h-full">
+                <PdfViewer
+                  fileUrl={pdfUrl}
+                  detections={detections}
+                  selectedDetectionId={selectedDetectionId}
+                  onDetectionClick={handleHighlightClick}
+                  detectionStates={detectionStates}
+                />
               </div>
-            )}
-
-            {/* RIGHT PANEL -- Redacted View */}
-            <div className={showOriginal ? "w-1/2" : "w-full"} onMouseUp={handleTextSelection}>
-              <div className="sticky top-0 z-10 px-4 py-2 border-b border-border bg-surface-card flex items-center gap-2">
-                <Edit size={13} className="text-brand-primary" />
-                <span className="text-xs font-semibold text-brand-primary uppercase tracking-wider">
-                  Redacted View
-                </span>
-                <span className="ml-auto flex items-center gap-3 text-[10px] text-txt-secondary" aria-label="Confidence level legend">
-                  <span className="flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 rounded-full bg-confidence-high inline-block" aria-hidden="true" />
-                    High
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 rounded-full bg-confidence-medium inline-block" aria-hidden="true" />
-                    Medium
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 rounded-full bg-confidence-low inline-block" aria-hidden="true" />
-                    Low
-                  </span>
-                </span>
-              </div>
-              <div className={cn("mx-auto px-8 py-6", showOriginal ? "max-w-[640px]" : "max-w-[800px]")}>
-                <div className="bg-white border border-gray-200 rounded shadow-sm px-10 py-8 min-h-[600px]">
-                  <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200">
-                    <div className="w-8 h-8 rounded-full bg-brand-primary flex items-center justify-center">
-                      <span className="text-white font-heading text-xs font-bold">
-                        {header.title.split(" ").map(w => w[0]).slice(0, 2).join("")}
+            ) : (
+              /* ===== HTML MODE: original + redacted split panels ===== */
+              <>
+                {/* LEFT PANEL -- Original Document (hideable) */}
+                {showOriginal && (
+                  <div className="w-1/2 border-r border-border">
+                    <div className="sticky top-0 z-10 px-4 py-2 border-b border-border bg-surface-card flex items-center gap-2">
+                      <Eye size={13} className="text-txt-secondary" />
+                      <span className="text-xs font-semibold text-txt-secondary uppercase tracking-wider">
+                        Original Document
                       </span>
                     </div>
-                    <div>
-                      <p className="text-[10px] text-txt-secondary uppercase tracking-widest font-semibold">
-                        {header.title}
-                      </p>
-                      <p className="text-[9px] text-txt-secondary/60">
-                        {header.subtitle}
-                      </p>
+                    <div className="max-w-[640px] mx-auto px-8 py-6">
+                      <div className="bg-white border border-gray-200 rounded shadow-sm px-10 py-8 min-h-[600px]">
+                        <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200">
+                          <div className="w-8 h-8 rounded-full bg-brand-primary flex items-center justify-center">
+                            <span className="text-white font-heading text-xs font-bold">
+                              {header.title.split(" ").map(w => w[0]).slice(0, 2).join("")}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-txt-secondary uppercase tracking-widest font-semibold">
+                              {header.title}
+                            </p>
+                            <p className="text-[9px] text-txt-secondary/60">
+                              {header.subtitle}
+                            </p>
+                          </div>
+                          <span className="ml-auto text-[9px] text-txt-secondary/50">{header.date}</span>
+                        </div>
+                        {documentContent.map((para, i) => renderOriginalParagraph(para, i))}
+                      </div>
                     </div>
-                    <span className="ml-auto text-[9px] text-txt-secondary/50">{header.date}</span>
                   </div>
-                  {documentContent.map((para, i) => renderRedactedParagraph(para, i))}
+                )}
+
+                {/* RIGHT PANEL -- Redacted View */}
+                <div className={showOriginal ? "w-1/2" : "w-full"} onMouseUp={handleTextSelection}>
+                  <div className="sticky top-0 z-10 px-4 py-2 border-b border-border bg-surface-card flex items-center gap-2">
+                    <Edit size={13} className="text-brand-primary" />
+                    <span className="text-xs font-semibold text-brand-primary uppercase tracking-wider">
+                      Redacted View
+                    </span>
+                    <span className="ml-auto flex items-center gap-3 text-[10px] text-txt-secondary" aria-label="Confidence level legend">
+                      <span className="flex items-center gap-1">
+                        <span className="w-2.5 h-2.5 rounded-full bg-confidence-high inline-block" aria-hidden="true" />
+                        High
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-2.5 h-2.5 rounded-full bg-confidence-medium inline-block" aria-hidden="true" />
+                        Medium
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-2.5 h-2.5 rounded-full bg-confidence-low inline-block" aria-hidden="true" />
+                        Low
+                      </span>
+                    </span>
+                  </div>
+                  <div className={cn("mx-auto px-8 py-6", showOriginal ? "max-w-[640px]" : "max-w-[800px]")}>
+                    <div className="bg-white border border-gray-200 rounded shadow-sm px-10 py-8 min-h-[600px]">
+                      <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200">
+                        <div className="w-8 h-8 rounded-full bg-brand-primary flex items-center justify-center">
+                          <span className="text-white font-heading text-xs font-bold">
+                            {header.title.split(" ").map(w => w[0]).slice(0, 2).join("")}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-txt-secondary uppercase tracking-widest font-semibold">
+                            {header.title}
+                          </p>
+                          <p className="text-[9px] text-txt-secondary/60">
+                            {header.subtitle}
+                          </p>
+                        </div>
+                        <span className="ml-auto text-[9px] text-txt-secondary/50">{header.date}</span>
+                      </div>
+                      {documentContent.map((para, i) => renderRedactedParagraph(para, i))}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              </>
+            )}
           </div>
         </div>
 

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getCase } from "@/lib/data/cases";
-import { getDocument, getDocumentIdsForCase } from "@/lib/data/documents";
+import { getDocument, getDocumentIdsForCase, getDocumentPages } from "@/lib/data/documents";
 import { getDetectionsForDocument } from "@/lib/data/detections";
 import { getDocumentContent, documentHeaders } from "@/lib/data/document-content";
 import { markDocumentInReview } from "@/lib/actions/detection-actions";
@@ -18,12 +18,13 @@ export default async function ReviewPage({
   await authorizeForCase(user, id);
 
   // Fetch all data in parallel
-  const [caseData, doc, detections, content, documentIds] = await Promise.all([
+  const [caseData, doc, detections, content, documentIds, pages] = await Promise.all([
     getCase(id),
     getDocument(docId),
     getDetectionsForDocument(docId),
     getDocumentContent(docId),
     getDocumentIdsForCase(id),
+    getDocumentPages(docId),
   ]);
 
   if (!caseData || !doc) {
@@ -52,6 +53,10 @@ export default async function ReviewPage({
   // Determine effective doc status after potential transition
   const docStatus = doc.status === "ready" ? "in-review" : doc.status;
 
+  // PDF viewer: check if this is a PDF with actual page data
+  const isPdf = doc.type === "pdf" && pages.length > 0 && !!doc.originalPath;
+  const pdfUrl = doc.originalPath ? `/api/files/${doc.originalPath}` : undefined;
+
   return (
     <ReviewClient
       requestId={id}
@@ -64,6 +69,8 @@ export default async function ReviewPage({
       detections={detections}
       documentIds={documentIds}
       currentDocIndex={currentDocIndex === -1 ? 0 : currentDocIndex}
+      isPdf={isPdf}
+      pdfUrl={pdfUrl}
     />
   );
 }

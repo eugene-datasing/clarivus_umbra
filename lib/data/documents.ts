@@ -44,6 +44,7 @@ export async function getDocument(id: string) {
     assignee: d.assignee?.name ?? null,
     updatedAt: d.updatedAt.toISOString(),
     duplicateGroup: d.duplicateGroup ?? undefined,
+    originalPath: d.originalPath ?? undefined,
   };
 }
 
@@ -54,6 +55,14 @@ export async function getDocumentIdsForCase(caseId: string): Promise<string[]> {
     orderBy: { name: "asc" },
   });
   return docs.map((d) => d.id);
+}
+
+export async function getDocumentPages(documentId: string) {
+  return prisma.documentPage.findMany({
+    where: { documentId },
+    select: { pageNumber: true, width: true, height: true },
+    orderBy: { pageNumber: "asc" },
+  });
 }
 
 export async function getQueueDocuments() {

@@ -85,13 +85,14 @@ function computeBoxFromWords(
 
   if (minX === Infinity) return { posX: 0, posY: 0, posW: 0, posH: 0 };
 
-  // Normalize to 0-1 range if page dimensions are available
+  // Normalize to 0-100 percentage range if page dimensions are available.
+  // This matches what redact_pdf_pymupdf.py expects (divides by 100).
   if (pageWidth && pageHeight && pageWidth > 0 && pageHeight > 0) {
     return {
-      posX: Math.round((minX / pageWidth) * 10000) / 10000,
-      posY: Math.round((minY / pageHeight) * 10000) / 10000,
-      posW: Math.round(((maxX - minX) / pageWidth) * 10000) / 10000,
-      posH: Math.round(((maxY - minY) / pageHeight) * 10000) / 10000,
+      posX: Math.round((minX / pageWidth) * 100 * 100) / 100,
+      posY: Math.round((minY / pageHeight) * 100 * 100) / 100,
+      posW: Math.round(((maxX - minX) / pageWidth) * 100 * 100) / 100,
+      posH: Math.round(((maxY - minY) / pageHeight) * 100 * 100) / 100,
     };
   }
 
