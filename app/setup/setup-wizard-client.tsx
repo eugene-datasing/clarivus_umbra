@@ -123,6 +123,9 @@ export default function SetupWizardClient({
 
   // Step 0: Organisation Identity
   const [identity, setIdentity] = useState<OrgIdentity>(initialIdentity);
+  // Fields pre-seeded from activation code are read-only
+  const orgNameLocked = !!initialIdentity.name;
+  const orgAbbrLocked = !!initialIdentity.abbreviation;
 
   // Step 1: Departments
   const [departments, setDepartments] = useState<Department[]>(initialDepartments);
@@ -438,10 +441,12 @@ export default function SetupWizardClient({
                         </label>
                         <input
                           type="text"
-                          className="input-field"
+                          className={cn("input-field", orgNameLocked && "bg-gray-100 text-txt-secondary cursor-not-allowed")}
                           placeholder="e.g. New Plymouth District Council"
                           value={identity.name}
-                          onChange={(e) => setIdentity({ ...identity, name: e.target.value })}
+                          onChange={(e) => !orgNameLocked && setIdentity({ ...identity, name: e.target.value })}
+                          readOnly={orgNameLocked}
+                          title={orgNameLocked ? "Set during activation — contact DataSing to change" : undefined}
                         />
                       </div>
 
@@ -464,10 +469,12 @@ export default function SetupWizardClient({
                         </label>
                         <input
                           type="text"
-                          className="input-field"
+                          className={cn("input-field", orgAbbrLocked && "bg-gray-100 text-txt-secondary cursor-not-allowed")}
                           placeholder="e.g. NPDC"
                           value={identity.abbreviation}
-                          onChange={(e) => setIdentity({ ...identity, abbreviation: e.target.value })}
+                          onChange={(e) => !orgAbbrLocked && setIdentity({ ...identity, abbreviation: e.target.value })}
+                          readOnly={orgAbbrLocked}
+                          title={orgAbbrLocked ? "Set during activation — contact DataSing to change" : undefined}
                         />
                       </div>
 
