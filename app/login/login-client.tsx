@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { EyeOff, LogIn } from "lucide-react";
 
 interface LoginClientProps {
@@ -78,7 +79,7 @@ export default function LoginClient({ ssoEnabled = false }: LoginClientProps) {
           )}
 
           {/* ---- Azure AD / Microsoft SSO ---- */}
-          {ssoEnabled && (
+          {ssoEnabled ? (
             <>
               <button
                 type="button"
@@ -108,80 +109,78 @@ export default function LoginClient({ ssoEnabled = false }: LoginClientProps) {
                 )}
               </button>
 
-              <div className="relative my-5">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-border" />
+              <p className="mt-4 text-xs text-txt-secondary text-center">
+                Sign in with your organisation&apos;s Azure AD credentials.
+              </p>
+            </>
+          ) : (
+            /* Credentials form — only shown when SSO is not configured (local dev) */
+            <>
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="login-email" className="block text-sm font-medium text-txt-primary mb-1.5">
+                    Email
+                  </label>
+                  <input
+                    id="login-email"
+                    type="email"
+                    className="input-field"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    aria-required="true"
+                    aria-invalid={error ? "true" : undefined}
+                    aria-describedby={error ? "login-error" : undefined}
+                    autoComplete="email"
+                  />
                 </div>
-                <div className="relative flex justify-center text-xs">
-                  <span className="bg-white px-3 text-txt-secondary">or</span>
+                <div>
+                  <label htmlFor="login-password" className="block text-sm font-medium text-txt-primary mb-1.5">
+                    Password
+                  </label>
+                  <input
+                    id="login-password"
+                    type="password"
+                    className="input-field"
+                    placeholder="Enter password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    aria-required="true"
+                    aria-invalid={error ? "true" : undefined}
+                    aria-describedby={error ? "login-error" : undefined}
+                    autoComplete="current-password"
+                  />
                 </div>
+                <button
+                  type="submit"
+                  className="btn-primary w-full flex items-center justify-center gap-2"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <span>Signing in...</span>
+                  ) : (
+                    <>
+                      <LogIn className="w-4 h-4" />
+                      Sign In
+                    </>
+                  )}
+                </button>
               </div>
             </>
           )}
-
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="login-email" className="block text-sm font-medium text-txt-primary mb-1.5">
-                Email
-              </label>
-              <input
-                id="login-email"
-                type="email"
-                className="input-field"
-                placeholder="you@npdc.govt.nz"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                aria-required="true"
-                aria-invalid={error ? "true" : undefined}
-                aria-describedby={error ? "login-error" : undefined}
-                autoComplete="email"
-              />
-            </div>
-            <div>
-              <label htmlFor="login-password" className="block text-sm font-medium text-txt-primary mb-1.5">
-                Password
-              </label>
-              <input
-                id="login-password"
-                type="password"
-                className="input-field"
-                placeholder="Enter password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                aria-required="true"
-                aria-invalid={error ? "true" : undefined}
-                aria-describedby={error ? "login-error" : undefined}
-                autoComplete="current-password"
-              />
-            </div>
-            <button
-              type="submit"
-              className="btn-primary w-full flex items-center justify-center gap-2"
-              disabled={loading}
-            >
-              {loading ? (
-                <span>Signing in...</span>
-              ) : (
-                <>
-                  <LogIn className="w-4 h-4" />
-                  Sign In
-                </>
-              )}
-            </button>
-          </div>
-
-          <div className="mt-4 pt-4 border-t border-border">
-            <p className="text-xs text-txt-secondary text-center mb-2">Demo accounts:</p>
-            <div className="space-y-1 text-xs text-txt-secondary">
-              <p><span className="font-mono">k.williams@npdc.govt.nz</span> (Reviewer)</p>
-              <p><span className="font-mono">a.richardson@npdc.govt.nz</span> (Senior Reviewer)</p>
-              <p><span className="font-mono">admin@npdc.govt.nz</span> (Admin)</p>
-              <p className="text-txt-secondary/60">Password for all: <span className="font-mono">demo123</span></p>
-            </div>
-          </div>
         </form>
+
+        <div className="mt-6 flex justify-center">
+          <Image
+            src="/images/Datasing_Logo-01.svg"
+            alt="DataSing"
+            width={120}
+            height={32}
+            priority
+          />
+        </div>
       </div>
     </div>
   );

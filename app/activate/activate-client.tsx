@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { EyeOff, KeyRound, CheckCircle2, AlertCircle, User } from "lucide-react";
 import { redeemActivationCode } from "@/lib/actions/activation-actions";
 
@@ -183,9 +184,15 @@ export default function ActivateClient({ userName }: ActivateClientProps) {
           )}
         </div>
 
-        <p className="text-center text-xs text-txt-secondary mt-6">
-          Veil &mdash; DataSing / Clarivus AI
-        </p>
+        <div className="mt-6 flex justify-center">
+          <Image
+            src="/images/Datasing_Logo-01.svg"
+            alt="DataSing"
+            width={120}
+            height={32}
+            priority
+          />
+        </div>
       </div>
     </div>
   );
