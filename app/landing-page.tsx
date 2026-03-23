@@ -349,18 +349,47 @@ export default function LandingPage() {
               Request Demo
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
+            <div className="w-px h-6 bg-current opacity-15 mx-1" />
+            <a
+              href="https://datasing.nz"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="DataSing — visit datasing.nz"
+              className="flex-shrink-0"
+            >
+              <img
+                src={scrolled ? "/images/Datasing_Logo-01.svg" : "/images/Datasing_Logo-02.svg"}
+                alt="DataSing"
+                className="h-7 w-auto transition-opacity duration-300"
+              />
+            </a>
           </div>
 
-          <button
-            onClick={() => setMobileOpen((v) => !v)}
-            className={`lg:hidden p-2 -mr-2 transition-colors ${
-              scrolled ? "text-txt-primary" : "text-white"
-            }`}
-            aria-label={mobileOpen ? "Close menu" : "Open menu"}
-            aria-expanded={mobileOpen}
-          >
-            {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
+          <div className="lg:hidden flex items-center gap-2">
+            <a
+              href="https://datasing.nz"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="DataSing — visit datasing.nz"
+              className="flex-shrink-0"
+            >
+              <img
+                src={scrolled ? "/images/Datasing_Logo-01.svg" : "/images/Datasing_Logo-02.svg"}
+                alt="DataSing"
+                className="h-5 w-auto"
+              />
+            </a>
+            <button
+              onClick={() => setMobileOpen((v) => !v)}
+              className={`p-2 -mr-2 transition-colors ${
+                scrolled ? "text-txt-primary" : "text-white"
+              }`}
+              aria-label={mobileOpen ? "Close menu" : "Open menu"}
+              aria-expanded={mobileOpen}
+            >
+              {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+          </div>
         </div>
 
         {mobileOpen && (

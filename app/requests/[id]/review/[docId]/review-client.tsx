@@ -584,7 +584,7 @@ export default function ReviewClient({
   const handleAcceptAndAdvance = useCallback(
     async (detectionId: string) => {
       await handleAccept(detectionId);
-      setStatusAnnouncement("Detection accepted");
+      setStatusAnnouncement("Detection redacted");
       focusNextDetection(detectionId);
     },
     [handleAccept, focusNextDetection],
@@ -765,19 +765,52 @@ export default function ReviewClient({
   /*  Render helpers                                                         */
   /* ---------------------------------------------------------------------- */
 
-  /** Render paragraph segments -- original (no highlights) */
+  /** Render paragraph segments -- original view with state-based highlights */
   function renderOriginalParagraph(para: DocParagraph, idx: number) {
     return (
-      <div key={idx} className={para.heading ? "mt-5" : "mt-3"}>
+      <div key={idx} className={para.heading ? "mt-5" : "mt-3"} data-page={para.page ?? 1}>
         {para.heading && (
           <h3 className="font-heading text-sm font-bold text-txt-primary mb-1 leading-snug">
             {para.heading}
           </h3>
         )}
         <p className="text-[11.5px] leading-[1.7] text-txt-primary/90 whitespace-pre-line">
-          {para.segments.map((seg, si) => (
-            <span key={si}>{seg.text}</span>
-          ))}
+          {para.segments.map((seg, si) => {
+            if (!seg.detectionId) return <span key={si}>{seg.text}</span>;
+
+            const det = detectionById.get(seg.detectionId);
+            if (!det) return <span key={si}>{seg.text}</span>;
+
+            const state = detectionStates[det.id];
+            const isSelected = selectedDetectionId === det.id;
+            const isRejected = state?.status === "rejected";
+            const isAccepted = state?.status === "accepted";
+
+            return (
+              <span
+                key={si}
+                onClick={() => handleHighlightClick(det.id)}
+                className={cn(
+                  "relative cursor-pointer inline rounded-sm px-0.5 -mx-0.5 border transition-all duration-150",
+                  isRejected
+                    ? "bg-emerald-100/70 border-emerald-300"  // Green = cleared
+                    : isAccepted
+                    ? "bg-red-200/70 border-red-400"          // Red = will be redacted
+                    : "bg-amber-200/70 border-amber-300",     // Yellow = pending
+                  isSelected && "ring-2 ring-brand-primary ring-offset-1"
+                )}
+                title={
+                  isRejected
+                    ? "Cleared — will not be redacted"
+                    : isAccepted
+                    ? `Redacted — ${groundLabel(state?.appliedGround ?? null)}`
+                    : `Pending review — ${det.confidence}% confidence`
+                }
+              >
+                {seg.text}
+              </span>
+            );
+          })}
         </p>
       </div>
     );
@@ -803,8 +836,55 @@ export default function ReviewClient({
             const isSelected = selectedDetectionId === det.id;
             const isRejected = state?.status === "rejected";
             const isAccepted = state?.status === "accepted";
-            const typeConf = detectionTypeConfig[det.type as keyof typeof detectionTypeConfig];
+            const appliedGround = state?.appliedGround;
 
+            // Rejected → plain text, no highlight (cleared for release)
+            if (isRejected) {
+              return (
+                <span
+                  key={si}
+                  ref={(el) => { redactionRefs.current[det.id] = el; }}
+                  onClick={() => handleHighlightClick(det.id)}
+                  className="cursor-pointer"
+                >
+                  {seg.text}
+                </span>
+              );
+            }
+
+            // Accepted/Redacted → black bar with ground superscript
+            if (isAccepted) {
+              const groundRef = appliedGround ? groundLabel(appliedGround) : null;
+              return (
+                <span
+                  key={si}
+                  ref={(el) => { redactionRefs.current[det.id] = el; }}
+                  onClick={() => handleHighlightClick(det.id)}
+                  className={cn(
+                    "relative cursor-pointer inline rounded-sm transition-all duration-150",
+                    isSelected && "ring-2 ring-brand-primary ring-offset-1"
+                  )}
+                  title={groundRef ? `Redacted — ${groundRef}` : "Redacted"}
+                >
+                  <span
+                    className="bg-gray-900 text-transparent select-none px-0.5 rounded-[2px]"
+                    aria-hidden="true"
+                  >
+                    {seg.text}
+                  </span>
+                  {groundRef && (
+                    <span className="absolute -top-2.5 right-0 text-[8px] font-mono font-semibold text-gray-500 select-none whitespace-nowrap pointer-events-none">
+                      {groundRef}
+                    </span>
+                  )}
+                  <span className="sr-only">
+                    Redacted: {seg.text}{groundRef ? ` (${groundRef})` : ""}
+                  </span>
+                </span>
+              );
+            }
+
+            // Pending → yellow highlight
             return (
               <span
                 key={si}
@@ -812,21 +892,12 @@ export default function ReviewClient({
                 onClick={() => handleHighlightClick(det.id)}
                 className={cn(
                   "relative cursor-pointer inline rounded-sm px-0.5 -mx-0.5 border transition-all duration-150",
-                  isRejected
-                    ? "opacity-50 bg-transparent border-dashed border-gray-300"
-                    : confBgClass(det.confidence),
-                  isSelected && !isRejected && "ring-2 ring-brand-primary ring-offset-1",
-                  isAccepted && !isRejected && "ring-1 ring-confidence-high"
+                  "bg-amber-200/70 border-amber-300",
+                  isSelected && "ring-2 ring-brand-primary ring-offset-1"
                 )}
-                title={typeConf ? `${typeConf.label} \u2014 ${det.confidence}% confidence` : `${det.type} \u2014 ${det.confidence}% confidence`}
+                title={`Pending review — ${det.confidence}% confidence`}
               >
                 {seg.text}
-                {isAccepted && !isRejected && (
-                  <Check
-                    size={10}
-                    className="inline-block ml-0.5 text-confidence-high align-text-top"
-                  />
-                )}
               </span>
             );
           })}
@@ -911,16 +982,16 @@ export default function ReviewClient({
         <div className="flex items-center gap-3 shrink-0">
           {/* Mini progress */}
           <div className="hidden lg:flex items-center gap-2.5 text-[11px] text-txt-secondary">
-            <span className="flex items-center gap-1">
-              <Check size={11} className="text-confidence-high" />
+            <span className="flex items-center gap-1" title="Redacted">
+              <span className="w-2 h-2 rounded-sm bg-gray-900 inline-block" />
               {stats.accepted}
             </span>
-            <span className="flex items-center gap-1">
-              <X size={11} className="text-confidence-low" />
+            <span className="flex items-center gap-1" title="Cleared">
+              <span className="w-2 h-2 rounded-sm bg-emerald-400 inline-block" />
               {stats.rejected}
             </span>
-            <span className="flex items-center gap-1">
-              <AlertCircle size={11} className="text-confidence-medium" />
+            <span className="flex items-center gap-1" title="Pending">
+              <span className="w-2 h-2 rounded-sm bg-amber-400 inline-block" />
               {stats.pending}
             </span>
           </div>
@@ -1110,6 +1181,20 @@ export default function ReviewClient({
                       <span className="text-xs font-semibold text-txt-secondary uppercase tracking-wider">
                         Original Document
                       </span>
+                      <span className="ml-auto flex items-center gap-3 text-[10px] text-txt-secondary" aria-label="Detection status legend">
+                        <span className="flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded-sm bg-amber-300 inline-block" aria-hidden="true" />
+                          Pending
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded-sm bg-red-300 inline-block" aria-hidden="true" />
+                          Redacted
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded-sm bg-emerald-200 inline-block border border-emerald-300" aria-hidden="true" />
+                          Cleared
+                        </span>
+                      </span>
                     </div>
                     <div className="max-w-[640px] mx-auto px-8 py-6">
                       <div className="bg-white border border-gray-200 rounded shadow-sm px-10 py-8 min-h-[600px]">
@@ -1142,18 +1227,18 @@ export default function ReviewClient({
                     <span className="text-xs font-semibold text-brand-primary uppercase tracking-wider">
                       Redacted View
                     </span>
-                    <span className="ml-auto flex items-center gap-3 text-[10px] text-txt-secondary" aria-label="Confidence level legend">
+                    <span className="ml-auto flex items-center gap-3 text-[10px] text-txt-secondary" aria-label="Detection status legend">
                       <span className="flex items-center gap-1">
-                        <span className="w-2.5 h-2.5 rounded-full bg-confidence-high inline-block" aria-hidden="true" />
-                        High
+                        <span className="w-2.5 h-2.5 rounded-sm bg-amber-300 inline-block" aria-hidden="true" />
+                        Pending
                       </span>
                       <span className="flex items-center gap-1">
-                        <span className="w-2.5 h-2.5 rounded-full bg-confidence-medium inline-block" aria-hidden="true" />
-                        Medium
+                        <span className="w-2.5 h-2.5 rounded-sm bg-gray-900 inline-block" aria-hidden="true" />
+                        Redacted
                       </span>
                       <span className="flex items-center gap-1">
-                        <span className="w-2.5 h-2.5 rounded-full bg-confidence-low inline-block" aria-hidden="true" />
-                        Low
+                        <span className="w-2.5 h-2.5 rounded-sm bg-emerald-200 inline-block border border-emerald-300" aria-hidden="true" />
+                        Cleared
                       </span>
                     </span>
                   </div>
@@ -1231,15 +1316,15 @@ export default function ReviewClient({
             {/* Right side: summary */}
             <div className="ml-auto flex items-center gap-4 text-[11px] text-txt-secondary pr-1" role="status" aria-live="polite" aria-label="Detection review progress">
               <span>
-                <span className="font-semibold text-confidence-high">{stats.accepted}</span>{" "}
-                accepted
+                <span className="font-semibold text-gray-900">{stats.accepted}</span>{" "}
+                redacted
               </span>
               <span>
-                <span className="font-semibold text-confidence-low">{stats.rejected}</span>{" "}
-                rejected
+                <span className="font-semibold text-emerald-600">{stats.rejected}</span>{" "}
+                cleared
               </span>
               <span>
-                <span className="font-semibold text-confidence-medium">{stats.pending}</span>{" "}
+                <span className="font-semibold text-amber-600">{stats.pending}</span>{" "}
                 pending
               </span>
             </div>
@@ -1421,13 +1506,13 @@ export default function ReviewClient({
                       {/* Status */}
                       <td className="px-2 py-2">
                         {isAccepted && (
-                          <span className="badge bg-green-50 text-green-700 text-[10px]">
-                            <Check size={10} /> Accepted
+                          <span className="badge bg-gray-900 text-white text-[10px]">
+                            <Check size={10} /> Redacted
                           </span>
                         )}
                         {isRejected && (
-                          <span className="badge bg-red-50 text-red-600 text-[10px]">
-                            <X size={10} /> Rejected
+                          <span className="badge bg-emerald-50 text-emerald-700 text-[10px]">
+                            <X size={10} /> Cleared
                           </span>
                         )}
                         {!isAccepted && !isRejected && (
@@ -1469,12 +1554,12 @@ export default function ReviewClient({
                             <>
                               <button
                                 onClick={() => handleAccept(det.id)}
-                                className="flex items-center gap-0.5 px-2 py-1 rounded-input text-[10px] font-medium bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
-                                title="Accept detection and apply redaction"
-                                aria-label={`Accept detection "${det.text.length > 30 ? det.text.slice(0, 30) + "..." : det.text}"`}
+                                className="flex items-center gap-0.5 px-2 py-1 rounded-input text-[10px] font-medium bg-gray-800 text-white hover:bg-gray-900 transition-colors"
+                                title="Redact this detection"
+                                aria-label={`Redact detection "${det.text.length > 30 ? det.text.slice(0, 30) + "..." : det.text}"`}
                               >
                                 <Check size={11} aria-hidden="true" />
-                                Accept
+                                Redact
                               </button>
                               <button
                                 onClick={() => handleReject(det.id)}
@@ -1598,7 +1683,7 @@ export default function ReviewClient({
               <dd className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-txt-primary">Arrow Up / Down</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-txt-secondary">Accept detection</dt>
+              <dt className="text-txt-secondary">Redact detection</dt>
               <dd className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-txt-primary">A</dd>
             </div>
             <div className="flex justify-between">

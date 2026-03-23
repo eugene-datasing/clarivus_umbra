@@ -25,11 +25,11 @@ interface PdfDetectionOverlayProps {
 function statusColor(status: string): string {
   switch (status) {
     case "accepted":
-      return "border-red-500 bg-red-500/20";
+      return "border-gray-900 bg-gray-900/80";   // Black bar = redacted
     case "rejected":
-      return "border-gray-400 bg-gray-400/10 opacity-40";
+      return "border-emerald-400 bg-emerald-400/15"; // Green = cleared
     default:
-      return "border-amber-500 bg-amber-500/20";
+      return "border-amber-500 bg-amber-500/25";     // Yellow = pending
   }
 }
 
