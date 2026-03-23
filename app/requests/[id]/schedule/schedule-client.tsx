@@ -53,7 +53,7 @@ export default function ScheduleClient({ requestId, caseData, withholdingItems }
 
 Thank you for your request under the Local Government Official Information and Meetings Act 1987 (LGOIMA) for information relating to ${caseDescription || "the requested matter"}.
 
-New Plymouth District Council has decided to grant your request in part. Some information has been withheld under the following sections of the LGOIMA:
+The Council has decided to grant your request in part. Some information has been withheld under the following sections of the LGOIMA:
 
 ${allGrounds.map((g) => `- ${g}`).join("\n")}
 

@@ -442,7 +442,7 @@ export default function SetupWizardClient({
                         <input
                           type="text"
                           className={cn("input-field", orgNameLocked && "bg-gray-100 text-txt-secondary cursor-not-allowed")}
-                          placeholder="e.g. New Plymouth District Council"
+                          placeholder="e.g. Taranaki District Council"
                           value={identity.name}
                           onChange={(e) => !orgNameLocked && setIdentity({ ...identity, name: e.target.value })}
                           readOnly={orgNameLocked}
@@ -470,7 +470,7 @@ export default function SetupWizardClient({
                         <input
                           type="text"
                           className={cn("input-field", orgAbbrLocked && "bg-gray-100 text-txt-secondary cursor-not-allowed")}
-                          placeholder="e.g. NPDC"
+                          placeholder="e.g. TDC"
                           value={identity.abbreviation}
                           onChange={(e) => !orgAbbrLocked && setIdentity({ ...identity, abbreviation: e.target.value })}
                           readOnly={orgAbbrLocked}
@@ -527,7 +527,7 @@ export default function SetupWizardClient({
                         <input
                           type="email"
                           className="input-field"
-                          placeholder="e.g. enquiries@npdc.govt.nz"
+                          placeholder="e.g. enquiries@council.govt.nz"
                           value={identity.email}
                           onChange={(e) => setIdentity({ ...identity, email: e.target.value })}
                         />
@@ -540,7 +540,7 @@ export default function SetupWizardClient({
                         <input
                           type="url"
                           className="input-field"
-                          placeholder="e.g. https://www.npdc.govt.nz"
+                          placeholder="e.g. https://www.council.govt.nz"
                           value={identity.website}
                           onChange={(e) => setIdentity({ ...identity, website: e.target.value })}
                         />

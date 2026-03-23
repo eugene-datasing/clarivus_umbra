@@ -227,7 +227,7 @@ export const DEFAULT_ACTIVATION_STATUS: ActivationStatus = {
 // ---------------------------------------------------------------------------
 
 export interface InstanceConfig {
-  allowedDomain?: string;    // e.g. "npdc.govt.nz"
+  allowedDomain?: string;    // e.g. "council.govt.nz"
   orgTenantId?: string;      // Azure AD tenant ID (for reference)
 }
 

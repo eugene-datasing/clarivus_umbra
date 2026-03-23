@@ -43,8 +43,8 @@ export default async function ReviewPage({
   }
 
   const header = documentHeaders[docId] ?? {
-    title: "New Plymouth District Council",
-    subtitle: "Te Kaunihera-a-Rohe o Ngamotu",
+    title: "District Council",
+    subtitle: "Official Document",
     date: "",
   };
 

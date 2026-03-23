@@ -12,8 +12,8 @@ export async function getDocumentContent(docId: string): Promise<DocParagraph[] 
 }
 
 export const documentHeaders: Record<string, { title: string; subtitle: string; date: string }> = {
-  "doc-001": { title: "New Plymouth District Council", subtitle: "Te Kaunihera-a-Rohe o Ngamotu", date: "28 February 2026" },
-  "doc-002": { title: "New Plymouth District Council", subtitle: "Finance & Infrastructure Division", date: "January 2026" },
-  "doc-003": { title: "Email Thread", subtitle: "NPDC Internal Correspondence", date: "15 March 2026" },
-  "doc-005": { title: "Tonkin & Taylor Ltd", subtitle: "Engineering Consultants", date: "March 2026" },
+  "doc-001": { title: "District Council", subtitle: "Infrastructure Committee Report", date: "28 February 2026" },
+  "doc-002": { title: "District Council", subtitle: "Finance & Infrastructure Division", date: "January 2026" },
+  "doc-003": { title: "Email Thread", subtitle: "Internal Correspondence", date: "15 March 2026" },
+  "doc-005": { title: "Engineering Consultants Ltd", subtitle: "Geotechnical Assessment", date: "March 2026" },
 };
