@@ -79,32 +79,32 @@ const FEATURES = [
   {
     Icon: Shield,
     title: "AI-Powered Detection",
-    text: "GPT-4o identifies personal information, commercially sensitive content, and legally privileged material with contextual understanding\u00a0\u2014 not just pattern matching.",
+    text: "Advanced AI models identify personal information, commercially sensitive content, and legally privileged material with deep contextual understanding. Continuously updated with the latest models available\u00a0\u2014 so detection accuracy improves over time, not just with pattern matching.",
   },
   {
     Icon: Scale,
-    title: "LGOIMA Compliance",
-    text: "Link every redaction to statutory grounds (s6, s7, s17). Generate withholding schedules automatically. Defensible disclosure, every time.",
+    title: "Full LGOIMA Compliance",
+    text: "Link every redaction to statutory grounds across 23 withholding provisions under s6, s7, and s17. Auto-generate withholding schedules with reasoning for both requesters and the Ombudsman. Defensible disclosure, every time.",
   },
   {
     Icon: Layers,
-    title: "Bulk Processing",
-    text: "Ingest and process 1,000\u201310,000+ documents. Detect duplicates, extract text from scans, and apply redactions at scale.",
+    title: "Bulk Processing at Scale",
+    text: "Ingest 1,000\u201310,000+ documents in a single request. Detect exact and near-duplicates, extract text from scanned documents with OCR, process email archives (PST, MSG, EML), and apply redactions across entire document sets.",
   },
   {
     Icon: Users,
-    title: "Collaborative Review",
-    text: "Tiered review workflow\u00a0\u2014 SME, Legal, Final Approver. Track every change with full version comparison and audit trail.",
+    title: "Collaborative Review Workflow",
+    text: "Structured tiered review\u00a0\u2014 Reviewer, Senior Reviewer, Final Approver. Full version comparison between original, draft redacted, and final versions. Every decision tracked with change history and reasoning.",
   },
   {
     Icon: FileCheck,
     title: "Immutable Audit Trail",
-    text: "Every action logged with user ID, timestamp, and reasoning. Chain-of-custody reports and tamper-evident audit logs.",
+    text: "Every action logged with user ID, timestamp, reasoning, and withholding ground. Tamper-evident hash chain ensures integrity. Generate chain-of-custody reports for the Ombudsman at any point.",
   },
   {
     Icon: Zap,
     title: "Rapid Deployment",
-    text: "Cloud-native SaaS on Azure NZ region. No infrastructure to manage. Onboard your team in days, not months.",
+    text: "Cloud-native SaaS hosted in Azure\u2019s New Zealand region. No infrastructure to provision or manage. Onboard your team in days with Azure AD single sign-on and SCIM automated user provisioning.",
   },
 ];
 
@@ -119,22 +119,22 @@ const STEPS = [
   {
     Icon: Upload,
     title: "Ingest",
-    text: "Upload documents individually or in bulk. Support for PDF, DOCX, email exports (PST, MSG, EML), and scanned documents with OCR.",
+    text: "Upload documents individually, in bulk, or via M365 integration. Support for PDF, DOCX, XLSX, email archives (PST, MSG, EML), and scanned documents with intelligent OCR.",
   },
   {
     Icon: Brain,
     title: "AI Analysis",
-    text: "Azure AI identifies sensitive content with contextual reasoning. Each detection includes confidence scores and suggested withholding grounds.",
+    text: "AI models analyse every page with contextual reasoning\u00a0\u2014 not just pattern matching. Each detection includes confidence scores, suggested LGOIMA withholding grounds, and public interest considerations.",
   },
   {
     Icon: CheckCircle,
     title: "Human Review",
-    text: "Tiered review workflow ensures accuracy. Accept, reject, or modify AI recommendations with full change tracking.",
+    text: "Tiered review workflow across Reviewer, Senior Reviewer, and Final Approver roles. Accept, reject, or modify AI recommendations with full change tracking and version comparison.",
   },
   {
     Icon: Send,
     title: "Compliant Release",
-    text: "Export redacted documents, withholding schedules, cover letters, and audit reports. Ready for the requester and the Ombudsman.",
+    text: "Export redacted documents with permanent, irreversible redactions. Auto-generate withholding schedules, cover letters, and Ombudsman-ready audit reports\u00a0\u2014 all in one click.",
   },
 ];
 
@@ -374,50 +374,142 @@ export default function LandingPage() {
 
         {/* Content */}
         <div className="relative max-w-7xl mx-auto px-6 pt-28 pb-20 lg:pt-0 lg:pb-0">
-          <div className="max-w-2xl">
-            <div
-              className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/10 text-white/80 text-xs font-medium mb-8"
-              style={{ animation: "fade-in-up 0.7s ease-out both" }}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-brand-accent animate-pulse" />
-              Purpose-built for NZ Local Government
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            {/* Left — Text */}
+            <div>
+              <div
+                className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/10 text-white/80 text-xs font-medium mb-8"
+                style={{ animation: "fade-in-up 0.7s ease-out both" }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-brand-accent animate-pulse" />
+                Purpose-built for NZ Local Government
+              </div>
+
+              <h1
+                className="font-heading text-4xl sm:text-5xl lg:text-[3.5rem] font-bold text-white leading-[1.1] tracking-tight"
+                style={{ animation: "fade-in-up 0.7s ease-out 0.15s both" }}
+              >
+                AI-Powered Disclosure.{" "}
+                <span className="text-white/60">Compliant. Defensible. Fast.</span>
+              </h1>
+
+              <p
+                className="mt-6 text-base sm:text-lg text-white/70 leading-relaxed max-w-xl font-body"
+                style={{ animation: "fade-in-up 0.7s ease-out 0.3s both" }}
+              >
+                Veil automates the detection and redaction of sensitive information in LGOIMA
+                responses&nbsp;&mdash; transforming weeks of manual review into hours of intelligent,
+                auditable workflow. Process thousands of documents with AI that understands
+                New Zealand legislation.
+              </p>
+
+              {/* Stats row */}
+              <div
+                className="mt-8 grid grid-cols-3 gap-4 max-w-md"
+                style={{ animation: "fade-in-up 0.7s ease-out 0.38s both" }}
+              >
+                <div>
+                  <div className="text-2xl sm:text-3xl font-heading font-bold text-white">10k+</div>
+                  <div className="text-xs text-white/50 mt-0.5">Documents per request</div>
+                </div>
+                <div>
+                  <div className="text-2xl sm:text-3xl font-heading font-bold text-white">23</div>
+                  <div className="text-xs text-white/50 mt-0.5">LGOIMA grounds</div>
+                </div>
+                <div>
+                  <div className="text-2xl sm:text-3xl font-heading font-bold text-white">100%</div>
+                  <div className="text-xs text-white/50 mt-0.5">NZ data sovereignty</div>
+                </div>
+              </div>
+
+              <div
+                className="mt-10 flex flex-wrap gap-4"
+                style={{ animation: "fade-in-up 0.7s ease-out 0.45s both" }}
+              >
+                <button
+                  onClick={() => scrollTo("contact")}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-white text-brand-primary font-semibold text-sm rounded-input hover:bg-white/90 transition-colors"
+                >
+                  Request a Demo
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => scrollTo("features")}
+                  className="inline-flex items-center gap-2 px-6 py-3 border border-white/25 text-white font-medium text-sm rounded-input hover:bg-white/10 transition-colors"
+                >
+                  Learn More
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
-            <h1
-              className="font-heading text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-[1.1] tracking-tight"
-              style={{ animation: "fade-in-up 0.7s ease-out 0.15s both" }}
-            >
-              AI-Powered Disclosure.{" "}
-              <span className="text-white/60">Compliant. Defensible. Fast.</span>
-            </h1>
-
-            <p
-              className="mt-6 text-base sm:text-lg text-white/70 leading-relaxed max-w-xl font-body"
-              style={{ animation: "fade-in-up 0.7s ease-out 0.3s both" }}
-            >
-              Veil automates the detection and redaction of sensitive information in LGOIMA
-              responses&nbsp;&mdash; transforming weeks of manual review into hours of intelligent,
-              auditable workflow.
-            </p>
-
+            {/* Right — Layered screenshot placeholders */}
             <div
-              className="mt-10 flex flex-wrap gap-4"
-              style={{ animation: "fade-in-up 0.7s ease-out 0.45s both" }}
+              className="hidden lg:block relative"
+              style={{ animation: "fade-in-up 0.9s ease-out 0.5s both" }}
+              aria-hidden="true"
             >
-              <button
-                onClick={() => scrollTo("contact")}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-white text-brand-primary font-semibold text-sm rounded-input hover:bg-white/90 transition-colors"
-              >
-                Request a Demo
-                <ArrowRight className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => scrollTo("features")}
-                className="inline-flex items-center gap-2 px-6 py-3 border border-white/25 text-white font-medium text-sm rounded-input hover:bg-white/10 transition-colors"
-              >
-                Learn More
-                <ChevronRight className="w-4 h-4" />
-              </button>
+              <div className="relative w-full aspect-[4/3]">
+                {/* Back card — Dashboard */}
+                <div
+                  className="absolute top-0 right-0 w-[85%] aspect-[16/10] rounded-xl bg-white/[0.07] border border-white/10 backdrop-blur-sm shadow-2xl overflow-hidden"
+                  style={{ transform: "rotate(2deg) translateY(8px)" }}
+                >
+                  <div className="h-7 bg-white/[0.05] border-b border-white/[0.06] flex items-center px-3 gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-white/20" />
+                    <span className="w-2 h-2 rounded-full bg-white/15" />
+                    <span className="w-2 h-2 rounded-full bg-white/10" />
+                    <span className="ml-3 text-[9px] text-white/30 font-mono">veil.local.govt.nz/dashboard</span>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    <div className="flex gap-3">
+                      <div className="h-16 flex-1 rounded-lg bg-white/[0.04] border border-white/[0.06]" />
+                      <div className="h-16 flex-1 rounded-lg bg-white/[0.04] border border-white/[0.06]" />
+                      <div className="h-16 flex-1 rounded-lg bg-white/[0.04] border border-white/[0.06]" />
+                    </div>
+                    <div className="h-24 rounded-lg bg-white/[0.03] border border-white/[0.06]" />
+                  </div>
+                </div>
+
+                {/* Front card — Document Review */}
+                <div
+                  className="absolute bottom-0 left-0 w-[85%] aspect-[16/10] rounded-xl bg-white/[0.10] border border-white/[0.12] backdrop-blur-md shadow-2xl overflow-hidden"
+                  style={{ transform: "rotate(-1deg)" }}
+                >
+                  <div className="h-7 bg-white/[0.06] border-b border-white/[0.08] flex items-center px-3 gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-white/20" />
+                    <span className="w-2 h-2 rounded-full bg-white/15" />
+                    <span className="w-2 h-2 rounded-full bg-white/10" />
+                    <span className="ml-3 text-[9px] text-white/30 font-mono">veil.local.govt.nz/review</span>
+                  </div>
+                  <div className="p-4 flex gap-3">
+                    {/* Document preview area */}
+                    <div className="flex-1 rounded-lg bg-white/[0.05] border border-white/[0.08] p-3 space-y-2">
+                      <div className="h-2 w-3/4 rounded bg-white/10" />
+                      <div className="h-2 w-full rounded bg-white/[0.06]" />
+                      <div className="h-2 w-5/6 rounded bg-white/[0.06]" />
+                      <div className="h-3 w-1/2 rounded bg-brand-accent/30 mt-1" />
+                      <div className="h-2 w-full rounded bg-white/[0.06]" />
+                      <div className="h-3 w-2/3 rounded bg-red-400/20 mt-1" />
+                      <div className="h-2 w-4/5 rounded bg-white/[0.06]" />
+                    </div>
+                    {/* Detection sidebar */}
+                    <div className="w-28 rounded-lg bg-white/[0.04] border border-white/[0.08] p-2 space-y-1.5">
+                      <div className="h-2 w-full rounded bg-white/10" />
+                      <div className="h-6 rounded bg-brand-accent/20 border border-brand-accent/30" />
+                      <div className="h-6 rounded bg-amber-400/15 border border-amber-400/25" />
+                      <div className="h-6 rounded bg-red-400/15 border border-red-400/25" />
+                      <div className="h-6 rounded bg-brand-accent/20 border border-brand-accent/30" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Floating badge */}
+                <div className="absolute -bottom-3 right-8 px-3 py-1.5 rounded-full bg-brand-accent/90 text-white text-[10px] font-semibold shadow-lg flex items-center gap-1.5">
+                  <Shield className="w-3 h-3" />
+                  2,156 detections found
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -440,7 +532,8 @@ export default function LandingPage() {
               Purpose-Built for LGOIMA Disclosure
             </h2>
             <p className="mt-4 text-txt-secondary text-base leading-relaxed">
-              Every capability designed around New Zealand local government workflows
+              Not a generic redaction tool. Veil is a defensible digital disclosure workflow platform
+              designed around the specific requirements of New Zealand&apos;s LGOIMA legislation.
             </p>
           </div>
 
@@ -530,6 +623,10 @@ export default function LandingPage() {
             <h2 className="font-heading text-3xl sm:text-4xl font-bold text-txt-primary">
               From Ingestion to Compliant Release
             </h2>
+            <p className="mt-4 text-txt-secondary text-base leading-relaxed">
+              A structured four-stage pipeline that takes raw documents to Ombudsman-ready
+              disclosure packages with full audit trail at every step.
+            </p>
           </div>
 
           <div className="relative">
@@ -606,10 +703,11 @@ export default function LandingPage() {
             {/* Left column */}
             <div>
               <p className="text-white/70 text-base leading-relaxed mb-8">
-                Veil runs entirely within the Azure New Zealand region. Your documents, AI
-                processing, and audit data never leave NZ shores. Built on enterprise-grade
-                infrastructure with encryption at every layer, role-based access, and automated
-                compliance with NZ legislative frameworks.
+                Veil runs entirely within Azure&apos;s New Zealand North region with disaster recovery
+                in Australia East. Your documents, AI processing, and audit data never leave
+                NZ shores. Built on enterprise-grade infrastructure with encryption at every layer,
+                role-based access control, and automated compliance with the Privacy Act 2020,
+                LGOIMA 1987, and the Public Records Act 2005.
               </p>
 
               <div className="flex flex-wrap gap-2">
@@ -737,7 +835,7 @@ export default function LandingPage() {
                       id="demo-org"
                       type="text"
                       className="input-field"
-                      placeholder="e.g. New Plymouth District Council"
+                      placeholder="e.g. District Council"
                       value={form.organisation}
                       onChange={handleField("organisation")}
                       required
