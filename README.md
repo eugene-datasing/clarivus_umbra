@@ -28,23 +28,38 @@ Hosted on Azure App Service (Linux B1, custom Docker container) with PostgreSQL 
 
 ---
 
+## Prerequisites
+
+| Tool | Version | Purpose |
+|------|---------|---------|
+| Node.js | 18+ (20 recommended) | Runtime |
+| npm | 9+ | Package manager |
+| Docker | Latest | Local PostgreSQL database |
+| Python 3 | 3.x | PDF redaction (optional for dev, required for production) |
+
+**macOS:** `brew install node@20 && brew install --cask docker`
+**Linux:** See [Node.js downloads](https://nodejs.org/) + `sudo apt-get install docker.io docker-compose`
+**Windows:** Use WSL2 with Ubuntu for best compatibility
+
+---
+
 ## Quick Start (Local Development)
 
 ```bash
-# 1. Start PostgreSQL
+# 1. Start PostgreSQL (port 5434 to avoid conflicts)
 docker compose up -d
 
 # 2. Install dependencies
 npm install
 
-# 3. Run database migrations
-DATABASE_URL="postgresql://veil:veil_dev@localhost:5434/veil" npx prisma migrate dev
+# 3. Create .env file with minimum required variables
+#    (copy template below, then generate AUTH_SECRET with: openssl rand -base64 32)
 
-# 4. (Optional) Seed with demo data
-DATABASE_URL="postgresql://veil:veil_dev@localhost:5434/veil" npx prisma db seed
+# 4. Run database migrations
+npx prisma migrate dev
 
-# 5. Configure Azure credentials in .env
-#    See .env.example for required variables
+# 5. (Optional) Seed with demo data — adds users, cases, documents, detections
+npx prisma db seed
 
 # 6. Run development server
 npm run dev
@@ -53,43 +68,97 @@ npm run dev
 open http://localhost:3000
 ```
 
-Requires Node.js 18+, npm 9+, Docker.
-
 ---
 
 ## Environment Variables
 
-```env
-# Database
-DATABASE_URL="postgresql://veil:veil_dev@localhost:5434/veil"
+Create a `.env` file in the project root:
 
-# Azure AI
+```env
+# === REQUIRED ===
+DATABASE_URL="postgresql://veil:veil_dev@localhost:5434/veil"
+AUTH_SECRET="your-32-char-secret"              # openssl rand -base64 32
+
+# === AZURE AI (required for document processing) ===
 AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com
 AZURE_OPENAI_KEY=<key>
 AZURE_OPENAI_DEPLOYMENT=gpt-4o
 AZURE_DI_ENDPOINT=https://<resource>.cognitiveservices.azure.com
 AZURE_DI_KEY=<key>
 
-# Azure AD SSO
+# === AZURE AD SSO (optional — falls back to credentials provider) ===
 AZURE_AD_CLIENT_ID=<client-id>
 AZURE_AD_CLIENT_SECRET=<client-secret>
 AZURE_AD_TENANT_ID=<tenant-id>
 
-# Azure Communication Services (email)
-AZURE_COMMUNICATION_CONNECTION_STRING=<connection-string>
-
-# Azure Blob Storage
-AZURE_BLOB_CONNECTION_STRING=<connection-string>
-
-# Azure Application Insights (telemetry)
-APPLICATIONINSIGHTS_CONNECTION_STRING=<connection-string>
-
-# Auth
-AUTH_SECRET=<random-32-char-string>
-AUTH_CREDENTIALS_ENABLED=true
+# === OPTIONAL ===
+AUTH_CREDENTIALS_ENABLED=true                  # Enable credentials login (dev mode)
+SCIM_API_TOKEN=                                # SCIM user provisioning bearer token
+AZURE_BLOB_CONNECTION_STRING=                  # Blob storage (falls back to local filesystem)
+AZURE_COMMUNICATION_CONNECTION_STRING=         # Email notifications
+APPLICATIONINSIGHTS_CONNECTION_STRING=         # Telemetry
+UPLOAD_DIR=./uploads                           # Local upload directory (dev only)
+EXPORT_DIR=./exports                           # Local export directory (dev only)
 ```
 
-In Azure, secrets are resolved from Key Vault via App Service managed identity references. See `docs/azure-infrastructure-spec.md` section 6 for the full production configuration.
+Without Azure AI keys, the app runs but document processing (OCR, AI detection) is unavailable.
+In production, secrets are resolved from Key Vault via App Service managed identity. See `docs/azure-infrastructure-spec.md`.
+
+---
+
+## Available Scripts
+
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Start development server (port 3000) |
+| `npm run build` | Production build (standalone output) |
+| `npm run start` | Start production server |
+| `npm run lint` | Strict ESLint (0 warnings policy) |
+| `npm run test` | Run Vitest tests |
+| `npx prisma studio` | Database GUI at localhost:5555 |
+| `npx prisma migrate dev` | Run migrations |
+| `npx prisma db seed` | Seed demo data |
+
+---
+
+## Seeded Demo Data
+
+After `npx prisma db seed`, the database includes:
+
+- **6 users** with roles: request-manager, reviewer, senior-reviewer, final-approver
+- **5 LGOIMA cases** with varying statuses and deadlines
+- **15 documents** with processing states
+- **35 AI detections** with confidence scores and LGOIMA grounds
+- **Departments:** Infrastructure, Planning, Legal, etc.
+- **Audit trail entries** and pipeline milestones
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| `Can't reach database at localhost:5434` | `docker compose ps` — check container is running |
+| `Cannot find module '@/lib/generated/prisma/client'` | `npx prisma generate` |
+| Migration fails | `npx prisma migrate status`, then `npx prisma migrate reset` (destructive) |
+| `SessionTokenError` | Check `AUTH_SECRET` is set and 32+ chars; clear browser cookies |
+| Port 3000 in use | `kill -9 $(lsof -ti:3000)` or `PORT=3001 npm run dev` |
+| Docker build on ARM Mac | Use `docker build --platform linux/amd64 -t veil-prototype .` |
+
+---
+
+## Further Documentation
+
+| Document | Description |
+|----------|-------------|
+| [`DEVELOPER-NOTES.md`](DEVELOPER-NOTES.md) | Architecture decisions, what's working, remaining gaps |
+| [`DEMO-SCRIPT.md`](DEMO-SCRIPT.md) | 20-minute demo walkthrough for stakeholders |
+| [`CHANGELOG.md`](CHANGELOG.md) | Version history |
+| [`docs/api-reference.md`](docs/api-reference.md) | REST API and server action reference |
+| [`docs/requirements-traceability.md`](docs/requirements-traceability.md) | RFP requirements mapped to implementation status |
+| [`docs/azure-infrastructure-spec.md`](docs/azure-infrastructure-spec.md) | Azure architecture and deployment |
+| [`docs/auth-and-onboarding-spec.md`](docs/auth-and-onboarding-spec.md) | Authentication and first-run onboarding design |
+| [`docs/client-deployment-activation-spec.md`](docs/client-deployment-activation-spec.md) | Client activation and licensing |
 
 ---
 

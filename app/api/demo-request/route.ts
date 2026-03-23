@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
+import { sendDemoRequestNotification } from "@/lib/email/send";
 
 const demoRequestSchema = z.object({
   name: z.string().min(1, "Name is required").max(200),
@@ -36,6 +37,11 @@ export async function POST(req: NextRequest) {
     });
 
     console.log(`[demo-request] New demo request from ${name} <${email}> at ${organisation}`);
+
+    // Send email notification (non-blocking — don't fail the request if email fails)
+    sendDemoRequestNotification({ name, email, organisation, message }).catch((err) => {
+      console.error("[demo-request] Failed to send email notification:", err);
+    });
 
     return NextResponse.json({ success: true });
   } catch (err) {

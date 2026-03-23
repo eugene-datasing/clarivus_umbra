@@ -137,6 +137,84 @@ export function welcomeEmailText(params: WelcomeEmailParams): string {
   ].join("\n");
 }
 
+// -- Demo Request Notification --
+
+interface DemoRequestEmailParams {
+  name: string;
+  email: string;
+  organisation: string;
+  message: string;
+}
+
+export function demoRequestEmailHtml(params: DemoRequestEmailParams): string {
+  const { name, email, organisation, message } = params;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <tr><td style="background:#3e13af;padding:24px 32px;">
+          <h1 style="margin:0;color:#fff;font-size:20px;font-weight:600;">Veil</h1>
+          <p style="margin:4px 0 0;color:#c4b5fd;font-size:13px;">New Demo Request</p>
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <h2 style="margin:0 0 20px;color:#1f2937;font-size:18px;">Demo Request Received</h2>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+            <tr>
+              <td style="padding:8px 0;color:#6b7280;font-size:13px;font-weight:600;width:110px;vertical-align:top;">Name</td>
+              <td style="padding:8px 0;color:#1f2937;font-size:14px;">${escapeHtml(name)}</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 0;color:#6b7280;font-size:13px;font-weight:600;width:110px;vertical-align:top;">Email</td>
+              <td style="padding:8px 0;color:#1f2937;font-size:14px;">
+                <a href="mailto:${escapeHtml(email)}" style="color:#3e13af;text-decoration:none;">${escapeHtml(email)}</a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:8px 0;color:#6b7280;font-size:13px;font-weight:600;width:110px;vertical-align:top;">Organisation</td>
+              <td style="padding:8px 0;color:#1f2937;font-size:14px;">${escapeHtml(organisation)}</td>
+            </tr>
+            ${message ? `<tr>
+              <td style="padding:8px 0;color:#6b7280;font-size:13px;font-weight:600;width:110px;vertical-align:top;">Message</td>
+              <td style="padding:8px 0;color:#1f2937;font-size:14px;line-height:1.5;">${escapeHtml(message)}</td>
+            </tr>` : ""}
+          </table>
+          <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.5;">
+            This demo request was submitted via the Veil landing page.
+          </p>
+        </td></tr>
+        <tr><td style="padding:16px 32px;background:#f9fafb;border-top:1px solid #e5e7eb;">
+          <p style="margin:0;color:#9ca3af;font-size:11px;text-align:center;">
+            Veil &mdash; DataSing / Clarivus AI
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+export function demoRequestEmailText(params: DemoRequestEmailParams): string {
+  const { name, email, organisation, message } = params;
+  return [
+    "NEW DEMO REQUEST",
+    "================",
+    "",
+    `Name: ${name}`,
+    `Email: ${email}`,
+    `Organisation: ${organisation}`,
+    ...(message ? ["", `Message: ${message}`] : []),
+    "",
+    "---",
+    "Submitted via the Veil landing page.",
+    "",
+    "Veil - DataSing / Clarivus AI",
+  ].join("\n");
+}
+
 // -- Helpers --
 
 /**

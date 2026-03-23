@@ -496,11 +496,12 @@ export default function LandingPage() {
             >
               <div style={{ transform: "rotateX(2deg)" }}>
                 <Image
-                  src="/screenshots/document-review-report.png"
-                  alt="Veil document review interface showing side-by-side original and redacted views with AI-detected sensitive information highlighted in the redacted view"
-                  width={1200}
-                  height={750}
+                  src="/screenshots/dashboard.png"
+                  alt="Veil dashboard showing active LGOIMA cases, document counts, deadlines, and team activity feed"
+                  width={1897}
+                  height={1368}
                   className="w-full h-auto"
+                  quality={95}
                   priority
                 />
               </div>
@@ -508,11 +509,11 @@ export default function LandingPage() {
             {/* Floating indicators */}
             <div className="absolute -bottom-4 left-8 px-3.5 py-2 rounded-lg bg-white shadow-lg shadow-black/10 text-xs font-semibold text-brand-primary flex items-center gap-2 border border-brand-primary/10">
               <Shield className="w-3.5 h-3.5" />
-              12 detections &middot; 3 accepted
+              12 active cases &middot; 1,322 docs
             </div>
             <div className="absolute -bottom-4 right-8 px-3.5 py-2 rounded-lg bg-brand-accent text-white shadow-lg shadow-black/10 text-xs font-semibold flex items-center gap-2">
               <CheckCircle className="w-3.5 h-3.5" />
-              95% avg confidence
+              All deadlines on track
             </div>
           </div>
         </div>
@@ -532,11 +533,11 @@ export default function LandingPage() {
           <div className="max-w-2xl mb-14">
             <p className="text-sm font-semibold text-brand-primary uppercase tracking-wider mb-3">The Challenge</p>
             <h2 className="font-heading text-3xl sm:text-4xl font-bold text-txt-primary leading-tight">
-              LGOIMA Disclosure Is Broken
+              The Growing LGOIMA Challenge
             </h2>
             <p className="mt-4 text-txt-secondary text-base leading-relaxed">
-              Councils across New Zealand face the same compounding pressures. Growing request volumes,
-              shrinking timelines, and escalating compliance expectations&nbsp;&mdash; met with manual
+              Councils across New Zealand face compounding pressures. Growing request volumes,
+              tight statutory timelines, and rising compliance expectations&nbsp;&mdash; met with manual
               processes that weren&apos;t designed for this scale.
             </p>
           </div>
@@ -643,8 +644,9 @@ export default function LandingPage() {
                     src={s.src}
                     alt={s.alt}
                     fill
+                    quality={90}
                     className="object-cover object-top group-hover:scale-[1.02] transition-transform duration-500"
-                    sizes="(max-width: 768px) 100vw, 50vw"
+                    sizes="(max-width: 768px) 100vw, 560px"
                   />
                 </div>
                 <div className="px-5 py-4 border-t border-border">

@@ -11,6 +11,8 @@ import {
   invitationEmailText,
   welcomeEmailHtml,
   welcomeEmailText,
+  demoRequestEmailHtml,
+  demoRequestEmailText,
 } from "./templates";
 
 const SENDER_ADDRESS = process.env.AZURE_COMMUNICATION_SENDER_ADDRESS || "DoNotReply@veil.datasing.co.nz";
@@ -49,6 +51,25 @@ export async function sendWelcomeEmail(params: SendWelcomeParams): Promise<boole
   const text = welcomeEmailText({ recipientName, orgName, loginUrl });
 
   return sendEmail(recipientEmail, recipientName, subject, html, text);
+}
+
+const DEMO_REQUEST_RECIPIENT = process.env.DEMO_REQUEST_EMAIL || "eugene@datasing.nz";
+
+interface SendDemoRequestParams {
+  name: string;
+  email: string;
+  organisation: string;
+  message: string;
+}
+
+export async function sendDemoRequestNotification(params: SendDemoRequestParams): Promise<boolean> {
+  const { name, email, organisation, message } = params;
+
+  const subject = `Veil Demo Request — ${organisation} (${name})`;
+  const html = demoRequestEmailHtml({ name, email, organisation, message });
+  const text = demoRequestEmailText({ name, email, organisation, message });
+
+  return sendEmail(DEMO_REQUEST_RECIPIENT, "DataSing Team", subject, html, text);
 }
 
 async function sendEmail(
