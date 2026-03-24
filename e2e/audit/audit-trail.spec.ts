@@ -4,33 +4,77 @@ import { SEED } from "../fixtures/test-data";
 test.describe("Audit Trail", () => {
   const auditUrl = `/requests/${SEED.cases.coastalWalkway.id}/audit`;
 
-  test("renders the audit trail page", async ({ page }) => {
+  test("renders the audit trail page with heading", async ({ page }) => {
     await page.goto(auditUrl);
-    await expect(page.locator("body")).toContainText(/audit/i);
+    await expect(page.locator("h1, h2").first()).toContainText(/audit trail/i);
   });
 
-  test("displays seeded audit entries", async ({ page }) => {
+  test("shows immutable audit log notice", async ({ page }) => {
     await page.goto(auditUrl);
-    // Seed includes "A. Richardson" creating the case
-    await expect(page.locator("body")).toContainText(/Richardson|created|upload/i);
+    await expect(page.locator("body")).toContainText(
+      /immutable.*cannot be modified/i,
+    );
+  });
+
+  test("shows event and user counts", async ({ page }) => {
+    await page.goto(auditUrl);
+    // Header shows "Events: 17 | Users: 6"
+    await expect(page.locator("body")).toContainText(/events:\s*\d+/i);
+    await expect(page.locator("body")).toContainText(/users:\s*\d+/i);
+  });
+
+  test("has Export PDF and Export CSV buttons", async ({ page }) => {
+    await page.goto(auditUrl);
+    await expect(
+      page.getByRole("button", { name: /export pdf/i }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /export csv/i }),
+    ).toBeVisible();
+  });
+
+  test("has a search input", async ({ page }) => {
+    await page.goto(auditUrl);
+    const search = page.getByPlaceholder(/search/i);
+    await expect(search).toBeVisible();
+  });
+
+  test("has a filter button", async ({ page }) => {
+    await page.goto(auditUrl);
+    const filterBtn = page.getByRole("button", { name: /filter/i });
+    await expect(filterBtn).toBeVisible();
+  });
+
+  test("displays audit entries with user names and roles", async ({
+    page,
+  }) => {
+    await page.goto(auditUrl);
+    // Seed data includes A. Richardson (Request Manager) and K. Williams (Reviewer)
+    await expect(page.locator("body")).toContainText("A. Richardson");
+    await expect(page.locator("body")).toContainText(/request manager/i);
+    await expect(page.locator("body")).toContainText("K. Williams");
+    await expect(page.locator("body")).toContainText(/reviewer/i);
   });
 
   test("shows timestamps on audit entries", async ({ page }) => {
     await page.goto(auditUrl);
-    // Audit entries should contain date-like content (e.g. Mar 2026 or 2026-03)
-    await expect(page.locator("body")).toContainText(/2026|Mar|March/i);
+    // Entries show date like "15 Mar 2026" and time like "09:00:12"
+    await expect(page.locator("body")).toContainText(/Mar 2026/i);
   });
 
-  test("shows user roles in audit entries", async ({ page }) => {
+  test("shows detection accept/reject actions in the log", async ({
+    page,
+  }) => {
     await page.goto(auditUrl);
+    await expect(page.locator("body")).toContainText(/accepted detection/i);
+    await expect(page.locator("body")).toContainText(/rejected detection/i);
+  });
+
+  test("shows system events from Veil System", async ({ page }) => {
+    await page.goto(auditUrl);
+    await expect(page.locator("body")).toContainText("Veil System");
     await expect(page.locator("body")).toContainText(
-      /Request Manager|Reviewer|Senior Reviewer|System/i,
+      /document processing|detection pipeline/i,
     );
-  });
-
-  test("shows detection review actions in audit log", async ({ page }) => {
-    await page.goto(auditUrl);
-    // Seed includes detection accepted/rejected actions
-    await expect(page.locator("body")).toContainText(/accept|reject|review|approv/i);
   });
 });

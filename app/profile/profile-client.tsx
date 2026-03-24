@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { User, Building2, Loader2, CheckCircle2 } from "lucide-react";
 import { updateProfile } from "@/lib/actions/profile-actions";
 
@@ -25,6 +26,7 @@ function formatRole(role: string): string {
 
 export default function ProfileClient({ user, departments }: ProfileClientProps) {
   const router = useRouter();
+  const { update: updateSession } = useSession();
   const [departmentId, setDepartmentId] = useState(user.departmentId || "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -38,6 +40,8 @@ export default function ProfileClient({ user, departments }: ProfileClientProps)
       const result = await updateProfile({ departmentId: departmentId || null });
       if (result.success) {
         setSaved(true);
+        // Refresh the JWT so the session picks up the new departmentId
+        await updateSession();
         router.refresh();
         setTimeout(() => setSaved(false), 3000);
       } else {

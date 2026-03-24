@@ -14,21 +14,10 @@ test.describe("Notifications", () => {
 
   test("can open notification panel", async ({ page }) => {
     await page.goto("/");
-    const sidebar = page.locator("#main-navigation");
-    // Click the notification bell (it's in the bottom section, find button with Bell icon)
-    const buttons = sidebar.locator("button");
-    const count = await buttons.count();
-    // Click the last non-signout button which should be the bell
-    for (let i = 0; i < count; i++) {
-      const btn = buttons.nth(i);
-      const text = await btn.textContent();
-      if (text && /sign out/i.test(text)) continue;
-      const ariaLabel = await btn.getAttribute("aria-label");
-      if (ariaLabel && /notification|bell/i.test(ariaLabel)) {
-        await btn.click();
-        break;
-      }
-    }
+    // The notification button has accessible name "Notifications"
+    const bellBtn = page.getByRole("button", { name: "Notifications" });
+    await expect(bellBtn).toBeVisible();
+    await bellBtn.click();
     // Panel should show notifications or empty state
     await expect(page.locator("body")).toContainText(
       /notification|no recent activity/i,

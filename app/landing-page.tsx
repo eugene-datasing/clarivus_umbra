@@ -95,7 +95,7 @@ const PAIN_POINTS = [
   {
     Icon: Clock,
     title: "Deadline pressure",
-    text: "20 working days per request. Every LGOIMA response is a ticking clock.",
+    text: "20 working days per request. Every OIA and LGOIMA response is a ticking clock.",
   },
   {
     Icon: AlertTriangle,
@@ -112,13 +112,13 @@ const FEATURES = [
   },
   {
     Icon: Scale,
-    title: "Full LGOIMA Compliance",
-    text: "Every redaction linked to statutory grounds (s6, s7, s17). Public interest consideration enforced for s7 grounds. Withholding schedules generated automatically. Reviewers cannot export without linking redactions to statutory grounds.",
+    title: "Full OIA & LGOIMA Compliance",
+    text: "Every redaction linked to statutory grounds (s6, s7, s9, s17). Public interest consideration enforced where required. Withholding schedules generated automatically. Reviewers cannot export without linking redactions to statutory grounds.",
   },
   {
     Icon: Users,
     title: "Tiered Review Workflow",
-    text: "Reviewer \u2192 Senior Reviewer \u2192 Final Approver. The same workflow your council uses, built into the system. Full version comparison, change tracking, and role-based permissions at every stage.",
+    text: "Reviewer \u2192 Senior Reviewer \u2192 Final Approver. The same workflow your organisation uses, built into the system. Full version comparison, change tracking, and role-based permissions at every stage.",
   },
   {
     Icon: Lock,
@@ -142,7 +142,7 @@ const SCREENSHOTS = [
     src: "/screenshots/dashboard.png",
     label: "Dashboard Overview",
     description: "Active cases, document counts, deadlines, and team activity at a glance",
-    alt: "Veil dashboard showing active LGOIMA cases, document counts, deadlines, and recent activity feed",
+    alt: "Veil dashboard showing active OIA and LGOIMA cases, document counts, deadlines, and recent activity feed",
   },
   {
     src: "/screenshots/document-review-report.png",
@@ -173,7 +173,7 @@ const STEPS = [
   {
     Icon: Brain,
     title: "AI Analysis",
-    text: "AI models analyse every page with contextual reasoning. Each detection includes confidence scores, suggested LGOIMA withholding grounds, and public interest considerations.",
+    text: "AI models analyse every page with contextual reasoning. Each detection includes confidence scores, suggested withholding grounds under OIA or LGOIMA, and public interest considerations.",
   },
   {
     Icon: CheckCircle,
@@ -195,6 +195,7 @@ const METRICS = [
 ];
 
 const COMPLIANCE_BADGES = [
+  "OIA 1982",
   "LGOIMA 1987",
   "Privacy Act 2020",
   "Public Records Act 2005",
@@ -454,7 +455,7 @@ export default function LandingPage() {
           <div className="max-w-3xl" style={{ animation: "fade-in-up 0.7s ease-out both" }}>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.08] border border-white/[0.08] text-white/70 text-xs font-medium mb-8 backdrop-blur-sm">
               <span className="w-1.5 h-1.5 rounded-full bg-brand-accent animate-pulse" />
-              Purpose-built for NZ Local Government
+              Purpose-built for NZ Local and Central Government
             </div>
 
             <h1
@@ -463,7 +464,7 @@ export default function LandingPage() {
             >
               Not Just Redaction.
               <br />
-              <span className="text-white/50">Defensible LGOIMA Disclosure.</span>
+              <span className="text-white/50">Defensible OIA &amp; LGOIMA Disclosure.</span>
             </h1>
 
             <p
@@ -526,7 +527,7 @@ export default function LandingPage() {
               <div style={{ transform: "rotateX(2deg)" }}>
                 <Image
                   src="/screenshots/dashboard.png"
-                  alt="Veil dashboard showing active LGOIMA cases, document counts, deadlines, and team activity feed"
+                  alt="Veil dashboard showing active OIA and LGOIMA cases, document counts, deadlines, and team activity feed"
                   width={1897}
                   height={1368}
                   className="w-full h-auto"
@@ -562,10 +563,10 @@ export default function LandingPage() {
           <div className="max-w-2xl mb-14">
             <p className="text-sm font-semibold text-brand-primary uppercase tracking-wider mb-3">The Challenge</p>
             <h2 className="font-heading text-3xl sm:text-4xl font-bold text-txt-primary leading-tight">
-              The Growing LGOIMA Challenge
+              The Growing OIA &amp; LGOIMA Challenge
             </h2>
             <p className="mt-4 text-txt-secondary text-base leading-relaxed">
-              Councils across New Zealand face compounding pressures. Growing request volumes,
+              Government agencies and councils across New Zealand face compounding pressures. Growing request volumes,
               tight statutory timelines, and rising compliance expectations&nbsp;&mdash; met with manual
               processes that weren&apos;t designed for this scale.
             </p>
@@ -604,7 +605,7 @@ export default function LandingPage() {
           <div className="max-w-2xl mx-auto text-center mb-16">
             <p className="text-sm font-semibold text-brand-primary uppercase tracking-wider mb-3">Capabilities</p>
             <h2 className="font-heading text-3xl sm:text-4xl font-bold text-txt-primary leading-tight">
-              Purpose-Built for LGOIMA&nbsp;&mdash;
+              Purpose-Built for OIA &amp; LGOIMA&nbsp;&mdash;
               <br className="hidden sm:block" />
               Not Generic Compliance Software
             </h2>
@@ -914,7 +915,7 @@ export default function LandingPage() {
                 Request a Demo
               </h2>
               <p className="mt-4 text-txt-secondary text-base leading-relaxed">
-                See how Veil can transform your LGOIMA disclosure workflow. We&apos;ll walk you through
+                See how Veil can transform your OIA or LGOIMA disclosure workflow. We&apos;ll walk you through
                 the platform with your team and discuss how it maps to your current process.
               </p>
 

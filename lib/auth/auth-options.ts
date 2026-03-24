@@ -51,6 +51,7 @@ const providers: Provider[] = [
         name: user.name,
         email: user.email ?? undefined,
         role: user.role,
+        departmentId: user.departmentId,
       };
     },
   }),
@@ -178,10 +179,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
         }
 
-        // Attach local DB id and role to the user object so the jwt callback
-        // in auth.config.ts can read them via `user.id` and `user.role`.
+        // Attach local DB id, role, and departmentId to the user object so the
+        // jwt callback can read them.
         user.id = dbUser.id;
         (user as { role?: string }).role = dbUser.role;
+        (user as { departmentId?: string | null }).departmentId = dbUser.departmentId;
       }
 
       return true;
@@ -205,16 +207,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.role = (user as { role?: string }).role ?? "reviewer";
         token.userId = (user as { id?: string }).id;
+        token.departmentId = (user as { departmentId?: string | null }).departmentId ?? null;
       }
 
-      // Re-read role from DB when session.update() is called
+      // Re-read from DB when session.update() is called (e.g. after profile save)
       if (trigger === "update" && token.userId) {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.userId as string },
-          select: { role: true },
+          select: { role: true, departmentId: true },
         });
         if (dbUser) {
           token.role = dbUser.role;
+          token.departmentId = dbUser.departmentId ?? null;
         }
       }
 

@@ -1,25 +1,46 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("Custom Redaction Rules", () => {
-  test("renders the custom rules admin page", async ({ page }) => {
+test.describe("Custom Detection Rules", () => {
+  test("renders the custom rules page with heading", async ({ page }) => {
     await page.goto("/admin/rules");
-    await expect(page.locator("body")).toContainText(/rules|redaction|custom/i);
+    await expect(page.locator("h1, h2").first()).toContainText(
+      /custom detection rules/i,
+    );
   });
 
-  test("shows a button to create a new rule", async ({ page }) => {
+  test("shows the New Rule button", async ({ page }) => {
     await page.goto("/admin/rules");
-    const createBtn = page.getByRole("button", { name: /new|create|add/i }).first();
-    const hasBtn = await createBtn.isVisible({ timeout: 5_000 }).catch(() => false);
-    expect(hasBtn).toBeTruthy();
+    const newRuleBtn = page.getByRole("button", { name: /new rule/i });
+    await expect(newRuleBtn).toBeVisible();
   });
 
-  test("can open the create rule form", async ({ page }) => {
+  test("shows Import and Export buttons", async ({ page }) => {
     await page.goto("/admin/rules");
-    const createBtn = page.getByRole("button", { name: /new|create|add/i }).first();
-    if (await createBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await createBtn.click();
-      // A form or modal should appear with rule type fields
-      await expect(page.locator("body")).toContainText(/keyword|pattern|entity|type/i);
-    }
+    await expect(
+      page.getByRole("button", { name: /import/i }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /export/i }),
+    ).toBeVisible();
+  });
+
+  test("shows rules table with columns", async ({ page }) => {
+    await page.goto("/admin/rules");
+    await expect(page.getByRole("columnheader", { name: "Name" })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Type" })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Status" })).toBeVisible();
+  });
+
+  test("shows empty state when no rules exist", async ({ page }) => {
+    await page.goto("/admin/rules");
+    await expect(page.locator("body")).toContainText(
+      /no custom rules created/i,
+    );
+  });
+
+  test("has a search input", async ({ page }) => {
+    await page.goto("/admin/rules");
+    const search = page.getByPlaceholder(/search/i);
+    await expect(search).toBeVisible();
   });
 });

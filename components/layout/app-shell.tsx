@@ -14,10 +14,10 @@ function ProfileNudge() {
   const { data: session } = useSession();
   const [dismissed, setDismissed] = useState(false);
 
-  // Only show for authenticated users — check via a custom session field
-  // The banner checks are best-effort; the actual department data comes from
-  // the profile page server component.
-  if (dismissed || !session?.user) return null;
+  const user = session?.user as { departmentId?: string | null } | undefined;
+
+  // Only show for authenticated users who have no department set
+  if (dismissed || !session?.user || user?.departmentId) return null;
 
   return (
     <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between text-sm">

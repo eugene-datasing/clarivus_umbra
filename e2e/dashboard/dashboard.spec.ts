@@ -2,32 +2,41 @@ import { test, expect } from "@playwright/test";
 import { SEED } from "../fixtures/test-data";
 
 test.describe("Dashboard", () => {
-  test("renders the dashboard with case cards", async ({ page }) => {
+  test("renders the dashboard with heading", async ({ page }) => {
     await page.goto("/");
-    // The page should contain the Veil branding or a dashboard heading
-    await expect(page.locator("body")).toContainText(/dashboard|requests|cases/i);
+    // The main content area should show a dashboard, not just any page
+    const mainContent = page.locator("[role='main'], #main-content, main").first();
+    await expect(mainContent).toContainText(/dashboard|active cases|recent/i);
   });
 
   test("displays seeded case references", async ({ page }) => {
     await page.goto("/");
-    // At least the first seeded case should be visible
-    await expect(page.locator("body")).toContainText(SEED.cases.coastalWalkway.reference);
+    await expect(page.locator("body")).toContainText(
+      SEED.cases.coastalWalkway.reference,
+    );
   });
 
   test("navigates to case detail when clicking a case", async ({ page }) => {
     await page.goto("/");
-    // Click the first case reference link
     const caseLink = page.getByText(SEED.cases.coastalWalkway.reference);
-    if (await caseLink.isVisible()) {
-      await caseLink.click();
-      await expect(page).toHaveURL(new RegExp(`/requests/${SEED.cases.coastalWalkway.id}`));
-    }
+    await expect(caseLink).toBeVisible();
+    await caseLink.click();
+    await expect(page).toHaveURL(
+      new RegExp(`/requests/${SEED.cases.coastalWalkway.id}`),
+    );
   });
 
-  test("shows dashboard statistics", async ({ page }) => {
+  test("shows case status badges", async ({ page }) => {
     await page.goto("/");
-    // Should show some kind of statistics — total cases, documents, etc.
-    // Check for numeric content that indicates stats are rendering
-    await expect(page.locator("body")).toContainText(/\d+/);
+    // Dashboard should show status indicators for cases
+    await expect(page.locator("body")).toContainText(
+      /in review|triage|pending|senior review/i,
+    );
+  });
+
+  test("shows deadline information for cases", async ({ page }) => {
+    await page.goto("/");
+    // Cases should show deadline/due date info
+    await expect(page.locator("body")).toContainText(/remaining|overdue|due/i);
   });
 });

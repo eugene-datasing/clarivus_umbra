@@ -37,9 +37,11 @@ test.describe("Login", () => {
     await expect(page.locator("body")).not.toContainText("Invalid email or password");
   });
 
-  test("redirects unauthenticated users to /login", async ({ page }) => {
+  test("shows landing page with sign-in link for unauthenticated users", async ({ page }) => {
     await page.goto("/");
-    await expect(page).toHaveURL(/\/login/);
+    // Unauthenticated users see the marketing landing page (not a redirect to /login)
+    const signInLink = page.getByRole("link", { name: /sign in/i }).first();
+    await expect(signInLink).toBeVisible({ timeout: 10_000 });
   });
 
   test("redirects unauthenticated users accessing /requests to /login", async ({ page }) => {

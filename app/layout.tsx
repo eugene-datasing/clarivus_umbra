@@ -11,8 +11,15 @@ import { isActivated } from "@/lib/data/activation";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Veil — LGOIMA Disclosure Platform",
-  description: "AI-powered document redaction and LGOIMA disclosure workflow — DataSing / Clarivus AI",
+  title: "Veil — OIA & LGOIMA Disclosure Platform",
+  description: "AI-powered document redaction and official information disclosure workflow for OIA and LGOIMA — DataSing / Clarivus AI",
+  icons: {
+    icon: [
+      { url: "/favicon/favicon.ico", sizes: "any" },
+      { url: "/favicon/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+    ],
+  },
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
