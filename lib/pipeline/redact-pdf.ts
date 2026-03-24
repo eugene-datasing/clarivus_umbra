@@ -1,12 +1,20 @@
 /**
  * Redaction engine — applies permanent redaction to PDF documents.
  *
- * For PDF originals: calls PyMuPDF (via Python subprocess) which uses
- * add_redact_annot + apply_redactions to genuinely remove text from
- * the PDF content stream. This is true, defensible redaction.
+ * Three-tier approach:
  *
- * For non-PDF originals: generates a new text-based PDF with redaction
- * markers applied (original text never enters the output).
+ * 1. Coordinate-based (PDFs only): calls PyMuPDF with bounding-box
+ *    coordinates from Azure Document Intelligence. Best quality — true
+ *    redaction at exact positions preserving original layout.
+ *
+ * 2. LibreOffice convert + text-search (any format): converts the
+ *    original document to PDF via LibreOffice headless, then uses
+ *    PyMuPDF text search to locate detection text and apply true
+ *    redaction. Preserves original formatting (tables, images, styles).
+ *
+ * 3. Text-based PDF (last resort): generates a new plain-text A4 PDF
+ *    from extracted page text with redaction markers. Loses all
+ *    formatting but guarantees output for every document.
  */
 
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
@@ -24,15 +32,19 @@ interface RedactedResult {
   pageCount: number;
 }
 
+/** File types that LibreOffice can convert to PDF with good fidelity. */
+const LIBREOFFICE_CONVERTIBLE = new Set([
+  "docx", "doc", "xlsx", "xls", "pptx", "ppt", "odt", "ods", "odp",
+  "rtf", "txt", "csv", "html", "htm",
+]);
+
 /**
  * Build a redacted PDF for a document.
  *
- * For PDF originals: load the original, draw black boxes over accepted
- * detections at their bounding-box positions, overlay the ground reference
- * in white text.
- *
- * For non-PDF originals (DOCX, XLSX, TXT, EML, etc.): generate a new
- * text-based PDF from extracted pages with redaction markers applied.
+ * Three-tier fallback:
+ *   1. Coordinate-based PyMuPDF (PDFs with bounding boxes)
+ *   2. LibreOffice conversion + text-search PyMuPDF (non-PDFs)
+ *   3. Plain text PDF generation (last resort)
  */
 export async function buildRedactedPdf(documentId: string): Promise<RedactedResult> {
   const doc = await prisma.document.findUniqueOrThrow({
@@ -46,18 +58,44 @@ export async function buildRedactedPdf(documentId: string): Promise<RedactedResu
 
   const isPdf = doc.fileType.toLowerCase() === "pdf";
 
+  // Tier 1: PDF originals — coordinate-based redaction
   if (isPdf) {
     try {
       return await redactOriginalPdf(doc, acceptedDetections);
     } catch (err) {
       console.warn(
-        `[redact-pdf] PyMuPDF redaction failed for ${doc.id}, falling back to text PDF:`,
+        `[redact-pdf] Coordinate redaction failed for ${doc.id}, trying text-search:`,
         err instanceof Error ? err.message : err,
       );
-      // Fall through to text-based PDF as a safety net
-      return generateTextPdf(doc, acceptedDetections);
+      // Fall through to text-search on the original PDF
     }
   }
+
+  // Tier 2: Convert to PDF (if needed) + text-search redaction
+  if (doc.originalPath) {
+    try {
+      const storage = getStorage();
+      const originalBuffer = await storage.download(doc.originalPath);
+
+      let pdfBuffer: Buffer;
+      if (isPdf) {
+        // PDF coordinate redaction failed above — try text-search on the original
+        pdfBuffer = originalBuffer;
+      } else {
+        // Non-PDF: convert to PDF via LibreOffice
+        pdfBuffer = await convertToPdfWithLibreOffice(originalBuffer, doc.fileType);
+      }
+
+      return await redactByTextSearch(pdfBuffer, acceptedDetections);
+    } catch (err) {
+      console.warn(
+        `[redact-pdf] Conversion/text-search failed for ${doc.id}, falling back to text PDF:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+
+  // Tier 3: Plain text PDF (last resort)
   return generateTextPdf(doc, acceptedDetections);
 }
 
@@ -144,7 +182,131 @@ async function redactOriginalPdf(
 }
 
 // ---------------------------------------------------------------------------
-// Non-PDF originals — generate text-based PDF with redactions
+// Non-PDF originals — convert to PDF via LibreOffice then text-search redact
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert a non-PDF document to PDF using LibreOffice headless.
+ *
+ * Works well for DOCX, XLSX, PPTX, RTF, TXT, CSV, HTML.
+ * EML/MSG are not supported by LibreOffice — those fall through to Tier 3.
+ */
+async function convertToPdfWithLibreOffice(
+  buffer: Buffer,
+  fileType: string,
+): Promise<Buffer> {
+  const ext = fileType.toLowerCase();
+  if (!LIBREOFFICE_CONVERTIBLE.has(ext)) {
+    throw new Error(`LibreOffice cannot convert .${ext} files`);
+  }
+
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "veil-convert-"));
+  const inputPath = path.join(tmpDir, `input.${ext}`);
+
+  try {
+    await fs.writeFile(inputPath, buffer);
+
+    await new Promise<void>((resolve, reject) => {
+      execFile(
+        "libreoffice",
+        [
+          "--headless",
+          "--norestore",
+          "--convert-to", "pdf",
+          "--outdir", tmpDir,
+          inputPath,
+        ],
+        { timeout: 120_000 },
+        (error, stdout, stderr) => {
+          if (error) {
+            console.error("[redact-pdf] LibreOffice stderr:", stderr);
+            reject(new Error(`LibreOffice conversion failed: ${error.message}`));
+          } else {
+            console.log("[redact-pdf] LibreOffice conversion:", stdout.trim());
+            resolve();
+          }
+        },
+      );
+    });
+
+    // LibreOffice outputs input.pdf in the same directory
+    const outputPath = path.join(tmpDir, "input.pdf");
+    const pdfBuffer = await fs.readFile(outputPath);
+    return pdfBuffer;
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/**
+ * Redact a PDF using text-search mode in PyMuPDF.
+ *
+ * Instead of coordinate-based bounding boxes, this passes detection text
+ * strings to the Python script which uses page.search_for() to locate
+ * each string and apply true redaction at the found positions.
+ */
+async function redactByTextSearch(
+  pdfBuffer: Buffer,
+  detections: Array<{
+    text: string;
+    appliedGround: string | null;
+    suggestedGround: string | null;
+    page: number;
+  }>,
+): Promise<RedactedResult> {
+  const redactions = detections.map((det) => {
+    const groundId = det.appliedGround || det.suggestedGround;
+    const ground = groundId ? getGroundById(groundId) : null;
+    return {
+      page: det.page,
+      text: det.text,
+      label: ground ? ground.reference : (groundId || ""),
+    };
+  });
+
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "veil-redact-ts-"));
+  const inputPath = path.join(tmpDir, "input.pdf");
+  const outputPath = path.join(tmpDir, "output.pdf");
+  const jsonPath = path.join(tmpDir, "redactions.json");
+  const scriptPath = path.resolve(process.cwd(), "lib/pipeline/redact_pdf_pymupdf.py");
+
+  try {
+    await fs.writeFile(inputPath, pdfBuffer);
+    await fs.writeFile(jsonPath, JSON.stringify(redactions));
+
+    await new Promise<void>((resolve, reject) => {
+      execFile(
+        "python3",
+        [scriptPath, inputPath, outputPath, jsonPath, "--mode=text-search"],
+        { timeout: 120_000 },
+        (error, stdout, stderr) => {
+          if (error) {
+            console.error("[redact-pdf] PyMuPDF text-search stderr:", stderr);
+            reject(new Error(`PyMuPDF text-search redaction failed: ${error.message}`));
+          } else {
+            console.log("[redact-pdf] PyMuPDF text-search result:", stdout.trim());
+            resolve();
+          }
+        },
+      );
+    });
+
+    const pdfBytes = await fs.readFile(outputPath);
+    const pdfDoc = await PDFDocument.load(pdfBytes);
+    const pageCount = pdfDoc.getPageCount();
+
+    return {
+      pdfBytes: new Uint8Array(pdfBytes),
+      redactionCount: detections.length,
+      pageCount,
+    };
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Fallback — generate text-based PDF with redactions (Tier 3)
 // ---------------------------------------------------------------------------
 
 async function generateTextPdf(

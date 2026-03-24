@@ -16,8 +16,9 @@ RUN npm run build
 FROM node:20-slim AS runner
 WORKDIR /app
 
-# Install Python3 + PyMuPDF for PDF redaction
-RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-pip && \
+# Install Python3 + PyMuPDF for PDF redaction, LibreOffice headless for DOCX/XLSX→PDF conversion
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-pip libreoffice-nogui && \
     pip3 install --break-system-packages PyMuPDF && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
