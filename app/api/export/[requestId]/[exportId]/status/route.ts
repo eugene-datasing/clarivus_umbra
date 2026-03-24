@@ -11,7 +11,7 @@ export async function GET(
   const user = await requireUser();
   await authorizeForCase(user, requestId);
 
-  const progress = getExportProgress(exportId);
+  const progress = await getExportProgress(exportId);
   if (!progress) {
     return NextResponse.json(
       { error: "Export not found" },

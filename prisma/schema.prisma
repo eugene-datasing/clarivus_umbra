@@ -72,6 +72,7 @@ model Case {
   feedbackExamples FeedbackExample[]
   milestones       CaseMilestone[]
   caseAssignments  CaseAssignment[]
+  exportJobs       ExportJob[]
 
   @@map("cases")
 }
@@ -365,6 +366,30 @@ model UserInvitation {
   @@index([email])
   @@index([status])
   @@map("user_invitations")
+}
+
+model ExportJob {
+  id            String    @id @default(cuid())
+  caseId        String
+  case          Case      @relation(fields: [caseId], references: [id])
+  status        String    @default("pending") // pending | generating | verifying | complete | error
+  packageType   String    @default("requester") // requester | internal | ombudsman
+  progress      Int       @default(0) // 0-100
+  currentStep   String?
+  error         String?
+  storageKey    String?   // blob/local storage key for the ZIP
+  sha256        String?
+  filename      String?
+  documentIds   Json?     // string[] of included document IDs
+  docResults    Json?     // per-document success/failure log
+  batchGroupId  String?   // links batched exports together
+  batchNumber   Int?      // 1-based index within a batch group
+  createdAt     DateTime  @default(now())
+  completedAt   DateTime?
+
+  @@index([caseId])
+  @@index([batchGroupId])
+  @@map("export_jobs")
 }
 
 model ProcessingJob {

@@ -3,6 +3,9 @@
  *
  * Assembles a ZIP package containing redacted PDFs, withholding schedule,
  * covering letter, and audit trail — depending on the selected package type.
+ *
+ * Export progress is persisted to the database (ExportJob model) so state
+ * survives container restarts on Azure App Service.
  */
 
 import archiver from "archiver";
@@ -27,28 +30,55 @@ export interface ExportProgress {
   downloadKey?: string;
   sha256?: string;
   filename?: string;
+  docResults?: DocResult[];
 }
 
-// In-memory progress store using globalThis to survive module re-imports in dev
-const globalForExport = globalThis as unknown as {
-  __exportProgressStore?: Map<string, ExportProgress>;
-};
-if (!globalForExport.__exportProgressStore) {
-  globalForExport.__exportProgressStore = new Map<string, ExportProgress>();
-}
-const progressStore = globalForExport.__exportProgressStore;
-
-export function getExportProgress(exportId: string): ExportProgress | null {
-  return progressStore.get(exportId) ?? null;
+interface DocResult {
+  docId: string;
+  docName: string;
+  success: boolean;
+  error?: string;
+  fallback?: boolean; // true if PDF used text-based fallback
 }
 
-function setProgress(exportId: string, update: Partial<ExportProgress>) {
-  const current = progressStore.get(exportId) ?? {
-    status: "pending" as const,
-    progress: 0,
-    currentStep: "Initializing",
+// ---------------------------------------------------------------------------
+// DB-backed progress helpers
+// ---------------------------------------------------------------------------
+
+export async function getExportProgress(exportId: string): Promise<ExportProgress | null> {
+  const job = await prisma.exportJob.findUnique({ where: { id: exportId } });
+  if (!job) return null;
+
+  return {
+    status: job.status as ExportProgress["status"],
+    progress: job.progress,
+    currentStep: job.currentStep ?? "Initializing",
+    error: job.error ?? undefined,
+    downloadKey: job.storageKey ?? undefined,
+    sha256: job.sha256 ?? undefined,
+    filename: job.filename ?? undefined,
+    docResults: (job.docResults as DocResult[] | null) ?? undefined,
   };
-  progressStore.set(exportId, { ...current, ...update });
+}
+
+async function setProgress(exportId: string, update: Partial<ExportProgress>) {
+  const data: Record<string, unknown> = {};
+  if (update.status !== undefined) data.status = update.status;
+  if (update.progress !== undefined) data.progress = update.progress;
+  if (update.currentStep !== undefined) data.currentStep = update.currentStep;
+  if (update.error !== undefined) data.error = update.error;
+  if (update.downloadKey !== undefined) data.storageKey = update.downloadKey;
+  if (update.sha256 !== undefined) data.sha256 = update.sha256;
+  if (update.filename !== undefined) data.filename = update.filename;
+  if (update.docResults !== undefined) data.docResults = update.docResults;
+  if (update.status === "complete" || update.status === "error") {
+    data.completedAt = new Date();
+  }
+
+  await prisma.exportJob.update({
+    where: { id: exportId },
+    data,
+  });
 }
 
 /**
@@ -69,13 +99,19 @@ export async function generateExportPackage(
     generatedBy?: string;
   } = {},
 ): Promise<string> {
-  const exportId = `exp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-  setProgress(exportId, {
-    status: "generating",
-    progress: 0,
-    currentStep: "Preparing export",
+  // Create the ExportJob in DB
+  const job = await prisma.exportJob.create({
+    data: {
+      caseId,
+      packageType,
+      status: "generating",
+      progress: 0,
+      currentStep: "Preparing export",
+      documentIds: options.documentIds ?? [],
+    },
   });
+
+  const exportId = job.id;
 
   // Run async — do not await
   doGenerate(exportId, caseId, packageType, options).catch((err) => {
@@ -120,10 +156,11 @@ async function doGenerate(
   const storage = getStorage();
   const zipParts: { name: string; data: Buffer | Uint8Array }[] = [];
   const verificationResults: Array<{ docName: string; result: VerificationResult }> = [];
+  const docResults: DocResult[] = [];
 
   // 1. Generate redacted PDFs for each document + verify
   for (const doc of documents) {
-    setProgress(exportId, {
+    await setProgress(exportId, {
       progress: Math.round((completed / totalSteps) * 80),
       currentStep: `Redacting: ${doc.name}`,
     });
@@ -133,8 +170,10 @@ async function doGenerate(
       const pdfName = doc.name.replace(/\.[^.]+$/, "") + "_redacted.pdf";
       zipParts.push({ name: `documents/${pdfName}`, data: result.pdfBytes });
 
+      docResults.push({ docId: doc.id, docName: doc.name, success: true });
+
       // Post-redaction verification
-      setProgress(exportId, {
+      await setProgress(exportId, {
         currentStep: `Verifying: ${doc.name}`,
       });
 
@@ -159,13 +198,22 @@ async function doGenerate(
       }
     } catch (err) {
       console.error(`Failed to redact ${doc.name}:`, err);
+      docResults.push({
+        docId: doc.id,
+        docName: doc.name,
+        success: false,
+        error: err instanceof Error ? err.message : "Unknown error",
+      });
       // Continue with other documents
     }
     completed++;
   }
 
+  // Persist per-doc results so far
+  await setProgress(exportId, { docResults });
+
   // 2. Generate withholding schedule
-  setProgress(exportId, {
+  await setProgress(exportId, {
     progress: Math.round((completed / totalSteps) * 80),
     currentStep: "Generating withholding schedule",
   });
@@ -177,7 +225,7 @@ async function doGenerate(
 
   // 3. Generate covering letter (if requested)
   if (options.includeCoverLetter !== false) {
-    setProgress(exportId, {
+    await setProgress(exportId, {
       progress: Math.round((completed / totalSteps) * 80),
       currentStep: "Generating covering letter",
     });
@@ -191,7 +239,7 @@ async function doGenerate(
 
   // 4. Add audit trail for internal and ombudsman packages
   if (packageType === "internal" || packageType === "ombudsman") {
-    setProgress(exportId, {
+    await setProgress(exportId, {
       progress: Math.round((completed / totalSteps) * 80),
       currentStep: "Generating audit trail",
     });
@@ -201,7 +249,7 @@ async function doGenerate(
 
   // 4b. Add chain-of-custody report if requested, or for ombudsman/internal packages
   if (options.includeChainOfCustody || packageType === "internal" || packageType === "ombudsman") {
-    setProgress(exportId, {
+    await setProgress(exportId, {
       progress: Math.round((completed / totalSteps) * 80),
       currentStep: "Generating chain-of-custody report",
     });
@@ -276,7 +324,7 @@ async function doGenerate(
   }
 
   // 7. Assemble ZIP
-  setProgress(exportId, {
+  await setProgress(exportId, {
     status: "verifying",
     progress: 85,
     currentStep: "Assembling ZIP package",
@@ -285,7 +333,7 @@ async function doGenerate(
   const zipBuffer = await assembleZip(zipParts);
 
   // 8. Compute SHA-256
-  setProgress(exportId, {
+  await setProgress(exportId, {
     progress: 95,
     currentStep: "Computing integrity hash",
   });
@@ -309,13 +357,14 @@ async function doGenerate(
     },
   });
 
-  setProgress(exportId, {
+  await setProgress(exportId, {
     status: "complete",
     progress: 100,
     currentStep: "Export complete",
     downloadKey: storageKey,
     sha256,
     filename,
+    docResults,
   });
 }
 
@@ -341,27 +390,49 @@ export interface BatchExportProgress {
   totalBatches: number;
 }
 
-const globalForBatchExport = globalThis as unknown as {
-  __batchExportProgressStore?: Map<string, BatchExportProgress>;
-};
-if (!globalForBatchExport.__batchExportProgressStore) {
-  globalForBatchExport.__batchExportProgressStore = new Map<string, BatchExportProgress>();
-}
-const batchProgressStore = globalForBatchExport.__batchExportProgressStore;
+export async function getBatchExportProgress(batchGroupId: string): Promise<BatchExportProgress | null> {
+  const jobs = await prisma.exportJob.findMany({
+    where: { batchGroupId },
+    orderBy: { batchNumber: "asc" },
+  });
 
-export function getBatchExportProgress(batchGroupId: string): BatchExportProgress | null {
-  return batchProgressStore.get(batchGroupId) ?? null;
-}
+  if (jobs.length === 0) return null;
 
-function setBatchProgress(batchGroupId: string, update: Partial<BatchExportProgress>) {
-  const current = batchProgressStore.get(batchGroupId) ?? {
-    status: "pending" as const,
-    progress: 0,
-    currentStep: "Initializing",
-    batches: [],
-    totalBatches: 0,
+  const batches = jobs.map((job) => ({
+    batchNumber: job.batchNumber ?? 1,
+    exportId: job.id,
+    status: job.status as "pending" | "generating" | "complete" | "error",
+    downloadKey: job.storageKey ?? undefined,
+    sha256: job.sha256 ?? undefined,
+    filename: job.filename ?? undefined,
+    pageCount: 0, // We don't track this per-job currently
+    docCount: Array.isArray(job.documentIds) ? (job.documentIds as string[]).length : 0,
+  }));
+
+  const allComplete = jobs.every((j) => j.status === "complete");
+  const anyError = jobs.some((j) => j.status === "error");
+  const overallStatus = allComplete ? "complete" : anyError ? "error" : "generating";
+
+  // Progress: average of individual job progress
+  const avgProgress = jobs.length > 0
+    ? Math.round(jobs.reduce((sum, j) => sum + j.progress, 0) / jobs.length)
+    : 0;
+
+  // Current step: first non-complete job's step, or "Batch export complete"
+  const activeJob = jobs.find((j) => j.status !== "complete" && j.status !== "error");
+  const currentStep = activeJob?.currentStep ?? (allComplete ? "Batch export complete" : "Processing batches");
+  const errorMsg = anyError
+    ? jobs.find((j) => j.status === "error")?.error ?? undefined
+    : undefined;
+
+  return {
+    status: overallStatus,
+    progress: avgProgress,
+    currentStep,
+    error: errorMsg,
+    batches,
+    totalBatches: jobs.length,
   };
-  batchProgressStore.set(batchGroupId, { ...current, ...update });
 }
 
 /**
@@ -432,25 +503,30 @@ export async function batchExport(
 
   // If total pages < threshold, produce a single ZIP (existing behavior)
   if (totalPages <= maxPages) {
-    const exportId = await generateExportPackage(caseId, packageType, options);
-    setBatchProgress(batchGroupId, {
-      status: "generating",
-      progress: 0,
-      currentStep: "Generating single package (below batch threshold)",
-      totalBatches: 1,
-      batches: [{
-        batchNumber: 1,
-        exportId,
+    // Create a single ExportJob with batchGroupId
+    const job = await prisma.exportJob.create({
+      data: {
+        caseId,
+        packageType,
         status: "generating",
-        pageCount: totalPages,
-        docCount: documents.length,
-      }],
+        progress: 0,
+        currentStep: "Generating single package (below batch threshold)",
+        documentIds: options.documentIds ?? [],
+        batchGroupId,
+        batchNumber: 1,
+      },
     });
 
-    // Poll the single export to update batch progress
-    pollSingleExportForBatch(batchGroupId, exportId);
+    // Run standard generation on this job
+    doGenerate(job.id, caseId, packageType, options).catch((err) => {
+      console.error("Export generation failed:", err);
+      setProgress(job.id, {
+        status: "error",
+        error: err instanceof Error ? err.message : "Export failed",
+      });
+    });
 
-    return { batchGroupId, exportIds: [exportId] };
+    return { batchGroupId, exportIds: [job.id] };
   }
 
   // Split into batches
@@ -459,39 +535,34 @@ export async function batchExport(
     maxPages,
   );
 
+  // Create ExportJob records for each batch
   const exportIds: string[] = [];
-  const batchEntries: BatchExportProgress["batches"] = [];
-
   for (let i = 0; i < docBatches.length; i++) {
     const batch = docBatches[i];
-    const batchPages = batch.reduce((s, d) => s + d.pageCount, 0);
-    const exportId = `exp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    exportIds.push(exportId);
-    batchEntries.push({
-      batchNumber: i + 1,
-      exportId,
-      status: "pending",
-      pageCount: batchPages,
-      docCount: batch.length,
+    const job = await prisma.exportJob.create({
+      data: {
+        caseId,
+        packageType,
+        status: "pending",
+        progress: 0,
+        currentStep: `Batch ${i + 1}: Waiting`,
+        documentIds: batch.map((d) => d.id),
+        batchGroupId,
+        batchNumber: i + 1,
+      },
     });
+    exportIds.push(job.id);
   }
-
-  setBatchProgress(batchGroupId, {
-    status: "generating",
-    progress: 0,
-    currentStep: `Starting batch export (${docBatches.length} batches)`,
-    totalBatches: docBatches.length,
-    batches: batchEntries,
-  });
 
   // Run batch generation in background
   doBatchGenerate(batchGroupId, caseId, packageType, docBatches, exportIds, options).catch(
     (err) => {
       console.error("Batch export generation failed:", err);
-      setBatchProgress(batchGroupId, {
-        status: "error",
-        error: err instanceof Error ? err.message : "Batch export failed",
-      });
+      // Mark all pending jobs in this batch as errored
+      prisma.exportJob.updateMany({
+        where: { batchGroupId, status: { not: "complete" } },
+        data: { status: "error", error: err instanceof Error ? err.message : "Batch export failed" },
+      }).catch(() => {});
     },
   );
 
@@ -513,7 +584,32 @@ async function doBatchGenerate(
 ) {
   const caseData = await prisma.case.findUniqueOrThrow({ where: { id: caseId } });
 
-  // Build the manifest that will be included in each batch
+  for (let i = 0; i < docBatches.length; i++) {
+    const batch = docBatches[i];
+    const exportId = exportIds[i];
+
+    await setProgress(exportId, {
+      status: "generating",
+      progress: 0,
+      currentStep: `Batch ${i + 1}: Preparing export`,
+    });
+
+    try {
+      await doGenerate(exportId, caseId, packageType, {
+        ...options,
+        documentIds: batch.map((d) => d.id),
+      });
+    } catch (err) {
+      await setProgress(exportId, {
+        status: "error",
+        error: err instanceof Error ? err.message : `Batch ${i + 1} failed`,
+      });
+      console.error(`Batch ${i + 1} failed:`, err);
+    }
+  }
+
+  // Store manifest in each batch's storage location
+  const storage = getStorage();
   const manifest = {
     caseReference: caseData.reference,
     totalBatches: docBatches.length,
@@ -526,65 +622,12 @@ async function doBatchGenerate(
       pageCount: batch.reduce((s, d) => s + d.pageCount, 0),
     })),
   };
-
-  for (let i = 0; i < docBatches.length; i++) {
-    const batch = docBatches[i];
-    const exportId = exportIds[i];
-
-    // Update batch status
-    const currentProgress = getBatchExportProgress(batchGroupId);
-    if (currentProgress) {
-      currentProgress.batches[i].status = "generating";
-      currentProgress.currentStep = `Generating batch ${i + 1} of ${docBatches.length}`;
-      currentProgress.progress = Math.round((i / docBatches.length) * 100);
-      batchProgressStore.set(batchGroupId, { ...currentProgress });
-    }
-
-    // Use the standard export pipeline for each batch, injecting the manifest
-    setProgress(exportId, {
-      status: "generating",
-      progress: 0,
-      currentStep: `Batch ${i + 1}: Preparing export`,
-    });
-
-    try {
-      await doGenerate(exportId, caseId, packageType, {
-        ...options,
-        documentIds: batch.map((d) => d.id),
-      });
-
-      // After generation, read the exported zip and inject manifest
-      // The doGenerate function stores the result with setProgress, so we can read it
-      const exportProgress = getExportProgress(exportId);
-
-      // Update batch entry with results
-      const batchProgress = getBatchExportProgress(batchGroupId);
-      if (batchProgress) {
-        batchProgress.batches[i].status = "complete";
-        batchProgress.batches[i].downloadKey = exportProgress?.downloadKey;
-        batchProgress.batches[i].sha256 = exportProgress?.sha256;
-        batchProgress.batches[i].filename = exportProgress?.filename
-          ? exportProgress.filename.replace(".zip", `_batch_${i + 1}.zip`)
-          : `${caseData.reference}_batch_${i + 1}.zip`;
-        batchProgressStore.set(batchGroupId, { ...batchProgress });
-      }
-    } catch (err) {
-      const batchProgress = getBatchExportProgress(batchGroupId);
-      if (batchProgress) {
-        batchProgress.batches[i].status = "error";
-        batchProgressStore.set(batchGroupId, { ...batchProgress });
-      }
-      console.error(`Batch ${i + 1} failed:`, err);
-    }
-  }
-
-  // Store manifest in each batch's storage location
-  const storage = getStorage();
   const manifestBuffer = Buffer.from(JSON.stringify(manifest, null, 2), "utf-8");
-  for (let i = 0; i < exportIds.length; i++) {
-    const ep = getExportProgress(exportIds[i]);
-    if (ep?.downloadKey) {
-      const manifestKey = ep.downloadKey.replace(/[^/]+\.zip$/, "export-manifest.json");
+
+  for (const eid of exportIds) {
+    const job = await prisma.exportJob.findUnique({ where: { id: eid } });
+    if (job?.storageKey) {
+      const manifestKey = job.storageKey.replace(/[^/]+\.zip$/, "export-manifest.json");
       try {
         await storage.upload(manifestKey, manifestBuffer, "application/json");
       } catch {
@@ -592,48 +635,6 @@ async function doBatchGenerate(
       }
     }
   }
-
-  // Mark overall batch export as complete
-  setBatchProgress(batchGroupId, {
-    status: "complete",
-    progress: 100,
-    currentStep: "Batch export complete",
-  });
-}
-
-/**
- * For single-export batches, poll the underlying export progress
- * and mirror it into the batch progress store.
- */
-function pollSingleExportForBatch(batchGroupId: string, exportId: string) {
-  const interval = setInterval(() => {
-    const ep = getExportProgress(exportId);
-    if (!ep) return;
-
-    const bp = getBatchExportProgress(batchGroupId);
-    if (!bp) { clearInterval(interval); return; }
-
-    bp.progress = ep.progress;
-    bp.currentStep = ep.currentStep;
-
-    if (ep.status === "complete") {
-      bp.status = "complete";
-      bp.batches[0].status = "complete";
-      bp.batches[0].downloadKey = ep.downloadKey;
-      bp.batches[0].sha256 = ep.sha256;
-      bp.batches[0].filename = ep.filename;
-      batchProgressStore.set(batchGroupId, { ...bp });
-      clearInterval(interval);
-    } else if (ep.status === "error") {
-      bp.status = "error";
-      bp.error = ep.error;
-      bp.batches[0].status = "error";
-      batchProgressStore.set(batchGroupId, { ...bp });
-      clearInterval(interval);
-    } else {
-      batchProgressStore.set(batchGroupId, { ...bp });
-    }
-  }, 1000);
 }
 
 /**

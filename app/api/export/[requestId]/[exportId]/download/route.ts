@@ -12,7 +12,7 @@ export async function GET(
   const user = await requireUser();
   await authorizeForCase(user, requestId);
 
-  const progress = getExportProgress(exportId);
+  const progress = await getExportProgress(exportId);
   if (!progress || progress.status !== "complete" || !progress.downloadKey) {
     return NextResponse.json(
       { error: "Export not ready or not found" },

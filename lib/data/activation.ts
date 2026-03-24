@@ -75,7 +75,7 @@ export async function verifyAndRedeemCode(
   }
 
   // Run the verification + redemption atomically
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     // Re-check activation inside the transaction
     const activationSetting = await tx.systemSetting.findUnique({
       where: { key: SETTING_KEYS.ACTIVATION_STATUS },
@@ -186,16 +186,20 @@ export async function verifyAndRedeemCode(
       });
     }
 
-    // Promote the redeeming user to admin
-    if (redeemedByUserId) {
-      await tx.user.update({
-        where: { id: redeemedByUserId },
-        data: { role: "admin" },
-      });
-    }
-
     return { success: true, orgName: matchedRecord.orgName || undefined };
   });
+
+  // Promote the redeeming user to admin (outside transaction so the
+  // recently-created user record is visible — Azure Postgres snapshot
+  // isolation can hide it inside the transaction).
+  if (result.success && redeemedByUserId) {
+    await prisma.user.updateMany({
+      where: { id: redeemedByUserId },
+      data: { role: "admin" },
+    });
+  }
+
+  return result;
 }
 
 /**

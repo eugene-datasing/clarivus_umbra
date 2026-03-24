@@ -19,7 +19,7 @@ export async function GET(
     );
   }
 
-  const progress = getBatchExportProgress(batchGroupId);
+  const progress = await getBatchExportProgress(batchGroupId);
   if (!progress) {
     return NextResponse.json(
       { error: "Batch export not found" },

@@ -47,7 +47,16 @@ export async function buildRedactedPdf(documentId: string): Promise<RedactedResu
   const isPdf = doc.fileType.toLowerCase() === "pdf";
 
   if (isPdf) {
-    return redactOriginalPdf(doc, acceptedDetections);
+    try {
+      return await redactOriginalPdf(doc, acceptedDetections);
+    } catch (err) {
+      console.warn(
+        `[redact-pdf] PyMuPDF redaction failed for ${doc.id}, falling back to text PDF:`,
+        err instanceof Error ? err.message : err,
+      );
+      // Fall through to text-based PDF as a safety net
+      return generateTextPdf(doc, acceptedDetections);
+    }
   }
   return generateTextPdf(doc, acceptedDetections);
 }
