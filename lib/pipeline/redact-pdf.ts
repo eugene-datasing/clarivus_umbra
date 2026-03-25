@@ -377,7 +377,7 @@ async function generateTextPdf(
       for (const redactText of pageRedactions) {
         if (processedLine.includes(redactText)) {
           const groundRef = groundMap.get(redactText) || "";
-          const replacement = `[${"█".repeat(Math.min(redactText.length, 20))} ${groundRef}]`;
+          const replacement = `[REDACTED${groundRef ? ` ${groundRef}` : ""}]`;
           processedLine = processedLine.replace(redactText, replacement);
         }
       }
