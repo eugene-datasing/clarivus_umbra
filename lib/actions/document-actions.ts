@@ -160,3 +160,47 @@ export async function deleteDocument(documentId: string) {
 
   return { success: true };
 }
+
+/**
+ * Bulk-assign documents to a reviewer by email.
+ */
+export async function bulkAssignReviewer(documentIds: string[], reviewerEmail: string) {
+  const user = await requireUser();
+  if (documentIds.length === 0) throw new Error("No documents specified");
+
+  const firstDoc = await prisma.document.findUnique({
+    where: { id: documentIds[0] },
+    select: { caseId: true },
+  });
+  if (!firstDoc) throw new Error("Document not found");
+  await authorizeForCase(user, firstDoc.caseId);
+
+  // Look up the reviewer
+  const reviewer = await prisma.user.findUnique({
+    where: { email: reviewerEmail.toLowerCase() },
+    select: { id: true, name: true },
+  });
+  if (!reviewer) throw new Error("No user found with that email address");
+
+  const updated = await prisma.document.updateMany({
+    where: { id: { in: documentIds } },
+    data: { assigneeId: reviewer.id },
+  });
+
+  const docs = await prisma.document.findMany({
+    where: { id: { in: documentIds } },
+    select: { name: true },
+  });
+
+  await createAuditEntry({
+    userId: user.id,
+    userName: user.name,
+    userRole: user.role,
+    type: "review",
+    description: `Assigned ${updated.count} document(s) to ${reviewer.name}`,
+    target: docs.map((d) => d.name).join(", "),
+    caseId: firstDoc.caseId,
+  });
+
+  return { success: true, count: updated.count };
+}

@@ -31,16 +31,28 @@ interface CasesListClientProps {
 export default function CasesListClient({ cases, totalCount, activeCount }: CasesListClientProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [filterStatus, setFilterStatus] = useState("");
+  const [filterPriority, setFilterPriority] = useState("");
+  const [filterDepartment, setFilterDepartment] = useState("");
 
   const filtered = cases.filter((req) => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      req.reference.toLowerCase().includes(q) ||
-      req.requesterName.toLowerCase().includes(q) ||
-      req.description.toLowerCase().includes(q) ||
-      req.department.some((d) => d.toLowerCase().includes(q))
-    );
+    // Status filter
+    if (filterStatus && req.status !== filterStatus) return false;
+    // Priority filter
+    if (filterPriority && req.priority !== filterPriority) return false;
+    // Department filter
+    if (filterDepartment && !req.department.includes(filterDepartment)) return false;
+    // Text search
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      return (
+        req.reference.toLowerCase().includes(q) ||
+        req.requesterName.toLowerCase().includes(q) ||
+        req.description.toLowerCase().includes(q) ||
+        req.department.some((d) => d.toLowerCase().includes(q))
+      );
+    }
+    return true;
   });
 
   return (
@@ -84,7 +96,7 @@ export default function CasesListClient({ cases, totalCount, activeCount }: Case
         <div className="card mb-6 flex items-center gap-6 text-sm">
           <div className="flex items-center gap-2">
             <label className="text-txt-secondary font-medium">Status:</label>
-            <select className="input-field w-auto">
+            <select className="input-field w-auto" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
               <option value="">All</option>
               <option value="draft">Draft</option>
               <option value="ingesting">Ingesting</option>
@@ -96,7 +108,7 @@ export default function CasesListClient({ cases, totalCount, activeCount }: Case
           </div>
           <div className="flex items-center gap-2">
             <label className="text-txt-secondary font-medium">Priority:</label>
-            <select className="input-field w-auto">
+            <select className="input-field w-auto" value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
               <option value="">All</option>
               <option value="standard">Standard</option>
               <option value="urgent">Urgent</option>
@@ -105,7 +117,7 @@ export default function CasesListClient({ cases, totalCount, activeCount }: Case
           </div>
           <div className="flex items-center gap-2">
             <label className="text-txt-secondary font-medium">Department:</label>
-            <select className="input-field w-auto">
+            <select className="input-field w-auto" value={filterDepartment} onChange={(e) => setFilterDepartment(e.target.value)}>
               <option value="">All</option>
               <option value="Infrastructure">Infrastructure</option>
               <option value="Planning">Planning</option>

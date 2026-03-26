@@ -5,10 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { statusConfig, docTypeConfig, type RequestStatus, type DocType } from "@/lib/db/mappers";
 import { workingDaysRemaining, deadlineColor, formatDate, cn, confidenceColor } from "@/lib/utils";
-import { bulkExcludeDocuments, deleteDocument } from "@/lib/actions/document-actions";
+import { bulkExcludeDocuments, deleteDocument, bulkAssignReviewer } from "@/lib/actions/document-actions";
 import {
   FileText, Mail, Search, Filter, Upload, CheckCircle,
-  XCircle, ChevronRight, ArrowRight, Trash2,
+  XCircle, ChevronRight, ArrowRight, Trash2, UserPlus,
 } from "lucide-react";
 
 const docStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
@@ -77,6 +77,8 @@ export default function CaseDetailClient({ caseData, documents }: CaseDetailClie
   const [isExcluding, setIsExcluding] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showAssign, setShowAssign] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
 
   const request = caseData;
   const cfg = statusConfig[request.status as RequestStatus];
@@ -383,8 +385,11 @@ export default function CaseDetailClient({ caseData, documents }: CaseDetailClie
             {selectedDocs.size} document{selectedDocs.size > 1 ? "s" : ""} selected
           </span>
           <div className="h-5 w-px bg-white/30" />
-          <button className="text-sm hover:underline flex items-center gap-1.5">
-            <CheckCircle className="w-4 h-4" />
+          <button
+            onClick={() => setShowAssign(!showAssign)}
+            className="text-sm hover:underline flex items-center gap-1.5"
+          >
+            <UserPlus className="w-4 h-4" />
             Assign Reviewer
           </button>
           <button
@@ -442,6 +447,54 @@ export default function CaseDetailClient({ caseData, documents }: CaseDetailClie
           >
             Clear
           </button>
+        </div>
+      )}
+
+      {/* Assign Reviewer Modal */}
+      {showAssign && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={() => setShowAssign(false)}>
+          <div className="bg-white rounded-card shadow-xl p-6 w-80" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-heading font-bold text-txt-primary mb-3">Assign Reviewer</h3>
+            <p className="text-sm text-txt-secondary mb-4">
+              Assign {selectedDocs.size} document{selectedDocs.size > 1 ? "s" : ""} to a reviewer.
+            </p>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const form = e.target as HTMLFormElement;
+                const reviewerEmail = (form.elements.namedItem("reviewerEmail") as HTMLInputElement).value;
+                if (!reviewerEmail) return;
+                setIsAssigning(true);
+                try {
+                  await bulkAssignReviewer(Array.from(selectedDocs), reviewerEmail);
+                  setShowAssign(false);
+                  setSelectedDocs(new Set());
+                  router.refresh();
+                } catch (err) {
+                  alert(err instanceof Error ? err.message : "Assignment failed");
+                } finally {
+                  setIsAssigning(false);
+                }
+              }}
+            >
+              <label className="text-sm font-medium text-txt-primary block mb-1">Reviewer email</label>
+              <input
+                name="reviewerEmail"
+                type="email"
+                placeholder="reviewer@council.govt.nz"
+                className="input-field w-full mb-4"
+                required
+              />
+              <div className="flex items-center gap-2 justify-end">
+                <button type="button" onClick={() => setShowAssign(false)} className="btn-secondary text-sm">
+                  Cancel
+                </button>
+                <button type="submit" disabled={isAssigning} className="btn-primary text-sm">
+                  {isAssigning ? "Assigning..." : "Assign"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

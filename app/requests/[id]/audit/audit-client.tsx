@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import Link from "next/link";
 import {
   ChevronRight,
@@ -87,13 +87,38 @@ function formatTimestamp(ts: string): { date: string; time: string } {
 
 export default function AuditClient({ requestId, caseData, auditEntries }: AuditClientProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterType, setFilterType] = useState("");
 
-  const filteredEntries = auditEntries.filter(
-    (entry) =>
-      entry.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      entry.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      entry.target.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredEntries = auditEntries.filter((entry) => {
+    if (filterType && entry.type !== filterType) return false;
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      entry.description.toLowerCase().includes(q) ||
+      entry.userName.toLowerCase().includes(q) ||
+      entry.target.toLowerCase().includes(q)
+    );
+  });
+
+  const exportCsv = useCallback(() => {
+    const header = "Timestamp,User,Role,Type,Description,Target,Detail\n";
+    const rows = filteredEntries.map((e) => {
+      const esc = (s: string) => `"${(s || "").replace(/"/g, '""')}"`;
+      return [esc(e.timestamp), esc(e.userName), esc(e.userRole), esc(e.type), esc(e.description), esc(e.target), esc(e.detail || "")].join(",");
+    }).join("\n");
+    const blob = new Blob([header + rows], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `audit-trail-${requestId}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [filteredEntries, requestId]);
+
+  const exportPdf = useCallback(() => {
+    // Open the audit page in print mode for PDF export
+    window.print();
+  }, []);
 
   const uniqueUsers = new Set(auditEntries.map((e) => e.userName)).size;
 
@@ -170,11 +195,11 @@ export default function AuditClient({ requestId, caseData, auditEntries }: Audit
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <button className="btn-secondary flex items-center gap-2 text-xs !px-3 !py-1.5">
+          <button onClick={exportPdf} className="btn-secondary flex items-center gap-2 text-xs !px-3 !py-1.5">
             <Download className="w-3.5 h-3.5" />
             Export PDF
           </button>
-          <button className="btn-secondary flex items-center gap-2 text-xs !px-3 !py-1.5">
+          <button onClick={exportCsv} className="btn-secondary flex items-center gap-2 text-xs !px-3 !py-1.5">
             <Download className="w-3.5 h-3.5" />
             Export CSV
           </button>
@@ -193,10 +218,19 @@ export default function AuditClient({ requestId, caseData, auditEntries }: Audit
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <button className="btn-secondary flex items-center gap-2">
-          <Filter className="w-4 h-4" />
-          Filter
-        </button>
+        <select
+          className="input-field w-auto"
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value)}
+        >
+          <option value="">All types</option>
+          <option value="approval">Approval</option>
+          <option value="ingestion">Ingestion</option>
+          <option value="detection">Detection</option>
+          <option value="review">Review</option>
+          <option value="export">Export</option>
+          <option value="admin">Admin</option>
+        </select>
       </div>
 
       {/* Event list */}
