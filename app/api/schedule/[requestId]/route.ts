@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { buildWithholdingSchedule } from "@/lib/pipeline/schedule";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeForCase } from "@/lib/auth/authorize";
+import { logger } from "@/lib/logger";
 
 export async function GET(
   _request: NextRequest,
@@ -23,7 +24,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error("Schedule PDF generation failed:", error);
+    logger.error("Schedule PDF generation failed:", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to generate schedule PDF" },
       { status: 500 },

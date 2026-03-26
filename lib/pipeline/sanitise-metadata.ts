@@ -12,6 +12,7 @@
  */
 
 import JSZip from "jszip";
+import { logger } from "@/lib/logger";
 
 const METADATA_ENTRIES = [
   "docProps/core.xml",

@@ -11,6 +11,7 @@
 import MsgReader from "@kenjiuno/msgreader";
 import type { FieldsData, AttachmentData } from "@kenjiuno/msgreader";
 import type { ExtractedPage, ExtractionAttachment, ExtractionResult } from "./extract";
+import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
 // Types

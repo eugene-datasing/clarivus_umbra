@@ -21,6 +21,7 @@ import {
 } from "./settings";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import { logger } from "@/lib/logger";
 
 // Characters that avoid ambiguity (no 0/O, 1/I/L)
 const SAFE_CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
@@ -111,7 +112,7 @@ export async function verifyAndRedeemCode(
       try {
         isMatch = await bcrypt.compare(normalised, record.codeHash);
       } catch (err) {
-        console.error("[activation] bcrypt comparison failed:", err);
+        logger.error("[activation] bcrypt comparison failed:", { error: String(err) });
         return { success: false, error: "Activation failed due to a server error. Please try again." };
       }
 

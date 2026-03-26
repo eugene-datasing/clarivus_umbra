@@ -25,6 +25,7 @@ import { execFile } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
+import { logger } from "@/lib/logger";
 
 interface RedactedResult {
   pdfBytes: Uint8Array;
@@ -154,7 +155,7 @@ async function redactOriginalPdf(
         { timeout: 120_000 },
         (error, stdout, stderr) => {
           if (error) {
-            console.error("[redact-pdf] PyMuPDF stderr:", stderr);
+            logger.error("[redact-pdf] PyMuPDF stderr:", { error: String(stderr) });
             reject(new Error(`PyMuPDF redaction failed: ${error.message}`));
           } else {
             console.log("[redact-pdf] PyMuPDF result:", stdout.trim());
@@ -219,7 +220,7 @@ async function convertToPdfWithLibreOffice(
         { timeout: 120_000 },
         (error, stdout, stderr) => {
           if (error) {
-            console.error("[redact-pdf] LibreOffice stderr:", stderr);
+            logger.error("[redact-pdf] LibreOffice stderr:", { error: String(stderr) });
             reject(new Error(`LibreOffice conversion failed: ${error.message}`));
           } else {
             console.log("[redact-pdf] LibreOffice conversion:", stdout.trim());
@@ -281,7 +282,7 @@ async function redactByTextSearch(
         { timeout: 120_000 },
         (error, stdout, stderr) => {
           if (error) {
-            console.error("[redact-pdf] PyMuPDF text-search stderr:", stderr);
+            logger.error("[redact-pdf] PyMuPDF text-search stderr:", { error: String(stderr) });
             reject(new Error(`PyMuPDF text-search redaction failed: ${error.message}`));
           } else {
             console.log("[redact-pdf] PyMuPDF text-search result:", stdout.trim());

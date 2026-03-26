@@ -34,7 +34,10 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' https://unpkg.com",
+              // Next.js dev server requires 'unsafe-eval' and 'unsafe-inline' for HMR
+              process.env.NODE_ENV === "development"
+                ? "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://unpkg.com"
+                : "script-src 'self' https://unpkg.com",
               "worker-src 'self' blob:",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: blob:",

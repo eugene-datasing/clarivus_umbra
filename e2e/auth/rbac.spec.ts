@@ -7,18 +7,34 @@ test.describe("RBAC — Role-Based Access Control", () => {
     test("can access the admin settings page", async ({ page }) => {
       await page.goto("/admin/settings");
       await expect(page).not.toHaveURL(/\/login/);
-      // Should see admin content, not a redirect to /
-      await expect(page.locator("body")).not.toContainText("Sign In");
+      await expect(page.locator("body")).toContainText(/settings|organisation/i);
     });
 
     test("can access the custom rules page", async ({ page }) => {
       await page.goto("/admin/rules");
       await expect(page).not.toHaveURL(/\/login/);
+      await expect(page.locator("body")).toContainText(/custom.*rules|detection rules/i);
     });
 
     test("can access the AI governance page", async ({ page }) => {
       await page.goto("/admin/ai-governance");
       await expect(page).not.toHaveURL(/\/login/);
+      await expect(page.locator("body")).toContainText(/governance|model|accuracy/i);
+    });
+
+    test("can access the reports page", async ({ page }) => {
+      await page.goto("/reports");
+      await expect(page).not.toHaveURL(/\/login/);
+      await expect(page.locator("body")).toContainText(/reports|analytics/i);
+    });
+
+    test("sidebar shows admin navigation links", async ({ page }) => {
+      await page.goto("/");
+      const nav = page.locator("nav");
+      await expect(nav.getByText("Custom Rules")).toBeVisible();
+      await expect(nav.getByText("AI Governance")).toBeVisible();
+      await expect(nav.getByText("Reports")).toBeVisible();
+      await expect(nav.getByText("Settings")).toBeVisible();
     });
   });
 
@@ -27,7 +43,6 @@ test.describe("RBAC — Role-Based Access Control", () => {
 
     test("is redirected away from /admin/settings", async ({ page }) => {
       await page.goto("/admin/settings");
-      // Middleware should redirect reviewers to /
       await expect(page).toHaveURL("/");
     });
 
@@ -38,7 +53,19 @@ test.describe("RBAC — Role-Based Access Control", () => {
 
     test("can still access the dashboard", async ({ page }) => {
       await page.goto("/");
-      await expect(page).toHaveURL("/");
+      await expect(page.locator("body")).toContainText(/dashboard|active cases/i);
+    });
+
+    test("can access the review queue", async ({ page }) => {
+      await page.goto("/queue");
+      await expect(page.locator("body")).toContainText(/processing dashboard|my review queue/i);
+    });
+
+    test("sidebar does not show admin links", async ({ page }) => {
+      await page.goto("/");
+      const nav = page.locator("nav");
+      const navText = await nav.textContent();
+      expect(/settings/i.test(navText ?? "")).toBeFalsy();
     });
   });
 });

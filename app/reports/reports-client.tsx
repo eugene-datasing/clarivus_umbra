@@ -121,7 +121,16 @@ export default function ReportsClient({
           <h1 className="text-2xl font-heading font-bold text-txt-primary">Reports</h1>
           <p className="text-sm text-txt-secondary mt-1">Analytics, compliance reporting, and audit exports</p>
         </div>
-        <button className="btn-primary flex items-center gap-2">
+        <button
+          className="btn-primary flex items-center gap-2"
+          onClick={() => {
+            setActiveSection("templates");
+            setTimeout(() => {
+              const el = document.getElementById("report-templates");
+              if (el) el.scrollIntoView({ behavior: "smooth" });
+            }, 50);
+          }}
+        >
           <FileBarChart size={15} />
           Generate Custom Report
         </button>
@@ -176,7 +185,7 @@ export default function ReportsClient({
         </div>
 
         {/* Report templates / recent reports */}
-        <div className="lg:col-span-2 card p-0 overflow-hidden">
+        <div id="report-templates" className="lg:col-span-2 card p-0 overflow-hidden">
           <div className="flex border-b border-border">
             <button
               onClick={() => setActiveSection("templates")}

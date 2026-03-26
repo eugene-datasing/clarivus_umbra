@@ -17,6 +17,7 @@
  */
 
 import type { TelemetryClient } from "applicationinsights";
+import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
 // Singleton client
@@ -48,7 +49,7 @@ export function initTelemetry(): void {
     client.initialize();
   } catch (err) {
     // If the SDK fails to load, degrade gracefully.
-    console.error("[telemetry] Failed to initialise Application Insights:", err);
+    logger.error("[telemetry] Failed to initialise Application Insights:", { error: String(err) });
     client = null;
   }
 }

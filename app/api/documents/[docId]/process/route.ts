@@ -1,3 +1,4 @@
+import { requireCsrfHeader } from "@/lib/csrf";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { getProcessingQueue } from "@/lib/queue/job-queue";
@@ -10,9 +11,12 @@ import { trackException } from "@/lib/telemetry";
 const log = logger.child({ module: "api", route: "/api/documents/process" });
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ docId: string }> },
 ) {
+  const csrfError = requireCsrfHeader(request);
+  if (csrfError) return csrfError;
+
   try {
     const { docId } = await params;
     const user = await requireUser();

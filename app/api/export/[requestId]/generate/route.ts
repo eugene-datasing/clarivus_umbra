@@ -1,3 +1,4 @@
+import { requireCsrfHeader } from "@/lib/csrf";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { generateExportPackage, batchExport, type PackageType } from "@/lib/pipeline/export";
@@ -14,6 +15,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ requestId: string }> },
 ) {
+  const csrfError = requireCsrfHeader(request);
+  if (csrfError) return csrfError;
+
   try {
     const { requestId } = await params;
     const user = await requireUser();

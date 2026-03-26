@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Brain, Shield, AlertTriangle } from "lucide-react";
+import { Brain, Shield, AlertTriangle, BarChart3 } from "lucide-react";
 import type { AIMetrics } from "@/lib/data/ai-metrics";
 import type { FalseNegativeMetrics } from "@/lib/pipeline/feedback-examples";
 
@@ -95,57 +95,74 @@ export default function AIGovernanceClient({ metrics, fnMetrics }: Props) {
         </p>
       </div>
 
-      {useMock && (
-        <div className="mb-6 flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-card px-4 py-3">
-          <Shield className="w-4 h-4 flex-shrink-0 mt-0.5" />
-          <p>
-            Fewer than 10 AI detections have been reviewed. Showing sample data.
-            Metrics will update automatically as reviewers accept or reject detections.
-          </p>
-        </div>
-      )}
-
-      {/* Overall stat cards */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
-        {overallStats.map((stat) => (
-          <div key={stat.label} className="card text-center">
-            <p className="text-sm text-txt-secondary mb-1">{stat.label}</p>
-            <p className={cn("text-3xl font-bold font-mono", stat.color)}>{stat.value}</p>
+      {useMock ? (
+        <>
+          {/* Insufficient data state */}
+          <div className="card mb-8 text-center py-12">
+            <div className="w-16 h-16 rounded-2xl bg-amber-50 flex items-center justify-center mx-auto mb-4">
+              <BarChart3 className="w-8 h-8 text-amber-500" />
+            </div>
+            <h2 className="text-lg font-heading font-semibold text-txt-primary mb-2">
+              Insufficient Review Data
+            </h2>
+            <p className="text-sm text-txt-secondary max-w-md mx-auto mb-4">
+              Fewer than 10 AI detections have been reviewed. Accuracy metrics require
+              a minimum sample of accepted and rejected detections to produce meaningful results.
+            </p>
+            <div className="flex items-center justify-center gap-6 text-sm">
+              <div className="text-center">
+                <div className="text-2xl font-bold font-mono text-txt-primary">{metrics.totalReviewed}</div>
+                <div className="text-xs text-txt-secondary">Reviewed</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold font-mono text-txt-primary">10</div>
+                <div className="text-xs text-txt-secondary">Required</div>
+              </div>
+            </div>
+            <div className="mt-6 mx-auto max-w-xs">
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-amber-400 rounded-full transition-all"
+                  style={{ width: `${Math.min((metrics.totalReviewed / 10) * 100, 100)}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-txt-secondary mt-1">
+                {metrics.totalReviewed}/10 reviews completed
+              </p>
+            </div>
           </div>
-        ))}
-      </div>
+        </>
+      ) : (
+        <>
+          {/* Overall stat cards */}
+          <div className="grid grid-cols-4 gap-4 mb-8">
+            {overallStats.map((stat) => (
+              <div key={stat.label} className="card text-center">
+                <p className="text-sm text-txt-secondary mb-1">{stat.label}</p>
+                <p className={cn("text-3xl font-bold font-mono", stat.color)}>{stat.value}</p>
+              </div>
+            ))}
+          </div>
 
-      {/* Accuracy by Entity Type */}
-      <div className="card p-0 overflow-hidden mb-8">
-        <div className="px-6 py-4 border-b border-border">
-          <h2 className="text-lg font-heading font-semibold text-txt-primary">
-            Accuracy by Entity Type
-          </h2>
-        </div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-surface-bg">
-              <th className="text-left px-6 py-3 font-medium text-txt-secondary">Entity Type</th>
-              <th className="text-right px-6 py-3 font-medium text-txt-secondary">Precision</th>
-              {useMock && <th className="text-right px-6 py-3 font-medium text-txt-secondary">Recall</th>}
-              {useMock && <th className="text-right px-6 py-3 font-medium text-txt-secondary">F1</th>}
-              {!useMock && <th className="text-right px-6 py-3 font-medium text-txt-secondary">Accepted</th>}
-              {!useMock && <th className="text-right px-6 py-3 font-medium text-txt-secondary">Rejected</th>}
-              <th className="text-right px-6 py-3 font-medium text-txt-secondary">Sample Size</th>
-            </tr>
-          </thead>
-          <tbody>
-            {useMock
-              ? mockEntityAccuracy.map((row) => (
-                  <tr key={row.entity} className="border-b border-border last:border-0 hover:bg-surface-hover transition-colors">
-                    <td className="px-6 py-3.5 font-medium text-txt-primary">{row.entity}</td>
-                    <td className="px-6 py-3.5 text-right font-mono text-txt-secondary">{row.precision}</td>
-                    <td className="px-6 py-3.5 text-right font-mono text-txt-secondary">{row.recall}</td>
-                    <td className={cn("px-6 py-3.5 text-right font-mono", f1ColorStr(row.f1))}>{row.f1}</td>
-                    <td className="px-6 py-3.5 text-right font-mono text-txt-secondary">{row.sampleSize.toLocaleString()}</td>
-                  </tr>
-                ))
-              : metrics.entityBreakdown.map((row) => (
+          {/* Accuracy by Entity Type */}
+          <div className="card p-0 overflow-hidden mb-8">
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="text-lg font-heading font-semibold text-txt-primary">
+                Accuracy by Entity Type
+              </h2>
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-surface-bg">
+                  <th className="text-left px-6 py-3 font-medium text-txt-secondary">Entity Type</th>
+                  <th className="text-right px-6 py-3 font-medium text-txt-secondary">Precision</th>
+                  <th className="text-right px-6 py-3 font-medium text-txt-secondary">Accepted</th>
+                  <th className="text-right px-6 py-3 font-medium text-txt-secondary">Rejected</th>
+                  <th className="text-right px-6 py-3 font-medium text-txt-secondary">Sample Size</th>
+                </tr>
+              </thead>
+              <tbody>
+                {metrics.entityBreakdown.map((row) => (
                   <tr key={row.entity} className="border-b border-border last:border-0 hover:bg-surface-hover transition-colors">
                     <td className="px-6 py-3.5 font-medium text-txt-primary">{row.entity}</td>
                     <td className={cn("px-6 py-3.5 text-right font-mono", f1Color(row.precision))}>{pct(row.precision)}</td>
@@ -154,36 +171,38 @@ export default function AIGovernanceClient({ metrics, fnMetrics }: Props) {
                     <td className="px-6 py-3.5 text-right font-mono text-txt-secondary">{row.sampleSize}</td>
                   </tr>
                 ))}
-          </tbody>
-        </table>
-      </div>
+              </tbody>
+            </table>
+          </div>
 
-      {/* Confidence Score Distribution */}
-      <div className="card mb-8">
-        <h2 className="text-lg font-heading font-semibold text-txt-primary mb-4">
-          Confidence Score Distribution
-        </h2>
-        <div className="space-y-4">
-          {confDistribution.map((band) => (
-            <div key={band.label} className="flex items-center gap-4">
-              <div className="w-40 text-sm font-medium text-txt-primary">{band.label}</div>
-              <div className="flex-1">
-                <div className="h-6 bg-gray-100 rounded overflow-hidden">
-                  <div
-                    className={cn("h-full rounded transition-all flex items-center justify-end pr-2", band.color)}
-                    style={{ width: Math.max(band.value, 2) + "%" }}
-                  >
-                    {band.value >= 10 && (
-                      <span className="text-xs font-bold text-white">{band.value}%</span>
-                    )}
+          {/* Confidence Score Distribution */}
+          <div className="card mb-8">
+            <h2 className="text-lg font-heading font-semibold text-txt-primary mb-4">
+              Confidence Score Distribution
+            </h2>
+            <div className="space-y-4">
+              {confDistribution.map((band) => (
+                <div key={band.label} className="flex items-center gap-4">
+                  <div className="w-40 text-sm font-medium text-txt-primary">{band.label}</div>
+                  <div className="flex-1">
+                    <div className="h-6 bg-gray-100 rounded overflow-hidden">
+                      <div
+                        className={cn("h-full rounded transition-all flex items-center justify-end pr-2", band.color)}
+                        style={{ width: Math.max(band.value, 2) + "%" }}
+                      >
+                        {band.value >= 10 && (
+                          <span className="text-xs font-bold text-white">{band.value}%</span>
+                        )}
+                      </div>
+                    </div>
                   </div>
+                  <div className="w-12 text-right text-sm font-mono text-txt-secondary">{band.value}%</div>
                 </div>
-              </div>
-              <div className="w-12 text-right text-sm font-mono text-txt-secondary">{band.value}%</div>
+              ))}
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
+        </>
+      )}
 
       {/* False Negative Rate (WP22) */}
       <div className="card mb-8">
@@ -281,7 +300,7 @@ export default function AIGovernanceClient({ metrics, fnMetrics }: Props) {
         <Shield className="w-4 h-4 flex-shrink-0 mt-0.5" />
         <p>
           {useMock
-            ? "Showing sample data for demonstration. Production metrics will be calculated from validated review outcomes."
+            ? "Metrics will appear here once 10 or more AI detections have been reviewed. Continue reviewing documents to populate this dashboard."
             : `Metrics based on ${metrics.totalReviewed} reviewed detection(s). Updated on a rolling basis as reviews are completed.`}
         </p>
       </div>

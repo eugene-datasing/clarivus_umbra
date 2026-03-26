@@ -18,6 +18,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db/prisma";
 import { authConfig } from "./auth.config";
 import { getSetting, SETTING_KEYS, type InstanceConfig, DEFAULT_INSTANCE_CONFIG } from "@/lib/data/settings";
+import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
 // Build providers list — Credentials is always present; Azure AD is
@@ -99,7 +100,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (instanceConfig.allowedDomain) {
           const domain = email.split("@")[1]?.toLowerCase();
           if (domain !== instanceConfig.allowedDomain.toLowerCase()) {
-            console.warn(`[auth] Rejected sign-in: email domain "${domain}" does not match allowed domain "${instanceConfig.allowedDomain}"`);
+            logger.warn(`[auth] Rejected sign-in: email domain "${domain}" does not match allowed domain "${instanceConfig.allowedDomain}"`);
             return false;
           }
         }
@@ -153,7 +154,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
           if (!invitation && userCount > 0) {
             // No invitation and not the first user — reject
-            console.warn(`[auth] Rejected sign-in: no invitation found for "${email}"`);
+            logger.warn(`[auth] Rejected sign-in: no invitation found for "${email}"`);
             return false;
           }
 

@@ -4,6 +4,7 @@ import {
   StorageSharedKeyCredential,
 } from "@azure/storage-blob";
 import type { StorageProvider } from "./types";
+import { logger } from "@/lib/logger";
 
 /**
  * Azure Blob Storage implementation of StorageProvider.

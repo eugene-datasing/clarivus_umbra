@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeForDocument } from "@/lib/auth/authorize";
+import { logger } from "@/lib/logger";
 
 export async function GET(
   _request: NextRequest,
@@ -38,7 +39,7 @@ export async function GET(
       error: doc.processingError,
     });
   } catch (error) {
-    console.error("Status check failed:", error);
+    logger.error("Status check failed:", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to fetch document status" },
       { status: 500 },

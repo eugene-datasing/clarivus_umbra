@@ -19,6 +19,7 @@ import { buildCoverLetterPdf } from "./cover-letter";
 import { buildAuditTrailPdf } from "./audit-pdf";
 import { buildChainOfCustodyReport } from "./chain-of-custody";
 import { sanitiseMetadata } from "./sanitise-metadata";
+import { logger } from "@/lib/logger";
 
 export type PackageType = "requester" | "internal" | "ombudsman";
 
@@ -115,7 +116,7 @@ export async function generateExportPackage(
 
   // Run async — do not await
   doGenerate(exportId, caseId, packageType, options).catch((err) => {
-    console.error("Export generation failed:", err);
+    logger.error("Export generation failed:", { error: String(err) });
     setProgress(exportId, {
       status: "error",
       error: err instanceof Error ? err.message : "Export failed",
@@ -193,7 +194,7 @@ async function doGenerate(
           `[export] Redaction verification warning for ${doc.name}: ${verification.leaksFound} issue(s) found`,
         );
         for (const detail of verification.details.filter((d) => d.leaked)) {
-          console.warn(`  - ${detail.detectionText}: ${detail.note}`);
+          logger.warn(`  - ${detail.detectionText}: ${detail.note}`);
         }
       }
     } catch (err) {
@@ -519,7 +520,7 @@ export async function batchExport(
 
     // Run standard generation on this job
     doGenerate(job.id, caseId, packageType, options).catch((err) => {
-      console.error("Export generation failed:", err);
+      logger.error("Export generation failed:", { error: String(err) });
       setProgress(job.id, {
         status: "error",
         error: err instanceof Error ? err.message : "Export failed",
@@ -557,7 +558,7 @@ export async function batchExport(
   // Run batch generation in background
   doBatchGenerate(batchGroupId, caseId, packageType, docBatches, exportIds, options).catch(
     (err) => {
-      console.error("Batch export generation failed:", err);
+      logger.error("Batch export generation failed:", { error: String(err) });
       // Mark all pending jobs in this batch as errored
       prisma.exportJob.updateMany({
         where: { batchGroupId, status: { not: "complete" } },

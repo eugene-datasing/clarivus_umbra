@@ -1,3 +1,4 @@
+import { requireCsrfHeader } from "@/lib/csrf";
 import { NextRequest, NextResponse } from "next/server";
 import { getStorage } from "@/lib/storage";
 import { prisma } from "@/lib/db/prisma";
@@ -72,6 +73,9 @@ function getFileTypeInfo(filename: string): { fileType: string; mimeType: string
 }
 
 export async function POST(request: NextRequest) {
+  const csrfError = requireCsrfHeader(request);
+  if (csrfError) return csrfError;
+
   try {
     // Authenticate the user
     const user = await requireUser();

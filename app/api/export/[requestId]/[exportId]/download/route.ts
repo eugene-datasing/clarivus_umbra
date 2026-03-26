@@ -3,6 +3,7 @@ import { getExportProgress } from "@/lib/pipeline/export";
 import { getStorage } from "@/lib/storage";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeForCase } from "@/lib/auth/authorize";
+import { logger } from "@/lib/logger";
 
 export async function GET(
   _request: NextRequest,
@@ -33,7 +34,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error("Download failed:", error);
+    logger.error("Download failed:", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to download export" },
       { status: 500 },

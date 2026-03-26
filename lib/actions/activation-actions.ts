@@ -4,49 +4,64 @@ import { headers } from "next/headers";
 import { verifyAndRedeemCode } from "@/lib/data/activation";
 import { createAuditEntry } from "@/lib/data/audit";
 import { auth } from "@/lib/auth/auth-options";
+import { prisma } from "@/lib/db/prisma";
+import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
-// In-memory rate limiter for activation attempts (per-process)
+// Database-backed rate limiter for activation attempts
 // ---------------------------------------------------------------------------
 
 const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
-const attempts = new Map<string, { count: number; firstAttempt: number }>();
-
-function checkRateLimit(ip: string): { allowed: boolean; retryAfterSeconds?: number } {
+async function checkActivationRateLimit(
+  ip: string,
+): Promise<{ allowed: boolean; retryAfterSeconds?: number }> {
+  const key = `activation_rate:${ip}`;
   const now = Date.now();
-  const entry = attempts.get(ip);
+  const windowStart = now - WINDOW_MS;
 
-  if (!entry || now - entry.firstAttempt > WINDOW_MS) {
-    // Window expired or first attempt — reset
-    attempts.set(ip, { count: 1, firstAttempt: now });
+  // Use system_settings as a key-value store for rate limit data
+  const existing = await prisma.systemSetting.findUnique({
+    where: { key },
+  });
+
+  if (!existing) {
+    // First attempt — create entry
+    await prisma.systemSetting.create({
+      data: {
+        key,
+        value: JSON.stringify({ timestamps: [now] }),
+        updatedBy: "system",
+      },
+    });
     return { allowed: true };
   }
 
-  if (entry.count >= MAX_ATTEMPTS) {
-    const retryAfter = Math.ceil((entry.firstAttempt + WINDOW_MS - now) / 1000);
-    return { allowed: false, retryAfterSeconds: retryAfter };
+  let timestamps: number[] = [];
+  try {
+    const parsed = JSON.parse(existing.value as string);
+    timestamps = (parsed.timestamps || []).filter((t: number) => t > windowStart);
+  } catch {
+    timestamps = [];
   }
 
-  entry.count++;
+  if (timestamps.length >= MAX_ATTEMPTS) {
+    const oldestInWindow = timestamps[0];
+    const retryAfter = Math.ceil((oldestInWindow + WINDOW_MS - now) / 1000);
+    return { allowed: false, retryAfterSeconds: Math.max(retryAfter, 1) };
+  }
+
+  timestamps.push(now);
+  await prisma.systemSetting.update({
+    where: { key },
+    data: {
+      value: JSON.stringify({ timestamps }),
+      updatedBy: "system",
+    },
+  });
+
   return { allowed: true };
-}
-
-// Periodic cleanup of stale entries (every 5 minutes)
-if (typeof globalThis !== "undefined") {
-  const CLEANUP_KEY = "__activation_rate_limit_cleanup";
-  if (!(globalThis as Record<string, unknown>)[CLEANUP_KEY]) {
-    (globalThis as Record<string, unknown>)[CLEANUP_KEY] = true;
-    setInterval(() => {
-      const now = Date.now();
-      for (const [ip, entry] of attempts) {
-        if (now - entry.firstAttempt > WINDOW_MS) {
-          attempts.delete(ip);
-        }
-      }
-    }, 5 * 60 * 1000).unref();
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -57,7 +72,7 @@ if (typeof globalThis !== "undefined") {
  * Server action to redeem an activation code.
  * Requires authentication — the user must sign in via Azure AD first.
  * The redeeming user is promoted to admin role.
- * Rate-limited to 5 attempts per IP per 15-minute window.
+ * Rate-limited to 5 attempts per IP per 15-minute window (database-backed).
  */
 export async function redeemActivationCode(
   code: string,
@@ -80,10 +95,10 @@ export async function redeemActivationCode(
     || headersList.get("x-real-ip")
     || "unknown";
 
-  // Rate limit check
-  const rateCheck = checkRateLimit(ip);
+  // Rate limit check (database-backed)
+  const rateCheck = await checkActivationRateLimit(ip);
   if (!rateCheck.allowed) {
-    console.warn(`[activation] Rate limited: ip=${ip}`);
+    logger.warn("Activation rate limited", { ip });
     return {
       success: false,
       error: `Too many attempts. Please try again in ${Math.ceil((rateCheck.retryAfterSeconds ?? 900) / 60)} minutes.`,
@@ -109,11 +124,11 @@ export async function redeemActivationCode(
         detail: `Activation code redeemed. User promoted to admin. IP: ${ip}`,
       });
     } catch (err) {
-      console.error("[activation] Failed to create audit entry:", err);
+      logger.error("Failed to create activation audit entry", { error: String(err) });
     }
   } else {
     // Log failed attempts for security monitoring
-    console.warn(`[activation] Failed attempt: ip=${ip}, user=${userName}, error=${result.error}`);
+    logger.warn("Activation failed attempt", { ip, user: userName, error: result.error });
   }
 
   return result;

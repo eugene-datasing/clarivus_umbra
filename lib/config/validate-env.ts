@@ -6,6 +6,8 @@
  * generate warnings only.
  */
 
+import { logger } from "@/lib/logger";
+
 export interface EnvVarSpec {
   /** Environment variable name */
   name: string;
@@ -59,7 +61,7 @@ export function validateEnv(
       if (spec.productionOnly && isDev) {
         // In dev, demote to warning
         result.warned.push(spec.name);
-        console.warn(
+        logger.warn(
           `[env] WARNING: ${spec.name} is not set. ${spec.description} (required in production)`,
         );
       } else {
@@ -68,7 +70,7 @@ export function validateEnv(
     } else {
       // Optional variable
       result.warned.push(spec.name);
-      console.warn(
+      logger.warn(
         `[env] INFO: Optional variable ${spec.name} is not set. ${spec.description}`,
       );
     }

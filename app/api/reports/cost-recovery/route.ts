@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { buildCostRecoveryReport } from "@/lib/pipeline/cost-recovery-report";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeForCase } from "@/lib/auth/authorize";
+import { logger } from "@/lib/logger";
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Cost recovery report generation failed:", error);
+    logger.error("Cost recovery report generation failed:", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to generate cost recovery report" },
       { status: 500 },

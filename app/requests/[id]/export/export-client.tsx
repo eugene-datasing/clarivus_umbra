@@ -316,7 +316,7 @@ export default function ExportClient({
     try {
       const res = await fetch(`/api/export/${requestId}/generate`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
         body: JSON.stringify({
           packageType: selectedPackage,
           includeCoverLetter,

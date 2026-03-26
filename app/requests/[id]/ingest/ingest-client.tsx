@@ -198,6 +198,7 @@ export default function IngestClient({
 
         const res = await fetch("/api/documents/upload", {
           method: "POST",
+          headers: { "X-Requested-With": "XMLHttpRequest" },
           body: formData,
         });
 
@@ -224,7 +225,7 @@ export default function IngestClient({
 
         // Trigger processing for each document (fire-and-forget)
         for (const doc of uploaded) {
-          fetch(`/api/documents/${doc.id}/process`, { method: "POST" }).catch(
+          fetch(`/api/documents/${doc.id}/process`, { method: "POST", headers: { "X-Requested-With": "XMLHttpRequest" } }).catch(
             (err) => console.error(`Failed to trigger processing for ${doc.id}:`, err)
           );
         }

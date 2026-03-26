@@ -6,6 +6,7 @@
  */
 
 import { getEmailClient } from "./email-client";
+import { logger } from "@/lib/logger";
 import {
   invitationEmailHtml,
   invitationEmailText,
@@ -83,10 +84,10 @@ async function sendEmail(
 
   if (!client) {
     // Dev mode fallback — log to console
-    console.log("[email] Azure Communication Services not configured. Logging email:");
-    console.log(`  To: ${toName} <${toEmail}>`);
-    console.log(`  Subject: ${subject}`);
-    console.log(`  Body (text): ${plainTextContent.slice(0, 200)}...`);
+    logger.info("[email] Azure Communication Services not configured. Logging email:");
+    logger.info(`  To: ${toName} <${toEmail}>`);
+    logger.info(`  Subject: ${subject}`);
+    logger.info(`  Body (text): ${plainTextContent.slice(0, 200)}...`);
     return true; // Simulate success in dev
   }
 
@@ -102,10 +103,10 @@ async function sendEmail(
     const result = await poller.pollUntilDone();
 
     if (result.status === "Succeeded") {
-      console.log(`[email] Sent "${subject}" to ${toEmail}`);
+      logger.info(`[email] Sent "${subject}" to ${toEmail}`);
       return true;
     } else {
-      console.error(`[email] Failed to send to ${toEmail}: status=${result.status}`);
+      logger.error(`[email] Failed to send to ${toEmail}: status=${result.status}`);
       return false;
     }
   } catch (err) {

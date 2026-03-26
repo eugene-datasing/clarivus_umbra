@@ -119,3 +119,52 @@ export async function toggleRuleStatus(ruleId: string) {
 
   return { success: true, newStatus };
 }
+
+export async function importRules(
+  rulesData: Array<{
+    name: string;
+    type: string;
+    status?: string;
+    matchMode: string;
+    keywords: string;
+    scope?: string;
+    priority?: string;
+    suggestedGround?: string;
+    description?: string;
+  }>,
+): Promise<{ success: boolean; count?: number; error?: string }> {
+  const user = await requireUser();
+  await requireAdmin(user);
+
+  if (!Array.isArray(rulesData) || rulesData.length === 0) {
+    return { success: false, error: "No rules to import." };
+  }
+
+  let imported = 0;
+  for (const rule of rulesData) {
+    if (!rule.name || !rule.type || !rule.keywords) continue;
+    const validated = createRuleSchema.parse({
+      name: rule.name,
+      type: rule.type,
+      status: rule.status || "Draft",
+      matchMode: rule.matchMode || "Exact",
+      keywords: rule.keywords,
+      scope: rule.scope || "All Documents",
+      priority: rule.priority || "Medium",
+      suggestedGround: rule.suggestedGround,
+      description: rule.description || "",
+    });
+    await prisma.customRule.create({ data: validated });
+    imported++;
+  }
+
+  await createAuditEntry({
+    userName: user.name,
+    userRole: user.role,
+    type: "rules-imported",
+    description: `Imported ${imported} custom rule(s) from JSON file`,
+    target: `${imported} rules`,
+  });
+
+  return { success: true, count: imported };
+}

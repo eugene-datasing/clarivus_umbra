@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -21,6 +21,7 @@ import {
   updateRule,
   deleteRule,
   toggleRuleStatus,
+  importRules,
 } from "@/lib/actions/rule-actions";
 
 type RuleType = "Keyword" | "Pattern" | "Entity" | "Combination";
@@ -85,6 +86,41 @@ export default function RulesClient({ rules }: RulesClientProps) {
   const [testingRule, setTestingRule] = useState<RuleRow | null>(null);
   const [testSampleText, setTestSampleText] = useState("");
   const [testResult, setTestResult] = useState<RuleTestResult | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExportRules = useCallback(() => {
+    const exportData = rules.map(({ id, name, type, status, matchMode, keywords, scope, priority, suggestedGround, description }) => ({
+      name, type, status, matchMode, keywords, scope, priority, suggestedGround, description,
+    }));
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "veil-detection-rules.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [rules]);
+
+  const handleImportRules = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      if (!Array.isArray(parsed)) throw new Error("Expected an array of rules");
+      const result = await importRules(parsed);
+      if (result.success) {
+        startTransition(() => router.refresh());
+        alert("Imported " + result.count + " rule(s) successfully.");
+      } else {
+        alert("Import failed: " + (result.error || "Unknown error"));
+      }
+    } catch (err) {
+      alert("Failed to parse rules file. Ensure it is valid JSON.");
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }, [router, startTransition]);
 
   const filtered = rules.filter(
     (r) =>
@@ -245,10 +281,23 @@ export default function RulesClient({ rules }: RulesClientProps) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="btn-secondary flex items-center gap-1.5">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            className="hidden"
+            onChange={handleImportRules}
+          />
+          <button
+            className="btn-secondary flex items-center gap-1.5"
+            onClick={() => fileInputRef.current?.click()}
+          >
             <Upload className="w-4 h-4" /> Import
           </button>
-          <button className="btn-secondary flex items-center gap-1.5">
+          <button
+            className="btn-secondary flex items-center gap-1.5"
+            onClick={handleExportRules}
+          >
             <Download className="w-4 h-4" /> Export
           </button>
           <button

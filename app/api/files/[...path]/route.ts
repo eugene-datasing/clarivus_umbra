@@ -3,6 +3,7 @@ import { getStorage } from "@/lib/storage";
 import path from "path";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeForCase } from "@/lib/auth/authorize";
+import { logger } from "@/lib/logger";
 
 /** Map file extension to MIME type for the Content-Type header */
 function getMimeType(filePath: string): string {
@@ -84,7 +85,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error("File serving failed:", error);
+    logger.error("File serving failed:", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to serve file" },
       { status: 500 },

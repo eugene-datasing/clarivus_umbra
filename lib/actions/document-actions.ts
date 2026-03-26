@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth/session";
 import { authorizeForCase, authorizeForDocument } from "@/lib/auth/authorize";
 import { createAuditEntry } from "@/lib/data/audit";
 import { getStorage } from "@/lib/storage";
+import { logger } from "@/lib/logger";
 
 /**
  * Mark documents as excluded — removes them from the review/export workflow

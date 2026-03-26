@@ -6,6 +6,7 @@
  */
 
 import { getActiveRules, incrementMatchCount } from "@/lib/data/rules";
+import { logger } from "@/lib/logger";
 
 export interface CustomRuleMatch {
   ruleId: string;
@@ -151,7 +152,7 @@ function runRegexRule(
   try {
     regex = new RegExp(rule.keywords, "gi");
   } catch {
-    console.warn(`[custom-rules] Invalid regex in rule "${rule.name}": ${rule.keywords}`);
+    logger.warn(`[custom-rules] Invalid regex in rule "${rule.name}": ${rule.keywords}`);
     return [];
   }
 

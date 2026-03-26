@@ -13,6 +13,7 @@ import { execFile } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
+import { logger } from "@/lib/logger";
 
 export interface VerificationResult {
   passed: boolean;
@@ -84,7 +85,7 @@ export async function verifyRedactedPdf(
         { timeout: 60_000 },
         (error, stdout, stderr) => {
           if (error) {
-            console.error("[verify-redaction] PyMuPDF stderr:", stderr);
+            logger.error("[verify-redaction] PyMuPDF stderr:", { error: String(stderr) });
             reject(new Error(`Verification failed: ${error.message}`));
           } else {
             try {
@@ -106,7 +107,7 @@ export async function verifyRedactedPdf(
     return result;
   } catch (err) {
     // Fallback: if PyMuPDF verification fails, return a conservative result
-    console.error("[verify-redaction] PyMuPDF verification failed, using fallback:", err);
+    logger.error("[verify-redaction] PyMuPDF verification failed, using fallback:", { error: String(err) });
     return {
       passed: metadataLeaks === 0,
       totalChecked: detections.length,

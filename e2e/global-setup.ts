@@ -26,11 +26,16 @@ async function loginAndSaveState(
   await page.getByLabel("Password").fill(user.password);
   await page.getByRole("button", { name: /sign in/i }).click();
 
-  // Wait for navigation away from /login — confirms auth succeeded.
-  // The destination may be "/" (dashboard) or "/activate" depending on state.
-  await page.waitForURL((url) => !url.pathname.startsWith("/login"), {
-    timeout: 15_000,
-  });
+  // Wait for either navigation away from /login OR an error message
+  // The signIn() call may take time on cold start; wait longer.
+  await Promise.race([
+    page.waitForURL((url) => !url.pathname.startsWith("/login"), {
+      timeout: 30_000,
+    }),
+    page.locator("#login-error").waitFor({ state: "visible", timeout: 30_000 }).then(() => {
+      throw new Error("Login failed: " + page.locator("#login-error").textContent());
+    }),
+  ]);
   await expect(page.locator("body")).not.toContainText("Invalid email or password");
 
   await page.context().storageState({ path: storageStatePath });

@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth/session";
 import { createAuditEntry } from "@/lib/data/audit";
 import { sendInvitationEmail } from "@/lib/email/send";
 import { getSetting, SETTING_KEYS, type OrgIdentity, DEFAULT_ORG_IDENTITY } from "@/lib/data/settings";
+import { logger } from "@/lib/logger";
 
 const INVITATION_EXPIRY_DAYS = 14;
 const ADMIN_ROLES = ["admin", "request-manager"];
@@ -124,7 +125,7 @@ export async function inviteUser(
       target: `invitation:${invitation.id}`,
     });
   } catch (err) {
-    console.error("[invitations] Failed to create audit entry:", err);
+    logger.error("[invitations] Failed to create audit entry:", { error: String(err) });
   }
 
   return { success: true, id: invitation.id };
@@ -167,7 +168,7 @@ export async function revokeInvitation(
       target: `invitation:${invitationId}`,
     });
   } catch (err) {
-    console.error("[invitations] Failed to create audit entry:", err);
+    logger.error("[invitations] Failed to create audit entry:", { error: String(err) });
   }
 
   return { success: true };
