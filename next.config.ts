@@ -37,7 +37,7 @@ const nextConfig: NextConfig = {
               // Next.js dev server requires 'unsafe-eval' and 'unsafe-inline' for HMR
               process.env.NODE_ENV === "development"
                 ? "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://unpkg.com"
-                : "script-src 'self' https://unpkg.com",
+                : "script-src 'self' 'unsafe-inline' https://unpkg.com",
               "worker-src 'self' blob:",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: blob:",
