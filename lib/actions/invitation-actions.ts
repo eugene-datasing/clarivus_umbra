@@ -8,11 +8,11 @@ import { sendInvitationEmail } from "@/lib/email/send";
 import { getSetting, SETTING_KEYS, type OrgIdentity, DEFAULT_ORG_IDENTITY } from "@/lib/data/settings";
 
 const INVITATION_EXPIRY_DAYS = 14;
-const ADMIN_ROLES = ["admin"];
+const ADMIN_ROLES = ["admin", "request-manager"];
 
-function requireAdmin(role: string) {
+function requireInvitationAdmin(role: string) {
   if (!ADMIN_ROLES.includes(role)) {
-    throw new Error("Only administrators can manage invitations");
+    throw new Error("Only administrators and request managers can manage invitations");
   }
 }
 
@@ -22,7 +22,7 @@ function requireAdmin(role: string) {
 
 export async function getInvitations() {
   const user = await requireUser();
-  requireAdmin(user.role);
+  requireInvitationAdmin(user.role);
 
   return prisma.userInvitation.findMany({
     orderBy: { createdAt: "desc" },
@@ -44,7 +44,7 @@ export async function inviteUser(
   params: InviteUserParams,
 ): Promise<{ success: boolean; error?: string; id?: string }> {
   const user = await requireUser();
-  requireAdmin(user.role);
+  requireInvitationAdmin(user.role);
 
   const email = params.email?.replace(/[\r\n]/g, "").trim();
   const { name, role, departmentId } = params;
@@ -138,7 +138,7 @@ export async function revokeInvitation(
   invitationId: string,
 ): Promise<{ success: boolean; error?: string }> {
   const user = await requireUser();
-  requireAdmin(user.role);
+  requireInvitationAdmin(user.role);
 
   const invitation = await prisma.userInvitation.findUnique({
     where: { id: invitationId },
@@ -181,7 +181,7 @@ export async function resendInvitation(
   invitationId: string,
 ): Promise<{ success: boolean; error?: string }> {
   const user = await requireUser();
-  requireAdmin(user.role);
+  requireInvitationAdmin(user.role);
 
   const invitation = await prisma.userInvitation.findUnique({
     where: { id: invitationId },

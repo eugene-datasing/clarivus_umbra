@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStorage } from "@/lib/storage";
 import { prisma } from "@/lib/db/prisma";
 import { createAuditEntry } from "@/lib/data/audit";
+import { requireUser } from "@/lib/auth/session";
+import { authorizeForCase } from "@/lib/auth/authorize";
 import { applyRateLimit } from "@/lib/api-utils";
 import { validateFile } from "@/lib/pipeline/file-validator";
 import { logger } from "@/lib/logger";
@@ -71,11 +73,11 @@ function getFileTypeInfo(filename: string): { fileType: string; mimeType: string
 
 export async function POST(request: NextRequest) {
   try {
-    // Rate limit by IP address (no auth on this route) — 20 req/min
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-      ?? request.headers.get("x-real-ip")
-      ?? "anonymous";
-    const rateLimitResponse = applyRateLimit(`upload:${ip}`, 20);
+    // Authenticate the user
+    const user = await requireUser();
+
+    // Rate limit by authenticated user — 20 req/min
+    const rateLimitResponse = applyRateLimit(`upload:${user.id}`, 20);
     if (rateLimitResponse) return rateLimitResponse;
 
     const formData = await request.formData();
@@ -221,8 +223,9 @@ export async function POST(request: NextRequest) {
 
     // Create audit entry for the upload
     await createAuditEntry({
-      userName: "System",
-      userRole: "system",
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
       type: "document_upload",
       description: `Uploaded ${results.length} document${results.length > 1 ? "s" : ""}`,
       target: caseId,

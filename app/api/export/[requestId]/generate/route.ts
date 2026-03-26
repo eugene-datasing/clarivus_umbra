@@ -4,6 +4,7 @@ import { generateExportPackage, batchExport, type PackageType } from "@/lib/pipe
 import { requireUser } from "@/lib/auth/session";
 import { authorizeForCase } from "@/lib/auth/authorize";
 import { applyRateLimit } from "@/lib/api-utils";
+import { verifyAuditIntegrity } from "@/lib/data/audit";
 import { logger } from "@/lib/logger";
 import { trackException } from "@/lib/telemetry";
 
@@ -79,6 +80,23 @@ export async function POST(
           error: `${missingGrounds} accepted detection(s) have no withholding ground assigned. Apply grounds before exporting.`,
         },
         { status: 400 },
+      );
+    }
+
+    // --- Verify audit integrity before export ---
+    const auditCheck = await verifyAuditIntegrity(requestId);
+    if (!auditCheck.valid) {
+      log.error("Audit integrity check failed before export", {
+        requestId,
+        totalEntries: auditCheck.totalEntries,
+        brokenAt: auditCheck.brokenAt,
+      });
+      return NextResponse.json(
+        {
+          error: "Audit trail integrity check failed. The audit chain may have been tampered with. Export blocked — contact an administrator.",
+          code: "AUDIT_INTEGRITY_FAILURE",
+        },
+        { status: 409 },
       );
     }
 
