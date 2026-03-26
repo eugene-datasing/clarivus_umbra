@@ -136,7 +136,7 @@ function buildQAGroups(
           label: "All documents signed off",
           status: signedOffDocs >= totalDocs ? "pass" : signedOffDocs > 0 ? "warning" : "fail",
           detail: signedOffDocs >= totalDocs
-            ? `All ${totalDocs} documents have been signed off by senior reviewer`
+            ? `All ${totalDocs} documents have been signed off`
             : `${signedOffDocs} of ${totalDocs} documents signed off`,
         },
       ],

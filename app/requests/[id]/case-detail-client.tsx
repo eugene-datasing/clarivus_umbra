@@ -5,9 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { statusConfig, docTypeConfig, type RequestStatus, type DocType } from "@/lib/db/mappers";
 import { workingDaysRemaining, deadlineColor, formatDate, cn, confidenceColor } from "@/lib/utils";
+import { bulkExcludeDocuments, deleteDocument } from "@/lib/actions/document-actions";
 import {
   FileText, Mail, Search, Filter, Upload, CheckCircle,
-  XCircle, ChevronRight, ArrowRight,
+  XCircle, ChevronRight, ArrowRight, Trash2,
 } from "lucide-react";
 
 const docStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
@@ -21,6 +22,7 @@ const docStatusConfig: Record<string, { label: string; color: string; bg: string
   approved: { label: "Approved", color: "text-green-700", bg: "bg-green-50" },
   rejected: { label: "Rejected", color: "text-red-700", bg: "bg-red-50" },
   released: { label: "Released", color: "text-brand-primary", bg: "bg-purple-50" },
+  excluded: { label: "Excluded", color: "text-gray-500", bg: "bg-gray-100" },
   error: { label: "Error", color: "text-red-700", bg: "bg-red-50" },
 };
 
@@ -72,6 +74,9 @@ export default function CaseDetailClient({ caseData, documents }: CaseDetailClie
   const router = useRouter();
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
+  const [isExcluding, setIsExcluding] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const request = caseData;
   const cfg = statusConfig[request.status as RequestStatus];
@@ -248,6 +253,7 @@ export default function CaseDetailClient({ caseData, documents }: CaseDetailClie
               <th className="text-left px-4 py-3 font-medium text-txt-secondary">Assignee</th>
               <th className="text-left px-4 py-3 font-medium text-txt-secondary">Updated</th>
               <th className="text-center px-4 py-3 font-medium text-txt-secondary">Processing</th>
+              <th className="w-8"></th>
             </tr>
           </thead>
           <tbody>
@@ -333,6 +339,36 @@ export default function CaseDetailClient({ caseData, documents }: CaseDetailClie
                       )}
                     </Link>
                   </td>
+                  <td className="px-2 py-3 w-8" onClick={(e) => e.stopPropagation()}>
+                    {deleteConfirm === doc.id ? (
+                      <button
+                        onClick={async () => {
+                          setIsDeleting(true);
+                          try {
+                            await deleteDocument(doc.id);
+                            setDeleteConfirm(null);
+                            router.refresh();
+                          } catch (e) {
+                            console.error("Delete failed:", e);
+                          } finally {
+                            setIsDeleting(false);
+                          }
+                        }}
+                        disabled={isDeleting}
+                        className="text-xs text-red-600 font-medium hover:text-red-800"
+                      >
+                        {isDeleting ? "..." : "Confirm"}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setDeleteConfirm(doc.id)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity text-txt-secondary hover:text-red-600"
+                        title="Delete document"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </td>
                 </tr>
               );
             })}
@@ -358,9 +394,46 @@ export default function CaseDetailClient({ caseData, documents }: CaseDetailClie
             <ArrowRight className="w-4 h-4" />
             Bulk Review
           </button>
-          <button className="text-sm hover:underline flex items-center gap-1.5">
+          <button
+            onClick={async () => {
+              setIsExcluding(true);
+              try {
+                await bulkExcludeDocuments(Array.from(selectedDocs));
+                setSelectedDocs(new Set());
+                router.refresh();
+              } catch (e) {
+                console.error("Exclude failed:", e);
+              } finally {
+                setIsExcluding(false);
+              }
+            }}
+            disabled={isExcluding}
+            className="text-sm hover:underline flex items-center gap-1.5"
+          >
             <XCircle className="w-4 h-4" />
-            Mark Excluded
+            {isExcluding ? "Excluding..." : "Mark Excluded"}
+          </button>
+          <button
+            onClick={async () => {
+              if (!confirm(`Permanently delete ${selectedDocs.size} document(s)? This cannot be undone.`)) return;
+              setIsDeleting(true);
+              try {
+                for (const docId of selectedDocs) {
+                  await deleteDocument(docId);
+                }
+                setSelectedDocs(new Set());
+                router.refresh();
+              } catch (e) {
+                console.error("Delete failed:", e);
+              } finally {
+                setIsDeleting(false);
+              }
+            }}
+            disabled={isDeleting}
+            className="text-sm hover:underline flex items-center gap-1.5 text-red-200 hover:text-white"
+          >
+            <Trash2 className="w-4 h-4" />
+            {isDeleting ? "Deleting..." : "Delete"}
           </button>
           <div className="h-5 w-px bg-white/30" />
           <button

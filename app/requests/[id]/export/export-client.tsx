@@ -547,8 +547,8 @@ export default function ExportClient({
                 {selectedWarnings.length} document{selectedWarnings.length > 1 ? "s have" : " has"} not been signed off
               </div>
               <div className="text-xs text-amber-700 mb-2">
-                The following documents have been reviewed but not signed off by a senior reviewer.
-                Including them means redaction decisions have not been independently verified.
+                The following documents have been reviewed but not yet given final approval.
+                Including them means redaction decisions have not received sign-off.
               </div>
               <ul className="text-xs text-amber-700 mb-3 space-y-0.5">
                 {selectedWarnings.map((d) => (

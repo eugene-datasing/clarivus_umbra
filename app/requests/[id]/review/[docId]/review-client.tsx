@@ -1004,7 +1004,7 @@ export default function ReviewClient({
                 disabled={isSubmitting}
               >
                 <Send size={14} />
-                <span className="hidden sm:inline">Submit to Senior Review</span>
+                <span className="hidden sm:inline">Sign Off</span>
               </button>
               {showSubmitConfirm && (
                 <div className="absolute right-0 top-full mt-2 w-72 bg-surface-card border border-border rounded-card shadow-lg p-4 z-50">
@@ -1014,8 +1014,8 @@ export default function ReviewClient({
                       <p className="text-sm font-medium text-txt-primary">Confirm Submission</p>
                       <p className="text-xs text-txt-secondary mt-1">
                         {stats.pending > 0
-                          ? `${stats.pending} detection(s) are still pending review. Are you sure you want to submit?`
-                          : "All detections reviewed. Ready to submit for senior review."}
+                          ? `${stats.pending} detection(s) are still pending review. Are you sure you want to sign off?`
+                          : "All detections reviewed. Ready to sign off."}
                       </p>
                     </div>
                   </div>
@@ -1050,7 +1050,7 @@ export default function ReviewClient({
           {docStatus === "reviewed" && (
             <div className="flex items-center gap-2">
               <span className="text-xs text-purple-600 font-medium bg-purple-50 px-2 py-1 rounded hidden lg:inline">
-                Awaiting Senior Review
+                Signed Off — Awaiting Final Approval
               </span>
               <div className="relative">
                 <button
@@ -1103,16 +1103,16 @@ export default function ReviewClient({
                   disabled={isSubmitting}
                 >
                   <Check size={14} />
-                  <span className="hidden sm:inline">Sign Off</span>
+                  <span className="hidden sm:inline">Final Approval</span>
                 </button>
                 {showSignOffConfirm && (
                   <div className="absolute right-0 top-full mt-2 w-72 bg-surface-card border border-border rounded-card shadow-lg p-4 z-50">
                     <div className="flex items-start gap-2 mb-3">
                       <Shield size={16} className="text-green-600 mt-0.5 shrink-0" />
                       <div>
-                        <p className="text-sm font-medium text-txt-primary">Confirm Sign-Off</p>
+                        <p className="text-sm font-medium text-txt-primary">Confirm Final Approval</p>
                         <p className="text-xs text-txt-secondary mt-1">
-                          This confirms all redaction decisions for this document are approved. This action will be recorded in the audit trail.
+                          This gives final approval for all redaction decisions on this document. This action will be recorded in the audit trail.
                         </p>
                       </div>
                     </div>
@@ -1137,7 +1137,7 @@ export default function ReviewClient({
                         }}
                         className="btn-primary text-xs bg-green-600 hover:bg-green-700"
                       >
-                        Confirm Sign-Off
+                        Confirm Approval
                       </button>
                     </div>
                   </div>
@@ -1608,7 +1608,7 @@ export default function ReviewClient({
             {isSubmitting ? (
               <>
                 <div className="w-10 h-10 border-3 border-brand-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                <div className="text-sm font-semibold text-txt-primary">Submitting to Senior Review...</div>
+                <div className="text-sm font-semibold text-txt-primary">Signing off...</div>
                 <div className="text-xs text-txt-secondary mt-1">Recording decisions in audit trail</div>
               </>
             ) : (
@@ -1616,8 +1616,8 @@ export default function ReviewClient({
                 <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-3">
                   <Check className="w-6 h-6 text-confidence-high" />
                 </div>
-                <div className="text-sm font-semibold text-txt-primary">Submitted Successfully</div>
-                <div className="text-xs text-txt-secondary mt-1">Document forwarded to senior reviewer. Redirecting to withholding schedule...</div>
+                <div className="text-sm font-semibold text-txt-primary">Signed Off Successfully</div>
+                <div className="text-xs text-txt-secondary mt-1">All redaction decisions approved. Redirecting to withholding schedule...</div>
               </>
             )}
           </div>

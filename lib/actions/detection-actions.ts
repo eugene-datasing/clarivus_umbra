@@ -127,7 +127,7 @@ export async function markDocumentInReview(documentId: string) {
 
 /**
  * Submit a document for senior review. Transitions from "in-review" or
- * "reviewed" to "reviewed" (marking it ready for senior sign-off).
+ * "reviewed" (reviewer sign-off complete, awaiting final approval if configured).
  */
 export async function submitForSeniorReview(documentId: string) {
   const user = await requireUser();
@@ -154,7 +154,7 @@ export async function submitForSeniorReview(documentId: string) {
     userName: user.name,
     userRole: user.role,
     type: "status",
-    description: `Submitted document for senior review: "${doc.name}"`,
+    description: `Reviewer signed off document: "${doc.name}"`,
     target: doc.name,
     caseId: doc.caseId,
   });
@@ -163,8 +163,8 @@ export async function submitForSeniorReview(documentId: string) {
 }
 
 /**
- * Senior reviewer signs off a document. Transitions from "reviewed" to
- * "signed-off".
+ * Final approval of a document. Transitions from "reviewed" to "signed-off".
+ * Used by the senior reviewer (if configured) or acts as the final step.
  */
 export async function signOffDocument(documentId: string) {
   const user = await requireUser();

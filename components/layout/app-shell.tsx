@@ -11,13 +11,14 @@ import { AlertCircle } from "lucide-react";
  * Profile completion nudge — shown when the user has no department assigned.
  */
 function ProfileNudge() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [dismissed, setDismissed] = useState(false);
 
+  // Only show for authenticated users who have no department set.
+  // Cast the user object to access departmentId which is added by our session callback.
   const user = session?.user as { departmentId?: string | null } | undefined;
 
-  // Only show for authenticated users who have no department set
-  if (dismissed || !session?.user || user?.departmentId) return null;
+  if (dismissed || status !== "authenticated" || !session?.user || user?.departmentId) return null;
 
   return (
     <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between text-sm">

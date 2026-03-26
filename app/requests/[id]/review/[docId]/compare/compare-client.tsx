@@ -171,7 +171,7 @@ export default function CompareClient({
           <GitCompare className="w-12 h-12 text-txt-secondary/30 mx-auto mb-4" />
           <h2 className="text-lg font-heading font-semibold text-txt-primary mb-2">No Snapshots Available</h2>
           <p className="text-sm text-txt-secondary max-w-md mx-auto">
-            Version snapshots are created automatically when a document is submitted for senior review (draft) or signed off (final).
+            Version snapshots are created automatically when a document is signed off (draft) or given final approval (final).
             Complete the review workflow to enable comparison.
           </p>
           <Link href={`/requests/${requestId}/review/${docId}`} className="btn-primary mt-4 inline-flex items-center gap-2">

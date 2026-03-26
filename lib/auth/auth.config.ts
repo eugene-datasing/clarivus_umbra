@@ -36,6 +36,7 @@ export const authConfig = {
       if (user) {
         token.role = (user as { role?: string }).role ?? "reviewer";
         token.userId = (user as { id?: string }).id;
+        token.departmentId = (user as { departmentId?: string | null }).departmentId ?? null;
       }
       return token;
     },
