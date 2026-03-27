@@ -39,10 +39,10 @@ const nextConfig: NextConfig = {
                 ? "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://unpkg.com"
                 : "script-src 'self' 'unsafe-inline' https://unpkg.com",
               "worker-src 'self' blob:",
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+              "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob:",
-              "font-src 'self' data: https://fonts.gstatic.com",
-              "connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com",
+              "font-src 'self' data:",
+              "connect-src 'self' https://unpkg.com",
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",

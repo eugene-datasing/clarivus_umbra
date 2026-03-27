@@ -54,8 +54,8 @@ const config: Config = {
         },
       },
       fontFamily: {
-        heading: ["Playfair Display", "serif"],
-        body: ["DM Sans", "sans-serif"],
+        heading: ["var(--font-playfair)", "Playfair Display", "serif"],
+        body: ["var(--font-dm-sans)", "DM Sans", "sans-serif"],
         mono: ["JetBrains Mono", "monospace"],
       },
       borderRadius: {
