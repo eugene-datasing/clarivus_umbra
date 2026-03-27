@@ -4,6 +4,60 @@ All notable changes to the Veil prototype.
 
 ---
 
+## 2026-03-28
+
+### Fixed
+- Switch Google Fonts to `next/font/google` for build-time bundling — eliminates runtime Google Fonts CDN dependency (`d008ac7`)
+- Restore `'unsafe-inline'` in CSP `script-src` for Next.js hydration — fixes production "Connection closed" error (`6c04637`)
+
+---
+
+## 2026-03-27
+
+### Fixed
+- Wire up remaining UI placeholders, harden security and logging — Tier 3 improvements (`2bf2251`)
+- Wire up non-functional UI elements: filters, audit export, assign reviewer — Tier 2 (`d504e10`)
+- Fix critical security vulnerabilities across auth, audit, and CSP — Tier 1 (`a79c12c`)
+- Fix review workflow labels, add document exclude/delete, fix department banner (`4272591`)
+- Fix Tier 3 PDF encoding error: replace block chars with ASCII marker (`c8f3564`)
+
+---
+
+## 2026-03-26
+
+### Added
+- LibreOffice conversion for non-PDF redaction with text-search mode (`663cda7`)
+
+### Fixed
+- Fix export persistence and PDF redaction fallback (`e715f25`)
+
+---
+
+## 2026-03-25
+
+### Added
+- Landing page for unauthenticated visitors with feature showcase, demo request form, real screenshots (`1be3312`, `c3f8da2`, `1a627b6`, `04dce11`)
+
+### Changed
+- Redesign detection highlights: three-state system with black-bar redactions (`c03b2e0`)
+- OIA/LGOIMA positioning, profile banner fix, favicon, e2e updates (`14ce9c1`)
+
+---
+
+## 2026-03-24
+
+### Added
+- PDF viewer for document review with detection overlays (`94cec6b`)
+
+### Changed
+- Switch Docker runtime from Alpine to Debian slim for PyMuPDF compatibility (`86f57ad`)
+
+### Fixed
+- Fix seed script and error boundary for authorization errors (`53b6f76`)
+- Update documentation to reflect current build state (`9358131`)
+
+---
+
 ## 2026-03-23
 
 ### Fixed

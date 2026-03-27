@@ -186,7 +186,7 @@ After `npx prisma db seed`, the database includes:
 | Lucide React | Icons |
 | React Hook Form + Zod | Form validation |
 | Recharts | Charts (AI governance dashboard) |
-| Docker | Container deployment (multi-stage: Node.js 20 Alpine + Python3) |
+| Docker | Container deployment (multi-stage: Node.js 20 Debian slim + Python3 + LibreOffice) |
 
 ---
 
@@ -257,10 +257,11 @@ veil-prototype/
 │   ├── page.tsx                           # Dashboard (server component)
 │   ├── login/                             # Login page (Azure AD SSO + credentials fallback)
 │   ├── activate/                          # Post-login activation (enter code, become admin)
+│   ├── landing-page.tsx                     # Public landing page (unauthenticated)
 │   ├── setup/                             # Setup wizard (7 steps)
 │   ├── profile/                           # User profile page
 │   ├── queue/page.tsx                     # My Queue (server component)
-│   ├── reports/page.tsx                   # Reports (stub)
+│   ├── reports/page.tsx                   # Reports dashboard with real analytics, templates, and cost-recovery
 │   ├── requests/
 │   │   ├── page.tsx                       # Cases list (server + client)
 │   │   ├── new/page.tsx                   # New LGOIMA request form
@@ -430,7 +431,7 @@ veil-prototype/
 │   ├── azure-infrastructure-spec.md       # Azure architecture & deployment
 │   ├── auth-and-onboarding-spec.md        # Auth & first-run onboarding design
 │   └── client-deployment-activation-spec.md  # Client deployment & activation flow
-├── Dockerfile                             # Multi-stage: Node 20 Alpine + Python3
+├── Dockerfile                             # Multi-stage: Node 20 Debian slim + Python3 + LibreOffice
 ├── .dockerignore                          # Excludes node_modules, .next, .env*, etc.
 ├── docker-compose.yml                     # Local PostgreSQL 16 (port 5434)
 ├── next.config.ts                         # standalone output mode
@@ -446,7 +447,7 @@ veil-prototype/
 
 ## Database Schema (Prisma)
 
-18 models across 17 migrations:
+18 models across 20+ migrations:
 
 | Model | Purpose |
 |-------|---------|
@@ -474,7 +475,8 @@ veil-prototype/
 ## Key Screens
 
 ### Fully Working (with real data)
-- **Dashboard** (`/`) — Active cases, queue summary, recent activity
+- **Landing Page** (`/`) — Public-facing product page with feature showcase, screenshots, stats, and demo request form
+- **Dashboard** (`/dashboard`) — Active cases, queue summary, recent activity
 - **Cases List** (`/requests`) — All LGOIMA requests with search and filters
 - **New Request** (`/requests/new`) — Intake form with auto-deadline and DB persistence
 - **Case Detail** (`/requests/[id]`) — Document table with real status tracking
@@ -495,8 +497,6 @@ veil-prototype/
 ### UI Present, Limited Functionality
 - **QA Screen** (`/requests/[id]/qa`) — Pre-release quality checks with simulation mode
 
-### Stub/Placeholder
-- **Reports** (`/reports`) — Placeholder with coming-soon notice
 
 ---
 
@@ -552,6 +552,7 @@ Clarivus brand tokens in `tailwind.config.ts`:
 - **Primary:** `#3e13af` (Clarivus purple)
 - **Accent:** `#1A9F6F` (Clarivus green)
 - **Fonts:** Playfair Display (headings), DM Sans (body), JetBrains Mono (mono)
+  - Fonts are self-hosted via `next/font/google` (build-time bundled, no runtime Google Fonts dependency)
 - **Confidence colours:** Green (high >= 85%), Amber (medium 50-84%), Red (low < 50%)
 
 Component classes in `app/globals.css`: `.btn-primary`, `.btn-secondary`, `.card`, `.badge`, `.input-field`.
@@ -598,9 +599,14 @@ Additional workflows handle Docker image builds (`docker.yml`) and database migr
 - **SCIM provisioning** — Azure AD can automatically sync users and groups to Veil via SCIM 2.0 endpoints, supporting automated onboarding/offboarding
 - **User invitations** — admins invite users via email; invitations are domain-restricted to the organisation's configured email domain
 - Role-based access control: admin, senior-reviewer, request-manager, final-approver, reviewer
-- The document review screen uses a simulated document view (styled HTML) rather than PDF.js
+- The document review screen uses a PDF viewer with detection overlays for PDFs and styled HTML for non-PDF documents
 - LGOIMA grounds are accurately sourced from the Act
 - **Responsive design** — mobile-friendly with bottom navigation bar on small viewports
 - **CI/CD pipeline** — GitHub Actions enforces lint, type check, tests, and build on every push and PR
 - **Azure deployment** is live — see `docs/azure-infrastructure-spec.md` for full architecture
 - See `DEVELOPER-NOTES.md` for architecture decisions and remaining gaps
+- **CSRF protection** — state-changing API routes require `X-Requested-With: XMLHttpRequest` header
+- **Structured logging** — all server-side code uses `lib/logger.ts` for structured JSON logging in production
+- **Database-backed rate limiting** — activation endpoint uses PostgreSQL-backed rate limiting instead of in-memory
+- **LibreOffice conversion** — non-PDF documents (DOCX, XLSX, TXT) are converted to PDF at export time for true redaction via LibreOffice headless
+- **Fonts** — self-hosted via `next/font/google` — no runtime dependency on Google Fonts CDN

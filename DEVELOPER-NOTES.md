@@ -78,6 +78,13 @@
 | CI/CD pipeline | GitHub Actions workflows (ci, docker, migrate) |
 | Responsive design | Mobile bottom navigation bar, hamburger menu for admin items |
 | Keyboard shortcuts | Review screen: A=accept, R=reject, arrow keys for navigation, Esc to dismiss |
+| Landing page | Public-facing product page with feature showcase, demo request form, real screenshots |
+| CSRF protection | State-changing API routes require X-Requested-With header; lib/csrf.ts utility |
+| Structured logging | All server-side code uses lib/logger.ts — pretty-printed in dev, JSON in production |
+| DB-backed rate limiting | Activation rate limiter uses PostgreSQL system_settings instead of in-memory Map |
+| LibreOffice conversion | Non-PDF documents (DOCX, XLSX, TXT) converted to PDF at export time for true redaction |
+| Self-hosted fonts | Fonts bundled at build time via next/font/google — no runtime Google Fonts CDN dependency |
+| PDF viewer | PDF.js-based viewer with detection overlay highlights for PDF documents |
 
 ---
 
@@ -113,6 +120,23 @@
 - **Decision:** Activation moved from pre-auth to post-auth. The user signs in via Azure AD first, then enters the activation code. The first user to activate receives the admin role.
 - **Reason:** This allows Azure AD to handle identity verification while the activation code binds the user to a specific Veil organisation instance. It also simplifies the sign-up flow since the user does not need to create separate credentials.
 
+### Font Self-Hosting
+- **Decision:** Switched from `@import url('https://fonts.googleapis.com/...')` in CSS to `next/font/google` in `app/layout.tsx`.
+- **Reason:** Google Fonts CDN was returning 503 errors in the Azure-hosted production deployment. `next/font/google` downloads fonts at build time and serves them from the app's own domain, eliminating the external dependency.
+
+### LibreOffice Conversion for Non-PDF Redaction
+- **Decision:** At export time, non-PDF documents (DOCX, XLSX, TXT) are converted to PDF via LibreOffice headless, then redacted using PyMuPDF text-search mode.
+- **Reason:** Non-PDF documents have no bounding-box data from Azure Document Intelligence. LibreOffice conversion preserves original formatting, then PyMuPDF `page.search_for()` locates detection text in the converted PDF for true redaction. Falls back to plain-text PDF if conversion fails.
+- **Three-tier fallback:** (1) Coordinate-based redaction for PDFs, (2) LibreOffice convert + text-search for non-PDFs, (3) Plain-text PDF as last resort.
+
+### CSRF Protection
+- **Decision:** Added `X-Requested-With: XMLHttpRequest` header requirement for state-changing API routes.
+- **Reason:** Browsers won't send custom headers cross-origin without CORS preflight, preventing cross-site request forgery. Implemented via `lib/csrf.ts` utility applied to upload, process, and export routes.
+
+### CSP Policy
+- **Decision:** `script-src` includes `'unsafe-inline'` in production.
+- **Reason:** Next.js requires inline scripts for hydration. Removing `'unsafe-inline'` broke the application with "Connection closed" errors. Next.js does not yet support clean nonce-based CSP.
+
 ---
 
 ## 4. Document Status Workflow
@@ -145,7 +169,7 @@ Reverting a detection to "pending" on a "reviewed" document automatically regres
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Service Bus job queue | Infrastructure provisioned | `sb-veil-prototype` / `document-processing` queue exists. Currently using in-process persistent queue (`lib/queue/job-queue.ts`). Need to replace with `@azure/service-bus` client for production-grade reliability. |
-| Real PDF viewer with redaction overlay | Not started | Use `@react-pdf-viewer/core` + custom annotation layer mapped to bounding-box coordinates. Currently using styled HTML. |
+| Enhanced PDF viewer | Partially done | PDF.js viewer with detection overlays is implemented. Could benefit from bounding-box coordinate overlays and more interactive annotation tools. |
 | Performance benchmarks | Infrastructure exists | Processing metrics and concurrency control are built. Not yet validated at scale against RFP targets (5,000 pages in 4 hours, 5 concurrent reviewers). |
 
 ### Should-Have
@@ -197,6 +221,6 @@ Items marked with checkmarks are complete.
 7. **Email ingestion** — DONE. EML + MSG parsing and ingestion.
 8. **Admin & governance** — DONE. Settings persistence via `SystemSetting` model, AI governance metrics dashboard, custom rules management.
 9. **Service Bus integration** — REMAINING. Replace in-process persistent queue with `@azure/service-bus` for production-grade job processing.
-10. **PDF viewer** — REMAINING. `@react-pdf-viewer/core` with custom annotation layer and bounding-box overlays. Currently using styled HTML.
+10. **PDF viewer** — PARTIALLY DONE. PDF.js viewer with detection overlays implemented. Bounding-box coordinate overlays for pixel-accurate highlighting would improve precision.
 11. **Real-time updates** — REMAINING. Azure SignalR for live detection progress and collaborative review.
 12. **Testing at scale** — REMAINING. Load testing against RFP benchmarks (5,000 pages / 4 hours, 10,000 doc duplicate detection / 1 hour, 5 concurrent reviewers).
