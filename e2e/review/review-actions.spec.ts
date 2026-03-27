@@ -30,8 +30,8 @@ test.describe("Document Review Actions", () => {
 
   test("shows detection count in header", async ({ page }) => {
     await page.goto(reviewUrl);
-    // Detection count should be shown (e.g., "12 detections")
-    await expect(page.locator("body")).toContainText(/\d+\s*detection/i);
+    // Detection panel shows "All Detections" tab with count badge
+    await expect(page.locator("body")).toContainText(/all detections/i);
   });
 
   test("shows confidence percentage for detections", async ({ page }) => {

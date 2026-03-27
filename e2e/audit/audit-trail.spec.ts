@@ -39,10 +39,12 @@ test.describe("Audit Trail", () => {
     await expect(search).toBeVisible();
   });
 
-  test("has a filter button", async ({ page }) => {
+  test("has a filter dropdown", async ({ page }) => {
     await page.goto(auditUrl);
-    const filterBtn = page.getByRole("button", { name: /filter/i });
-    await expect(filterBtn).toBeVisible();
+    // Filter is a select dropdown with event type options
+    const filterSelect = page.locator("select").first();
+    await expect(filterSelect).toBeVisible();
+    await expect(page.locator("body")).toContainText(/all types/i);
   });
 
   test("displays audit entries with user names and roles", async ({

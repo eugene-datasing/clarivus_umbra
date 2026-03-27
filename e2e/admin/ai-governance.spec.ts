@@ -20,9 +20,10 @@ test.describe("AI Governance", () => {
 
   test("shows accuracy by entity type table", async ({ page }) => {
     await page.goto("/admin/ai-governance");
-    await expect(page.locator("body")).toContainText(/personal name/i);
-    await expect(page.locator("body")).toContainText(/phone number/i);
-    await expect(page.locator("body")).toContainText(/email address/i);
+    // Entity types are hyphenated identifiers: personal-name, phone, email, etc.
+    await expect(page.locator("body")).toContainText("personal-name");
+    await expect(page.locator("body")).toContainText("phone");
+    await expect(page.locator("body")).toContainText("email");
   });
 
   test("shows confidence score distribution", async ({ page }) => {

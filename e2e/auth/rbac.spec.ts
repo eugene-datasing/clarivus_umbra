@@ -63,7 +63,7 @@ test.describe("RBAC — Role-Based Access Control", () => {
 
     test("sidebar does not show admin links", async ({ page }) => {
       await page.goto("/");
-      const nav = page.locator("nav");
+      const nav = page.locator('nav[aria-label="Main navigation"]');
       const navText = await nav.textContent();
       expect(/settings/i.test(navText ?? "")).toBeFalsy();
     });

@@ -14,9 +14,9 @@ test.describe("Notifications API", () => {
       const body = await res.json();
       if (body.length > 0) {
         const notification = body[0];
-        // Should have at least an action and timestamp
+        // Response has: time, user, action, type
         expect(notification).toHaveProperty("action");
-        expect(notification).toHaveProperty("timestamp");
+        expect(notification).toHaveProperty("time");
       }
     }
   });

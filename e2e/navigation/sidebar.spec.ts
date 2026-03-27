@@ -1,5 +1,8 @@
 import { test, expect } from "@playwright/test";
 
+// Desktop sidebar nav has aria-label="Main navigation"; mobile nav is separate
+const sidebarNav = 'nav[aria-label="Main navigation"]';
+
 test.describe("Sidebar Navigation", () => {
   test("sidebar collapse button hides labels", async ({ page }) => {
     await page.goto("/");
@@ -15,13 +18,13 @@ test.describe("Sidebar Navigation", () => {
   test("navigation highlights current page", async ({ page }) => {
     await page.goto("/requests");
     // The "Cases" nav item should have active styling
-    const casesItem = page.locator("nav").getByText("Cases");
+    const casesItem = page.locator(sidebarNav).getByText("Cases");
     await expect(casesItem).toBeVisible();
   });
 
   test("admin nav items visible for admin role", async ({ page }) => {
     await page.goto("/");
-    const nav = page.locator("nav");
+    const nav = page.locator(sidebarNav);
     await expect(nav.getByText("Custom Rules")).toBeVisible();
     await expect(nav.getByText("AI Governance")).toBeVisible();
     await expect(nav.getByText("Reports")).toBeVisible();
@@ -30,28 +33,28 @@ test.describe("Sidebar Navigation", () => {
 
   test("clicking Dashboard navigates to home", async ({ page }) => {
     await page.goto("/requests");
-    const dashLink = page.locator("nav").getByText("Dashboard");
+    const dashLink = page.locator(sidebarNav).getByText("Dashboard");
     await dashLink.click();
     await expect(page).toHaveURL("/");
   });
 
   test("clicking Cases navigates to case list", async ({ page }) => {
     await page.goto("/");
-    const casesLink = page.locator("nav").getByText("Cases");
+    const casesLink = page.locator(sidebarNav).getByText("Cases");
     await casesLink.click();
     await expect(page).toHaveURL(/\/requests$/);
   });
 
   test("clicking My Queue navigates to queue", async ({ page }) => {
     await page.goto("/");
-    const queueLink = page.locator("nav").getByText("My Queue");
+    const queueLink = page.locator(sidebarNav).getByText("My Queue");
     await queueLink.click();
     await expect(page).toHaveURL(/\/queue/);
   });
 
   test("clicking New Case navigates to create form", async ({ page }) => {
     await page.goto("/");
-    const newCaseLink = page.locator("nav").getByText("New Case");
+    const newCaseLink = page.locator(sidebarNav).getByText("New Case");
     await newCaseLink.click();
     await expect(page).toHaveURL(/\/requests\/new/);
   });

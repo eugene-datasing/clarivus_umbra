@@ -9,12 +9,12 @@ test.describe("Breadcrumb Navigation", () => {
     await expect(page.locator("body")).toContainText(SEED.cases.coastalWalkway.reference);
   });
 
-  test("review page shows breadcrumb back to case", async ({ page }) => {
+  test("review page shows link back to case", async ({ page }) => {
     const reviewUrl = `/requests/${SEED.cases.coastalWalkway.id}/review/${SEED.documents.councilReport.id}`;
     await page.goto(reviewUrl);
-    // Should have link back to case
-    const caseLink = page.getByRole("link", { name: SEED.cases.coastalWalkway.reference });
-    await expect(caseLink).toBeVisible();
+    // Review page has "Back to Case" link, not a breadcrumb with the reference
+    const backLink = page.getByRole("link", { name: /back to case/i });
+    await expect(backLink).toBeVisible();
   });
 
   test("clicking Cases breadcrumb navigates to case list", async ({ page }) => {

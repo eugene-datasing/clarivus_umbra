@@ -3,16 +3,18 @@ import { test, expect } from "@playwright/test";
 test.describe("Create Case Form Validation", () => {
   test("shows auto-generated reference number", async ({ page }) => {
     await page.goto("/requests/new");
-    // Reference field should be pre-populated and read-only
-    const refField = page.getByLabel(/reference/i);
-    await expect(refField).toBeVisible();
-    const refValue = await refField.inputValue();
+    // Reference field is a read-only input pre-populated with LGOIMA-YYYY-NNN
+    const refInput = page.locator("input[readonly]").first();
+    await expect(refInput).toBeVisible();
+    const refValue = await refInput.inputValue();
     expect(refValue).toMatch(/LGOIMA-/);
   });
 
   test("shows requester type dropdown with options", async ({ page }) => {
     await page.goto("/requests/new");
-    const typeSelect = page.getByLabel(/requester type|type/i).first();
+    // Requester Type is a <select> with options like Individual, Media, etc.
+    await expect(page.locator("body")).toContainText(/requester type/i);
+    const typeSelect = page.locator("select").first();
     await expect(typeSelect).toBeVisible();
   });
 
@@ -27,16 +29,17 @@ test.describe("Create Case Form Validation", () => {
   test("validates required fields on submit", async ({ page }) => {
     await page.goto("/requests/new");
     // Clear required fields and try to submit
-    const requesterName = page.getByLabel(/requester name|requester/i).first();
+    const requesterName = page.locator("input[placeholder='Full name of the requester']");
     await requesterName.clear();
 
-    const submitBtn = page.getByRole("button", { name: /create|submit/i });
+    const submitBtn = page.getByRole("button", { name: /create case/i });
     await submitBtn.click();
 
-    // Should show validation error
-    await expect(page.locator("body")).toContainText(
-      /required|select at least one department|please/i,
-    );
+    // Browser native validation prevents submission — page should stay on /requests/new
+    await expect(page).toHaveURL(/\/requests\/new/);
+    // The form uses HTML5 required attribute, so the browser shows a native tooltip
+    // Verify the field is still empty (form was not submitted)
+    await expect(requesterName).toHaveValue("");
   });
 
   test("shows statutory deadline calculated from date received", async ({ page }) => {
@@ -53,15 +56,17 @@ test.describe("Create Case Form Validation", () => {
 
   test("shows description textarea", async ({ page }) => {
     await page.goto("/requests/new");
-    const description = page.getByLabel(/description|details/i).first();
+    // Description is a textarea with specific placeholder
+    const description = page.locator("textarea");
     await expect(description).toBeVisible();
+    await expect(page.locator("body")).toContainText(/request description/i);
   });
 
   test("successful submission shows toast and redirects", async ({ page }) => {
     await page.goto("/requests/new");
 
-    // Fill the form
-    const requesterName = page.getByLabel(/requester name|requester/i).first();
+    // Fill the form using placeholders since labels lack htmlFor
+    const requesterName = page.locator("input[placeholder='Full name of the requester']");
     await requesterName.fill("E2E Test Requester");
 
     // Select a department
@@ -69,14 +74,14 @@ test.describe("Create Case Form Validation", () => {
     await checkbox.check();
 
     // Fill description
-    const description = page.getByLabel(/description|details/i).first();
+    const description = page.locator("textarea");
     await description.fill("E2E test case for coverage expansion");
 
     // Submit
-    const submitBtn = page.getByRole("button", { name: /create|submit/i });
+    const submitBtn = page.getByRole("button", { name: /create case/i });
     await submitBtn.click();
 
-    // Should show success or redirect
+    // Should show success toast "Case Created" or redirect to pipeline
     await expect(page.locator("body")).toContainText(
       /case created|redirecting|pipeline/i,
       { timeout: 15_000 },

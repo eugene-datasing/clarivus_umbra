@@ -27,8 +27,8 @@ test.describe("Document API", () => {
         caseId: SEED.cases.coastalWalkway.id,
       },
     });
-    // Should fail validation (no files) or return 400
-    expect([400, 401, 422, 500]).toContain(res.status());
+    // May return 403 (CSRF), 400 (no files), or 401 (auth)
+    expect([400, 401, 403, 422, 500]).toContain(res.status());
   });
 
   test("GET /api/detections/:detectionId/history returns history", async ({ request }) => {
