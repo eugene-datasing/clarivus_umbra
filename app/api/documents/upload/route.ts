@@ -215,13 +215,14 @@ export async function POST(request: NextRequest) {
       results.push(result);
     }
 
-    // Update the case document count
+    // Update the case document count and transition draft -> ingesting
     await prisma.case.update({
       where: { id: caseId },
       data: {
         documentCount: {
           increment: results.length,
         },
+        ...(existingCase.status === "draft" ? { status: "ingesting" } : {}),
       },
     });
 
