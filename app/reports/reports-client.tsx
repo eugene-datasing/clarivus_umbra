@@ -12,8 +12,6 @@ import {
   BarChart3,
   PieChart,
   Users,
-  ArrowUpRight,
-  ArrowDownRight,
   X,
   Loader2,
 } from "lucide-react";
@@ -22,31 +20,40 @@ import type { SummaryStats, GroundUsageItem, RecentExport } from "@/lib/data/rep
 import type { AIMetrics } from "@/lib/data/ai-metrics";
 
 /* -------------------------------------------------------------------------- */
-/*  Static data (report templates)                                             */
-/* -------------------------------------------------------------------------- */
-
-const reportTemplates = [
-  { name: "LGOIMA Compliance Summary", description: "Statutory compliance metrics, response times, and withholding ground usage across all cases.", icon: Shield, format: "PDF" },
-  { name: "AI Detection Accuracy", description: "False positive/negative rates, model governance metrics, and confidence score distributions.", icon: TrendingUp, format: "PDF" },
-  { name: "Chain of Custody Report", description: "Immutable audit trail export — user actions, timestamps, and document access history.", icon: FileText, format: "CSV/PDF" },
-  { name: "Reviewer Workload Analysis", description: "Cases per reviewer, average review time, approval rates, and queue depth over time.", icon: Users, format: "PDF" },
-  { name: "Cost Recovery Report", description: "Processing costs, time allocation, and charge-back calculations per LGOIMA request.", icon: PieChart, format: "PDF", actionable: true },
-  { name: "Withholding Schedule Export", description: "Consolidated withholding schedules with statutory grounds and reasoning for Ombudsman review.", icon: Calendar, format: "PDF" },
-];
-
-/* -------------------------------------------------------------------------- */
 /*  Types                                                                      */
 /* -------------------------------------------------------------------------- */
+
+type ReportKey =
+  | "compliance-summary"
+  | "ai-accuracy"
+  | "chain-of-custody"
+  | "reviewer-workload"
+  | "cost-recovery"
+  | "withholding-schedule";
+
+interface ReportTemplate {
+  key: ReportKey;
+  name: string;
+  description: string;
+  icon: typeof Shield;
+  format: string;
+  needsCase: boolean;
+}
+
+const reportTemplates: ReportTemplate[] = [
+  { key: "compliance-summary", name: "LGOIMA Compliance Summary", description: "Statutory compliance metrics, response times, and withholding ground usage across all cases.", icon: Shield, format: "PDF", needsCase: false },
+  { key: "ai-accuracy", name: "AI Detection Accuracy", description: "False positive/negative rates, model governance metrics, and confidence score distributions.", icon: TrendingUp, format: "PDF", needsCase: false },
+  { key: "chain-of-custody", name: "Chain of Custody Report", description: "Immutable audit trail export \u2014 user actions, timestamps, and document access history.", icon: FileText, format: "PDF", needsCase: true },
+  { key: "reviewer-workload", name: "Reviewer Workload Analysis", description: "Cases per reviewer, average review time, approval rates, and queue depth over time.", icon: Users, format: "PDF", needsCase: false },
+  { key: "cost-recovery", name: "Cost Recovery Report", description: "Processing costs, time allocation, and charge-back calculations per LGOIMA request.", icon: PieChart, format: "PDF", needsCase: true },
+  { key: "withholding-schedule", name: "Withholding Schedule Export", description: "Consolidated withholding schedules with statutory grounds and reasoning for Ombudsman review.", icon: Calendar, format: "PDF", needsCase: true },
+];
 
 export interface CaseOption {
   id: string;
   reference: string;
   requesterName: string;
 }
-
-/* -------------------------------------------------------------------------- */
-/*  Props                                                                      */
-/* -------------------------------------------------------------------------- */
 
 interface ReportsClientProps {
   stats: SummaryStats;
@@ -55,6 +62,28 @@ interface ReportsClientProps {
   aiMetrics: AIMetrics;
   cases: CaseOption[];
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Helpers                                                                    */
+/* -------------------------------------------------------------------------- */
+
+const API_ROUTES: Record<ReportKey, string> = {
+  "compliance-summary": "/api/reports/compliance-summary",
+  "ai-accuracy": "/api/reports/ai-accuracy",
+  "chain-of-custody": "/api/reports/chain-of-custody",
+  "reviewer-workload": "/api/reports/reviewer-workload",
+  "cost-recovery": "/api/reports/cost-recovery",
+  "withholding-schedule": "/api/reports/withholding-schedule",
+};
+
+const FILE_NAMES: Record<ReportKey, string> = {
+  "compliance-summary": "lgoima-compliance-summary.pdf",
+  "ai-accuracy": "ai-detection-accuracy.pdf",
+  "chain-of-custody": "chain-of-custody.pdf",
+  "reviewer-workload": "reviewer-workload-analysis.pdf",
+  "cost-recovery": "cost-recovery-report.pdf",
+  "withholding-schedule": "withholding-schedule.pdf",
+};
 
 /* -------------------------------------------------------------------------- */
 /*  Component                                                                  */
@@ -68,7 +97,8 @@ export default function ReportsClient({
   cases,
 }: ReportsClientProps) {
   const [activeSection, setActiveSection] = useState<"templates" | "recent">("templates");
-  const [costRecoveryOpen, setCostRecoveryOpen] = useState(false);
+  const [caseSelectorOpen, setCaseSelectorOpen] = useState(false);
+  const [activeReport, setActiveReport] = useState<ReportKey | null>(null);
   const [selectedCaseId, setSelectedCaseId] = useState("");
   const [generating, setGenerating] = useState(false);
 
@@ -109,9 +139,52 @@ export default function ReportsClient({
   const fpPct = aiMetrics.hasSufficientData && aiMetrics.totalReviewed > 0
     ? `${((aiMetrics.fp / aiMetrics.totalReviewed) * 100).toFixed(1)}%`
     : "5.3%";
-  const avgConfidence = aiMetrics.hasSufficientData
-    ? `${aiMetrics.confidenceDistribution[0]?.percentage ?? 0}%`
-    : "87.2%";
+
+  /** Generate a report — for per-case reports, opens the case selector first. */
+  function handleGenerateReport(key: ReportKey) {
+    const tpl = reportTemplates.find((t) => t.key === key);
+    if (!tpl) return;
+
+    if (tpl.needsCase) {
+      setActiveReport(key);
+      setCaseSelectorOpen(true);
+    } else {
+      downloadReport(key);
+    }
+  }
+
+  /** Download the PDF from the API route. */
+  async function downloadReport(key: ReportKey, caseId?: string) {
+    setGenerating(true);
+    try {
+      let url = API_ROUTES[key];
+      if (caseId) url += `?caseId=${encodeURIComponent(caseId)}`;
+
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Failed to generate report");
+
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = FILE_NAMES[key];
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      setCaseSelectorOpen(false);
+      setSelectedCaseId("");
+      setActiveReport(null);
+    } catch {
+      alert("Failed to generate report. Please try again.");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  const activeReportTemplate = activeReport
+    ? reportTemplates.find((t) => t.key === activeReport)
+    : null;
 
   return (
     <div className="p-6 max-w-[1100px]">
@@ -221,12 +294,11 @@ export default function ReportsClient({
             <div className="divide-y divide-border">
               {reportTemplates.map((tpl) => {
                 const TplIcon = tpl.icon;
-                const isCostRecovery = tpl.name === "Cost Recovery Report";
                 return (
                   <div
-                    key={tpl.name}
+                    key={tpl.key}
                     className="flex items-center gap-4 px-4 py-3 hover:bg-surface-hover transition-colors cursor-pointer"
-                    onClick={isCostRecovery ? () => setCostRecoveryOpen(true) : undefined}
+                    onClick={() => handleGenerateReport(tpl.key)}
                   >
                     <div className="w-9 h-9 rounded-lg bg-surface-bg flex items-center justify-center shrink-0">
                       <TplIcon size={16} className="text-txt-secondary" />
@@ -239,7 +311,7 @@ export default function ReportsClient({
                     <button
                       className="btn-ghost p-1.5 shrink-0"
                       title="Generate report"
-                      onClick={isCostRecovery ? (e) => { e.stopPropagation(); setCostRecoveryOpen(true); } : undefined}
+                      onClick={(e) => { e.stopPropagation(); handleGenerateReport(tpl.key); }}
                     >
                       <Download size={14} />
                     </button>
@@ -305,17 +377,17 @@ export default function ReportsClient({
         <div className="mt-3 pt-3 border-t border-border flex items-center justify-between">
           <p className="text-[11px] text-txt-secondary">
             Based on {stats.documentsProcessed.toLocaleString()} documents processed across {stats.totalCases} cases. Model: Azure OpenAI GPT-4o.
-            {!aiMetrics.hasSufficientData && " Sample metrics shown — will update as reviews accumulate."}
+            {!aiMetrics.hasSufficientData && " Sample metrics shown \u2014 will update as reviews accumulate."}
           </p>
         </div>
       </div>
 
-      {/* Cost Recovery Report Modal */}
-      {costRecoveryOpen && (
+      {/* Case Selector Modal (shared for all per-case reports) */}
+      {caseSelectorOpen && activeReportTemplate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
             <button
-              onClick={() => { setCostRecoveryOpen(false); setSelectedCaseId(""); }}
+              onClick={() => { setCaseSelectorOpen(false); setSelectedCaseId(""); setActiveReport(null); }}
               className="absolute top-3 right-3 btn-ghost p-1.5"
               title="Close"
             >
@@ -324,11 +396,11 @@ export default function ReportsClient({
 
             <div className="flex items-center gap-3 mb-4">
               <div className="w-9 h-9 rounded-lg bg-brand-primary/10 flex items-center justify-center">
-                <PieChart size={18} className="text-brand-primary" />
+                {(() => { const Icon = activeReportTemplate.icon; return <Icon size={18} className="text-brand-primary" />; })()}
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-txt-primary">Cost Recovery Report</h3>
-                <p className="text-[11px] text-txt-secondary">Select a case to generate a cost recovery PDF</p>
+                <h3 className="text-sm font-semibold text-txt-primary">{activeReportTemplate.name}</h3>
+                <p className="text-[11px] text-txt-secondary">Select a case to generate this report</p>
               </div>
             </div>
 
@@ -350,29 +422,9 @@ export default function ReportsClient({
 
             <button
               disabled={!selectedCaseId || generating}
-              onClick={async () => {
-                if (!selectedCaseId) return;
-                setGenerating(true);
-                try {
-                  const url = `/api/reports/cost-recovery?caseId=${encodeURIComponent(selectedCaseId)}`;
-                  const res = await fetch(url);
-                  if (!res.ok) throw new Error("Failed to generate report");
-                  const blob = await res.blob();
-                  const blobUrl = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = blobUrl;
-                  a.download = "cost-recovery-report.pdf";
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  URL.revokeObjectURL(blobUrl);
-                  setCostRecoveryOpen(false);
-                  setSelectedCaseId("");
-                } catch {
-                  alert("Failed to generate cost recovery report. Please try again.");
-                } finally {
-                  setGenerating(false);
-                }
+              onClick={() => {
+                if (!selectedCaseId || !activeReport) return;
+                downloadReport(activeReport, selectedCaseId);
               }}
               className={cn(
                 "w-full btn-primary flex items-center justify-center gap-2",
