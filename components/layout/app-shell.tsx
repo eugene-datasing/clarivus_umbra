@@ -42,21 +42,42 @@ function ProfileNudge() {
   );
 }
 
+/** Full-screen routes that never show the sidebar. */
+const FULL_SCREEN_PREFIXES = ["/login", "/setup", "/activate"];
+
+function isFullScreen(pathname: string, authenticated: boolean): boolean {
+  if (pathname === "/login") return true;
+  if (FULL_SCREEN_PREFIXES.some((p) => pathname.startsWith(p))) return true;
+  if (pathname === "/" && !authenticated) return true;
+  return false;
+}
+
+interface AppShellProps {
+  children: React.ReactNode;
+  /** Server-side pathname from x-pathname header (avoids waiting for hydration). */
+  pathname?: string;
+  /** Server-side auth check result (avoids waiting for useSession). */
+  isAuthenticated?: boolean;
+}
+
 /**
  * Conditionally renders the sidebar + main wrapper.
- * Login page renders full-screen without sidebar.
+ *
+ * Accepts server-side hints (pathname, isAuthenticated) so the sidebar layout
+ * is reserved in the initial HTML — preventing the 1-2s layout shift that
+ * occurred when we had to wait for useSession() to resolve on the client.
  */
-export function AppShell({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
+export function AppShell({ children, pathname: serverPathname, isAuthenticated: serverAuth }: AppShellProps) {
+  const clientPathname = usePathname();
   const { status } = useSession();
   const [collapsed, setCollapsed] = useState(false);
-  const isFullScreenRoute =
-    pathname === "/login" ||
-    pathname.startsWith("/setup") ||
-    pathname.startsWith("/activate") ||
-    (pathname === "/" && status !== "authenticated");
 
-  if (isFullScreenRoute) {
+  // Use server-provided values for the initial render; client values take over
+  // once hydration completes (they'll match in practice).
+  const pathname = clientPathname || serverPathname || "/";
+  const authenticated = status === "authenticated" || (status === "loading" && !!serverAuth);
+
+  if (isFullScreen(pathname, authenticated)) {
     return (
       <main id="main-content" role="main">
         {children}

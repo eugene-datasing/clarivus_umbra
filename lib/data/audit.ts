@@ -117,6 +117,67 @@ export async function getRecentActivity(limit = 10) {
   }));
 }
 
+
+/**
+ * Audit event types that are meaningful as notifications for other users.
+ *
+ * Excludes: individual detection accept/reject (too granular), bulk threshold
+ * operations, settings/rule changes, and internal pipeline events. These
+ * belong in the audit trail but aren't actionable notifications.
+ */
+const NOTIFICATION_EVENT_TYPES = [
+  // Case lifecycle
+  "case-created",
+  "case_created",
+
+  // Document uploads & processing complete
+  "document-upload",
+  "document-uploaded",
+  "document_upload",
+  "processing-complete",
+  "processing-completed",
+  "processing-error",
+
+  // Review workflow transitions (actionable for the next person in the chain)
+  "review-submitted",
+  "senior-review-submitted",
+  "senior-review",
+  "senior-review-complete",
+  "sign-off",
+  "signed-off",
+  "final-approval",
+  "request-changes",
+
+  // Export events
+  "export-generated",
+  "export-started",
+
+  // Assignment
+  "document-assigned",
+];
+
+/**
+ * Get notifications for the bell icon — meaningful events excluding the
+ * current user's own actions.
+ */
+export async function getNotifications(currentUserId: string, limit = 8) {
+  const entries = await prisma.auditEntry.findMany({
+    where: {
+      type: { in: NOTIFICATION_EVENT_TYPES },
+      userId: { not: currentUserId },
+    },
+    orderBy: { timestamp: "desc" },
+    take: limit,
+  });
+
+  return entries.map((e) => ({
+    time: e.timestamp.toLocaleTimeString("en-NZ", { hour: "2-digit", minute: "2-digit", hour12: false }),
+    user: e.userName,
+    action: e.description,
+    type: mapAuditType(e.type),
+  }));
+}
+
 function mapAuditType(type: string): "approval" | "review" | "detection" | "ingestion" | "system" {
   if (type.includes("approv") || type.includes("release")) return "approval";
   if (type.includes("review") || type.includes("reject") || type.includes("accept")) return "review";

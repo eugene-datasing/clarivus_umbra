@@ -8,6 +8,7 @@ import { ServiceWorkerRegister } from "@/components/sw-register";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { isActivated } from "@/lib/data/activation";
+import { auth } from "@/lib/auth/auth-options";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -82,6 +83,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     }
   }
 
+  // Server-side auth check so AppShell can reserve sidebar space in the initial HTML
+  // (avoids layout shift while useSession() resolves on the client).
+  let isAuthenticated = false;
+  try {
+    const session = await auth();
+    isAuthenticated = !!session?.user;
+  } catch {
+    // Auth check failed — default to unauthenticated (no sidebar).
+  }
+
   return (
     <html lang="en" className={`${playfair.variable} ${dmSans.variable} ${jetbrainsMono.variable}`}>
       <head>
@@ -97,7 +108,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </a>
         <SessionProvider>
           <QueryProvider>
-            <AppShell>{children}</AppShell>
+            <AppShell pathname={pathname} isAuthenticated={isAuthenticated}>{children}</AppShell>
           </QueryProvider>
         </SessionProvider>
         <ServiceWorkerRegister />
