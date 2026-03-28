@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import { prisma } from "@/lib/db/prisma";
+import { stripPiiPatterns } from "./audit-sanitize";
 
 export async function getAuditLog(caseId?: string) {
   const entries = await prisma.auditEntry.findMany({
@@ -62,6 +63,17 @@ export async function createAuditEntry(data: {
   previousValue?: string;
   newValue?: string;
 }) {
+  // Sanitize free-text fields to strip PII patterns (emails, phones, IRD, NHI)
+  // before storage and hash computation. This is the single enforcement point —
+  // callers do not need to sanitize manually.
+  const sanitized = {
+    description: stripPiiPatterns(data.description),
+    target: stripPiiPatterns(data.target),
+    detail: data.detail ? stripPiiPatterns(data.detail) : undefined,
+    previousValue: data.previousValue ? stripPiiPatterns(data.previousValue) : undefined,
+    newValue: data.newValue ? stripPiiPatterns(data.newValue) : undefined,
+  };
+
   // Fetch the most recent audit entry to get its integrity hash
   const lastEntry = await prisma.auditEntry.findFirst({
     orderBy: { timestamp: "desc" },
@@ -76,8 +88,8 @@ export async function createAuditEntry(data: {
     timestamp,
     data.userId,
     data.type,
-    data.description,
-    data.target,
+    sanitized.description,
+    sanitized.target,
     data.caseId,
   );
 
@@ -88,12 +100,12 @@ export async function createAuditEntry(data: {
       userName: data.userName,
       userRole: data.userRole,
       type: data.type,
-      description: data.description,
-      target: data.target,
+      description: sanitized.description,
+      target: sanitized.target,
       caseId: data.caseId,
-      detail: data.detail,
-      previousValue: data.previousValue,
-      newValue: data.newValue,
+      detail: sanitized.detail,
+      previousValue: sanitized.previousValue,
+      newValue: sanitized.newValue,
       integrityHash,
       previousHash,
     },

@@ -2,9 +2,9 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import Image from "next/image";
-import { EyeOff, KeyRound, CheckCircle2, AlertCircle, User } from "lucide-react";
+import { EyeOff, KeyRound, CheckCircle2, AlertCircle, User, LogOut } from "lucide-react";
 import { redeemActivationCode } from "@/lib/actions/activation-actions";
 
 /**
@@ -112,9 +112,18 @@ export default function ActivateClient({ userName }: ActivateClientProps) {
           ) : (
             <>
               {userName && (
-                <div className="flex items-center gap-2 mb-4 p-2 bg-surface-raised rounded-card text-sm text-txt-secondary">
+                <div className="flex items-center gap-2 mb-4 p-2 bg-surface-hover rounded-card text-sm text-txt-secondary">
                   <User className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-                  <span>Signed in as <strong className="text-txt-primary">{userName}</strong></span>
+                  <span className="flex-1">Signed in as <strong className="text-txt-primary">{userName}</strong></span>
+                  <button
+                    type="button"
+                    onClick={() => signOut({ callbackUrl: "/" })}
+                    className="flex items-center gap-1 text-xs text-txt-secondary hover:text-txt-primary transition-colors"
+                    aria-label="Sign out"
+                  >
+                    <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
+                    Sign out
+                  </button>
                 </div>
               )}
 
