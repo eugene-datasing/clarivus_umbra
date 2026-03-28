@@ -17,6 +17,7 @@ import {
   bulkApplyGroundByTypeSchema,
 } from "@/lib/validation/schemas";
 import { authorizeForCase } from "@/lib/auth/authorize";
+import { recomputeCaseStatus } from "@/lib/data/cases";
 
 // ---------------------------------------------------------------------------
 // Change tracking (WP12)
@@ -122,6 +123,8 @@ export async function markDocumentInReview(documentId: string) {
     caseId: doc.caseId,
   });
 
+  await recomputeCaseStatus(doc.caseId);
+
   return { success: true };
 }
 
@@ -158,6 +161,8 @@ export async function submitForSeniorReview(documentId: string) {
     target: doc.name,
     caseId: doc.caseId,
   });
+
+  await recomputeCaseStatus(doc.caseId);
 
   return { success: true };
 }
@@ -196,6 +201,8 @@ export async function signOffDocument(documentId: string) {
     caseId: doc.caseId,
   });
 
+  await recomputeCaseStatus(doc.caseId);
+
   return { success: true };
 }
 
@@ -219,6 +226,8 @@ export async function requestChanges(documentId: string, reason?: string) {
     where: { id: documentId },
     data: { status: "in-review" },
   });
+
+  await recomputeCaseStatus(doc.caseId);
 
   await createAuditEntry({
     userName: user.name,

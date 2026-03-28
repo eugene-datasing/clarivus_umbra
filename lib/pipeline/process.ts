@@ -15,6 +15,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma";
+import { recomputeCaseStatus } from "@/lib/data/cases";
 import { getStorage } from "@/lib/storage";
 import { extractText, OCRUnavailableError, ExtractionCorruptionError } from "./extract";
 import { validateFile } from "./file-validator";
@@ -632,6 +633,9 @@ export async function processDocument(docId: string): Promise<void> {
         `Processing time: ${(totalProcessingMs / 1000).toFixed(1)}s (extraction: ${(extractionMs / 1000).toFixed(1)}s, patterns: ${patternDetectionMs}ms, AI: ${(aiDetectionMs / 1000).toFixed(1)}s)`,
       ].join("; "),
     });
+
+    // Recompute case status (ingesting -> in-review when all docs ready)
+    await recomputeCaseStatus(caseId);
 
     log.info("Document processing complete", { docId, totalProcessingMs });
     trackEvent("document_processed", { docId });

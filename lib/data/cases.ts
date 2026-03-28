@@ -77,3 +77,61 @@ export async function getDashboardStats() {
     casesByStatus: Object.fromEntries(casesByStatus.map((s) => [s.status, s._count])),
   };
 }
+
+/**
+ * Recompute the case status based on the aggregate status of its documents.
+ * Called after document status transitions to keep the case status in sync.
+ *
+ * Logic:
+ *   - If any doc is processing/pending -> ingesting
+ *   - If all non-excluded docs are ready or in-review -> in-review
+ *   - If all non-excluded docs are reviewed (or better) -> senior-review
+ *   - If all non-excluded docs are signed-off -> ready-export
+ *   - released is only set manually (not computed here)
+ */
+export async function recomputeCaseStatus(caseId: string) {
+  const caseRecord = await prisma.case.findUnique({
+    where: { id: caseId },
+    select: { status: true },
+  });
+  if (!caseRecord) return;
+
+  // Don't touch draft or released cases
+  if (caseRecord.status === "draft" || caseRecord.status === "released") return;
+
+  const docs = await prisma.document.findMany({
+    where: { caseId, status: { notIn: ["excluded"] } },
+    select: { status: true },
+  });
+
+  // No documents -> stay as-is
+  if (docs.length === 0) return;
+
+  const statuses = docs.map((d) => d.status);
+
+  const hasProcessingOrPending = statuses.some((s) => s === "processing" || s === "pending");
+  const allReady = statuses.every((s) => ["ready", "in-review", "reviewed", "signed-off"].includes(s));
+  const allReviewedOrBetter = statuses.every((s) => ["reviewed", "signed-off"].includes(s));
+  const allSignedOff = statuses.every((s) => s === "signed-off");
+
+  let newStatus: string;
+  if (hasProcessingOrPending) {
+    newStatus = "ingesting";
+  } else if (allSignedOff) {
+    newStatus = "ready-export";
+  } else if (allReviewedOrBetter) {
+    newStatus = "senior-review";
+  } else if (allReady) {
+    newStatus = "in-review";
+  } else {
+    // Mixed states (e.g. some error docs) -> stay as-is
+    return;
+  }
+
+  if (newStatus !== caseRecord.status) {
+    await prisma.case.update({
+      where: { id: caseId },
+      data: { status: newStatus },
+    });
+  }
+}
