@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { getCase } from "@/lib/data/cases";
 import { getDocument, getDocumentIdsForCase, getDocumentPages } from "@/lib/data/documents";
 import { getDetectionsForDocument } from "@/lib/data/detections";
-import { getDocumentContent, documentHeaders } from "@/lib/data/document-content";
+import { getDocumentContent, getDocumentHeader } from "@/lib/data/document-content";
 import { markDocumentInReview } from "@/lib/actions/detection-actions";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeForCase } from "@/lib/auth/authorize";
@@ -18,13 +18,14 @@ export default async function ReviewPage({
   await authorizeForCase(user, id);
 
   // Fetch all data in parallel
-  const [caseData, doc, detections, content, documentIds, pages] = await Promise.all([
+  const [caseData, doc, detections, content, documentIds, pages, header] = await Promise.all([
     getCase(id),
     getDocument(docId),
     getDetectionsForDocument(docId),
     getDocumentContent(docId),
     getDocumentIdsForCase(id),
     getDocumentPages(docId),
+    getDocumentHeader(docId),
   ]);
 
   if (!caseData || !doc) {
@@ -41,12 +42,6 @@ export default async function ReviewPage({
   } catch {
     // Silently skip — page still renders for read access
   }
-
-  const header = documentHeaders[docId] ?? {
-    title: "District Council",
-    subtitle: "Official Document",
-    date: "",
-  };
 
   const currentDocIndex = documentIds.indexOf(docId);
 

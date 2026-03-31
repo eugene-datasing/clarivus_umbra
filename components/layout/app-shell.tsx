@@ -80,6 +80,7 @@ export function AppShell({ children, pathname: serverPathname, isAuthenticated: 
   if (isFullScreen(pathname, authenticated)) {
     return (
       <main id="main-content" role="main">
+        <ProfileNudge />
         {children}
       </main>
     );
