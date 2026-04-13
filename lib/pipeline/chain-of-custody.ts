@@ -12,6 +12,7 @@
 import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
 import { prisma } from "@/lib/db/prisma";
 import { getOrgBranding } from "@/lib/data/org-config";
+import { embedOrgLogo } from "./logo-helper";
 
 export interface ChainOfCustodyResult {
   pdfBytes: Uint8Array;
@@ -136,6 +137,17 @@ export async function buildChainOfCustodyReport(
   // -----------------------------------------------------------------------
   // Title page
   // -----------------------------------------------------------------------
+
+  // Organisation logo (top-right if available)
+  const logo = await embedOrgLogo(pdfDoc);
+  if (logo) {
+    ctx.page.drawImage(logo.image, {
+      x: PAGE_WIDTH - MARGIN - logo.width,
+      y: ctx.yPos - logo.height + 10,
+      width: logo.width,
+      height: logo.height,
+    });
+  }
 
   ctx.yPos -= 20;
   drawText(ctx, "CHAIN OF CUSTODY REPORT", {

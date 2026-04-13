@@ -14,6 +14,7 @@ import {
   CircuitOpenError,
 } from "@/lib/resilience/azure-services";
 import { logger } from "@/lib/logger";
+import { lgoimaGrounds } from "@/lib/lgoima-grounds";
 
 const log = logger.child({ module: "ai-detect" });
 
@@ -65,15 +66,49 @@ function getClient(): AzureOpenAI {
 // System prompt
 // ---------------------------------------------------------------------------
 
-const SYSTEM_PROMPT = `You are an expert LGOIMA (Local Government Official Information and Meetings Act 1987) document reviewer for a New Zealand local council.
+/** All detection types the AI model can produce. */
+const ALL_AI_TYPES = [
+  "personal-name", "phone", "email-addr", "ird", "address",
+  "bank-account", "nz-passport", "vehicle-reg",
+  "commercial", "free-frank", "legal-privilege", "confidential",
+];
+
+/**
+ * Build the LGOIMA grounds reference section for the AI prompt.
+ * Generated dynamically from the canonical `lgoimaGrounds` array so
+ * the prompt stays in sync with code changes.
+ */
+function buildGroundsReference(): string {
+  const lines: string[] = ["Available LGOIMA withholding grounds:"];
+  for (const g of lgoimaGrounds) {
+    const piNote = g.requiresPI ? " [requires public interest test]" : " [conclusive — no PI override]";
+    lines.push(`- ${g.reference}: ${g.label} — ${g.description}${piNote}`);
+  }
+  return lines.join("\n");
+}
+
+const SYSTEM_PROMPT_BASE = `You are an expert LGOIMA (Local Government Official Information and Meetings Act 1987) document reviewer for a New Zealand local council.
 
 Analyze the following document pages and identify text that may need to be withheld under LGOIMA. For each detection:
 
-1. Classify the type: "personal-name", "phone", "email-addr", "ird", "address", "commercial", "free-frank", "legal-privilege", "confidential"
+1. Classify the type using ONLY these values: {{TYPES}}
 2. Assign a confidence score (0-100)
-3. Suggest the appropriate LGOIMA withholding ground
+3. Suggest the appropriate LGOIMA withholding ground from the reference table below
 4. Provide reasoning for the reviewer
 5. Note any public interest considerations
+
+{{GROUNDS_REFERENCE}}
+
+Ground selection guidance:
+- Section 6 grounds are CONCLUSIVE — there is no public interest override. Use them only when the threshold is clearly met.
+- Section 7 grounds require a public interest balancing test. State what the competing interest is.
+- If content relates to an active investigation or prosecution, suggest s6(c) (maintenance of the law) rather than defaulting to s7(2)(a).
+- If releasing an address could endanger a person's safety (e.g. family violence, threatened witness, stalking context), suggest s6(d) (safety of any person) rather than s7(2)(a).
+- For free and frank opinions by council staff or elected officials, use s7(2)(f)(i). For protection from harassment/pressure, use s7(2)(f)(ii).
+- For obligation of confidence, distinguish between s7(2)(c)(i) (prejudice to supply of similar information) and s7(2)(c)(ii) (damage to public interest).
+- For tikanga Māori or wāhi tapu locations in resource consent contexts, use s7(2)(ba).
+- s7(2)(j) is about improper gain or advantage (NOT incomplete negotiations — that is s7(2)(i)).
+- Do NOT suggest section 17 grounds — those are request-level refusal reasons, not content-level withholding grounds.
 
 Important context:
 - Public officials acting in their official capacity have lower privacy expectations
@@ -98,6 +133,19 @@ Respond with a JSON object containing a "detections" array. Each detection must 
 }
 
 If there is nothing to detect, return {"detections": []}.`;
+
+/**
+ * Build the system prompt with only the enabled detection types listed.
+ * The "confidential" type is always included as a catch-all.
+ */
+function buildSystemPrompt(enabledTypes?: Set<string>): string {
+  const types = enabledTypes
+    ? ALL_AI_TYPES.filter((t) => t === "confidential" || enabledTypes.has(t))
+    : ALL_AI_TYPES;
+  return SYSTEM_PROMPT_BASE
+    .replace("{{TYPES}}", types.map((t) => `"${t}"`).join(", "))
+    .replace("{{GROUNDS_REFERENCE}}", buildGroundsReference());
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -136,7 +184,7 @@ function validateDetection(raw: unknown): AIDetection | null {
     suggestedGround:
       typeof obj.suggestedGround === "string"
         ? obj.suggestedGround
-        : "s7(2)(a)",
+        : "",
     reasoning:
       typeof obj.reasoning === "string" ? obj.reasoning : "AI-detected content",
     piConsideration:
@@ -168,6 +216,7 @@ export async function detectWithAI(
   pages: ExtractedPage[],
   existingPatternTexts: string[],
   feedbackPrompt?: string,
+  enabledTypes?: Set<string>,
 ): Promise<AIDetection[]> {
   const client = getClient();
   const allDetections: AIDetection[] = [];
@@ -192,9 +241,10 @@ export async function detectWithAI(
     }
 
     try {
+      const systemPrompt = buildSystemPrompt(enabledTypes);
       const systemContent = feedbackPrompt
-        ? SYSTEM_PROMPT + feedbackPrompt
-        : SYSTEM_PROMPT;
+        ? systemPrompt + feedbackPrompt
+        : systemPrompt;
 
       const response = await resilientOpenAICall(() =>
         client.chat.completions.create({

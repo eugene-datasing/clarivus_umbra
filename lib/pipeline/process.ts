@@ -28,6 +28,7 @@ import { calculateBBox } from "./bbox";
 import { buildContent } from "./content-builder";
 import { buildFeedbackPromptSection } from "./feedback-examples";
 import { createAuditEntry } from "@/lib/data/audit";
+import { getEnabledDetectionTypes } from "@/lib/data/settings";
 import { CircuitOpenError } from "@/lib/resilience/azure-services";
 import { logger } from "@/lib/logger";
 import { trackException, trackEvent, trackMetric } from "@/lib/telemetry";
@@ -410,9 +411,10 @@ export async function processDocument(docId: string): Promise<void> {
     // ------------------------------------------------------------------
     // 6. Pattern detection
     // ------------------------------------------------------------------
-    log.info("Running pattern detection", { docId });
+    const enabledTypes = await getEnabledDetectionTypes();
+    log.info("Running pattern detection", { docId, enabledTypes: [...enabledTypes] });
     const patternStart = Date.now();
-    const patternMatches = detectPatterns(extraction.pages);
+    const patternMatches = detectPatterns(extraction.pages, enabledTypes);
     patternDetectionMs = Date.now() - patternStart;
     log.info("Pattern detection complete", { docId, matches: patternMatches.length });
 
@@ -441,7 +443,7 @@ export async function processDocument(docId: string): Promise<void> {
       const aiStart = Date.now();
       const patternTexts = patternMatches.map((m) => m.text);
       const feedbackPrompt = await buildFeedbackPromptSection();
-      aiDetections = await detectWithAI(extraction.pages, patternTexts, feedbackPrompt || undefined);
+      aiDetections = await detectWithAI(extraction.pages, patternTexts, feedbackPrompt || undefined, enabledTypes);
       aiDetectionMs = Date.now() - aiStart;
       log.info("AI detection complete", { docId, detections: aiDetections.length });
     } catch (aiError) {

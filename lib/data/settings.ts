@@ -75,12 +75,45 @@ export const DEFAULT_DETECTION_TOGGLES: DetectionToggle[] = [
   { label: "Physical Addresses", enabled: true },
   { label: "IRD Numbers", enabled: true },
   { label: "Bank Account Numbers", enabled: true },
-  { label: "NZ Passport Numbers", enabled: true },
+  { label: "NZ Passport Numbers", enabled: false },
   { label: "Vehicle Registration", enabled: false },
   { label: "Commercial Sensitivity", enabled: true },
   { label: "Legal Privilege", enabled: true },
   { label: "Free & Frank Opinions", enabled: true },
 ];
+
+/** Maps UI toggle labels to the detection type keys used in the pipeline. */
+export const DETECTION_TYPE_MAP: Record<string, string> = {
+  "Personal Names": "personal-name",
+  "Phone Numbers": "phone",
+  "Email Addresses": "email-addr",
+  "Physical Addresses": "address",
+  "IRD Numbers": "ird",
+  "Bank Account Numbers": "bank-account",
+  "NZ Passport Numbers": "nz-passport",
+  "Vehicle Registration": "vehicle-reg",
+  "Commercial Sensitivity": "commercial",
+  "Legal Privilege": "legal-privilege",
+  "Free & Frank Opinions": "free-frank",
+};
+
+/**
+ * Read detection toggles from settings and return the set of enabled
+ * detection type keys (e.g. "phone", "ird", "commercial").
+ */
+export async function getEnabledDetectionTypes(): Promise<Set<string>> {
+  const toggles = await getSetting<DetectionToggle[]>(
+    SETTING_KEYS.DETECTION_TOGGLES,
+    DEFAULT_DETECTION_TOGGLES,
+  );
+  const enabled = new Set<string>();
+  for (const t of toggles) {
+    if (t.enabled && DETECTION_TYPE_MAP[t.label]) {
+      enabled.add(DETECTION_TYPE_MAP[t.label]);
+    }
+  }
+  return enabled;
+}
 
 export interface WorkflowConfig {
   seniorReview: boolean;

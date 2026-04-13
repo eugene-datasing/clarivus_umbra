@@ -10,6 +10,7 @@ import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { prisma } from "@/lib/db/prisma";
 import { getGroundById } from "@/lib/lgoima-grounds";
 import { getOrgBranding } from "@/lib/data/org-config";
+import { embedOrgLogo } from "./logo-helper";
 
 export interface ScheduleResult {
   pdfBytes: Uint8Array;
@@ -52,6 +53,17 @@ export async function buildWithholdingSchedule(
 
   let page = pdfDoc.addPage([pageWidth, pageHeight]);
   let yPos = pageHeight - margin;
+
+  // Organisation logo (top-right if available)
+  const logo = await embedOrgLogo(pdfDoc);
+  if (logo) {
+    page.drawImage(logo.image, {
+      x: pageWidth - margin - logo.width,
+      y: yPos - logo.height + 10,
+      width: logo.width,
+      height: logo.height,
+    });
+  }
 
   // ----- Title page -----
   yPos -= 60;

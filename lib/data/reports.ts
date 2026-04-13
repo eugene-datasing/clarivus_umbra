@@ -3,6 +3,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma";
+import { getGroundLabelMap } from "@/lib/lgoima-grounds";
 
 export interface SummaryStats {
   totalCases: number;
@@ -67,19 +68,7 @@ export async function getGroundUsageBreakdown(): Promise<GroundUsageItem[]> {
 
   const total = detections.length || 1;
 
-  // Ground labels
-  const groundLabels: Record<string, string> = {
-    "s7(2)(a)": "Privacy of natural persons",
-    "s7(2)(b)(ii)": "Commercial prejudice",
-    "s7(2)(f)(i)": "Free and frank opinions",
-    "s7(2)(g)": "Legal privilege",
-    "s6(a)": "National security",
-    "s7(2)(c)(i)": "Negotiations prejudice",
-    "s7(2)(d)": "Improper gain/advantage",
-    "s7(2)(h)": "Legal professional privilege",
-    "s7(2)(i)": "Officials advice to Ministers",
-    "s17": "Information not held",
-  };
+  const groundLabels = getGroundLabelMap();
 
   return Array.from(counts.entries())
     .sort((a, b) => b[1] - a[1])

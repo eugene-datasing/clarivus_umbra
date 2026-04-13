@@ -5,25 +5,9 @@ import { requireUser } from "@/lib/auth/session";
 import { authorizeForCase } from "@/lib/auth/authorize";
 import BulkReviewClient from "./bulk-review-client";
 import { detectionTypeConfig, type DetectionType } from "@/lib/db/mappers";
+import { getGroundLabelMap } from "@/lib/lgoima-grounds";
 
-const groundLabels: Record<string, string> = {
-  "s6(a)": "Security or defence",
-  "s6(b)": "Entrusted to Government",
-  "s6(c)": "Prejudice to maintenance of law",
-  "s6(d)": "Safety of any person",
-  "s7(2)(a)": "Personal privacy",
-  "s7(2)(b)(i)": "Trade secrets",
-  "s7(2)(b)(ii)": "Commercial position",
-  "s7(2)(c)(i)": "Terms of contract",
-  "s7(2)(c)(ii)": "Negotiations",
-  "s7(2)(f)(i)": "Free and frank opinions",
-  "s7(2)(f)(ii)": "Free and frank expression",
-  "s7(2)(g)": "Effective conduct of public affairs",
-  "s7(2)(h)": "Legal professional privilege",
-  "s7(2)(i)": "Negotiations or commercial activities",
-  "s7(2)(j)": "Prevent improper pressure",
-  "s17": "Information does not exist",
-};
+const groundLabels = getGroundLabelMap();
 
 export default async function BulkReviewPage({
   params,

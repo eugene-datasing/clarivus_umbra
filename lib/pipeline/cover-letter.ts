@@ -5,6 +5,7 @@
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { prisma } from "@/lib/db/prisma";
 import { getOrgIdentity, getOrgSignatory, getOrgOmbudsman } from "@/lib/data/org-config";
+import { embedOrgLogo } from "./logo-helper";
 
 export async function buildCoverLetterPdf(
   caseId: string,
@@ -51,6 +52,17 @@ export async function buildCoverLetterPdf(
 
   const page = pdfDoc.addPage([pageWidth, pageHeight]);
   let yPos = pageHeight - margin;
+
+  // Organisation logo (top-right if available)
+  const logo = await embedOrgLogo(pdfDoc);
+  if (logo) {
+    page.drawImage(logo.image, {
+      x: pageWidth - margin - logo.width,
+      y: yPos - logo.height + 10,
+      width: logo.width,
+      height: logo.height,
+    });
+  }
 
   // Council header
   page.drawText(orgName.toUpperCase(), {
