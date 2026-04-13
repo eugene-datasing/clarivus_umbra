@@ -135,10 +135,10 @@ export default function ReportsClient({
 
   const precisionPct = aiMetrics.hasSufficientData
     ? `${(aiMetrics.precision * 100).toFixed(1)}%`
-    : "94.7%";
+    : "--";
   const fpPct = aiMetrics.hasSufficientData && aiMetrics.totalReviewed > 0
     ? `${((aiMetrics.fp / aiMetrics.totalReviewed) * 100).toFixed(1)}%`
-    : "5.3%";
+    : "--";
 
   /** Generate a report — for per-case reports, opens the case selector first. */
   function handleGenerateReport(key: ReportKey) {
@@ -358,11 +358,11 @@ export default function ReportsClient({
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div className="bg-surface-bg rounded-lg p-3 text-center">
-            <div className="text-xl font-heading font-bold text-green-600">{precisionPct}</div>
+            <div className={`text-xl font-heading font-bold ${aiMetrics.hasSufficientData ? "text-green-600" : "text-txt-secondary"}`}>{precisionPct}</div>
             <div className="text-[11px] text-txt-secondary mt-1">Precision</div>
           </div>
           <div className="bg-surface-bg rounded-lg p-3 text-center">
-            <div className="text-xl font-heading font-bold text-amber-600">{fpPct}</div>
+            <div className={`text-xl font-heading font-bold ${aiMetrics.hasSufficientData ? "text-amber-600" : "text-txt-secondary"}`}>{fpPct}</div>
             <div className="text-[11px] text-txt-secondary mt-1">False Positive Rate</div>
           </div>
           <div className="bg-surface-bg rounded-lg p-3 text-center">
@@ -377,7 +377,7 @@ export default function ReportsClient({
         <div className="mt-3 pt-3 border-t border-border flex items-center justify-between">
           <p className="text-[11px] text-txt-secondary">
             Based on {stats.documentsProcessed.toLocaleString()} documents processed across {stats.totalCases} cases. Model: Azure OpenAI GPT-4o.
-            {!aiMetrics.hasSufficientData && " Sample metrics shown \u2014 will update as reviews accumulate."}
+            {!aiMetrics.hasSufficientData && " Requires at least 10 reviewed detections to compute accuracy metrics."}
           </p>
         </div>
       </div>

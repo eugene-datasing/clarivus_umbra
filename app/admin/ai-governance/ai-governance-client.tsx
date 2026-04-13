@@ -6,32 +6,13 @@ import type { AIMetrics } from "@/lib/data/ai-metrics";
 import type { FalseNegativeMetrics } from "@/lib/pipeline/feedback-examples";
 
 /* ------------------------------------------------------------------ */
-/*  Mock fallback data (used when <10 reviewed detections)            */
+/*  Types                                                             */
 /* ------------------------------------------------------------------ */
 
-const mockOverallStats = [
-  { label: "Precision", value: "94.2%", color: "text-green-700", bg: "bg-green-50" },
-  { label: "Recall", value: "91.8%", color: "text-blue-700", bg: "bg-blue-50" },
-  { label: "F1 Score", value: "93.0%", color: "text-purple-700", bg: "bg-purple-50" },
-  { label: "False Positive Rate", value: "5.8%", color: "text-amber-700", bg: "bg-amber-50" },
-];
-
-const mockEntityAccuracy = [
-  { entity: "Personal Names", precision: "96.1%", recall: "93.4%", f1: "94.7%", sampleSize: 1245 },
-  { entity: "Phone Numbers", precision: "99.2%", recall: "98.8%", f1: "99.0%", sampleSize: 423 },
-  { entity: "Email Addresses", precision: "98.5%", recall: "97.2%", f1: "97.8%", sampleSize: 312 },
-  { entity: "IRD Numbers", precision: "99.8%", recall: "99.1%", f1: "99.4%", sampleSize: 87 },
-  { entity: "Addresses", precision: "89.3%", recall: "84.6%", f1: "86.9%", sampleSize: 534 },
-  { entity: "Commercial Sensitivity", precision: "88.7%", recall: "82.1%", f1: "85.3%", sampleSize: 678 },
-  { entity: "Free & Frank Opinions", precision: "82.4%", recall: "79.8%", f1: "81.1%", sampleSize: 445 },
-  { entity: "Legal Privilege", precision: "91.2%", recall: "88.5%", f1: "89.8%", sampleSize: 198 },
-];
-
-const mockConfidenceDistribution = [
-  { label: "High (\u226585%)", value: 58, color: "bg-green-500" },
-  { label: "Medium (50\u201384%)", value: 29, color: "bg-amber-400" },
-  { label: "Low (<50%)", value: 13, color: "bg-red-400" },
-];
+interface ModelConfig {
+  deployment: string | null;
+  endpointConfigured: boolean;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
@@ -48,14 +29,6 @@ function f1Color(value: number): string {
   return "text-red-600";
 }
 
-function f1ColorStr(f1: string): string {
-  const num = parseFloat(f1);
-  if (num >= 95) return "text-green-700 font-semibold";
-  if (num >= 90) return "text-green-600";
-  if (num >= 85) return "text-amber-600";
-  return "text-red-600";
-}
-
 /* ------------------------------------------------------------------ */
 /*  Component                                                         */
 /* ------------------------------------------------------------------ */
@@ -63,27 +36,24 @@ function f1ColorStr(f1: string): string {
 interface Props {
   metrics: AIMetrics;
   fnMetrics: FalseNegativeMetrics;
+  modelConfig: ModelConfig;
 }
 
-export default function AIGovernanceClient({ metrics, fnMetrics }: Props) {
-  const useMock = !metrics.hasSufficientData;
+export default function AIGovernanceClient({ metrics, fnMetrics, modelConfig }: Props) {
+  const hasSufficientData = metrics.hasSufficientData;
 
-  const overallStats = useMock
-    ? mockOverallStats
-    : [
-        { label: "Precision", value: pct(metrics.precision), color: "text-green-700", bg: "bg-green-50" },
-        { label: "Total AI Detections", value: metrics.aiDetections.toString(), color: "text-blue-700", bg: "bg-blue-50" },
-        { label: "Reviewed", value: metrics.totalReviewed.toString(), color: "text-purple-700", bg: "bg-purple-50" },
-        { label: "False Positive Rate", value: pct(metrics.totalReviewed > 0 ? metrics.fp / metrics.totalReviewed : 0), color: "text-amber-700", bg: "bg-amber-50" },
-      ];
+  const overallStats = [
+    { label: "Precision", value: pct(metrics.precision), color: "text-green-700", bg: "bg-green-50" },
+    { label: "Total AI Detections", value: metrics.aiDetections.toString(), color: "text-blue-700", bg: "bg-blue-50" },
+    { label: "Reviewed", value: metrics.totalReviewed.toString(), color: "text-purple-700", bg: "bg-purple-50" },
+    { label: "False Positive Rate", value: pct(metrics.totalReviewed > 0 ? metrics.fp / metrics.totalReviewed : 0), color: "text-amber-700", bg: "bg-amber-50" },
+  ];
 
-  const confDistribution = useMock
-    ? mockConfidenceDistribution
-    : metrics.confidenceDistribution.map((b, i) => ({
-        label: b.label,
-        value: b.percentage,
-        color: ["bg-green-500", "bg-amber-400", "bg-red-400"][i],
-      }));
+  const confDistribution = metrics.confidenceDistribution.map((b, i) => ({
+    label: b.label,
+    value: b.percentage,
+    color: ["bg-green-500", "bg-amber-400", "bg-red-400"][i],
+  }));
 
   return (
     <div className="p-6 max-w-[1400px]">
@@ -95,44 +65,43 @@ export default function AIGovernanceClient({ metrics, fnMetrics }: Props) {
         </p>
       </div>
 
-      {useMock ? (
-        <>
-          {/* Insufficient data state */}
-          <div className="card mb-8 text-center py-12">
-            <div className="w-16 h-16 rounded-2xl bg-amber-50 flex items-center justify-center mx-auto mb-4">
-              <BarChart3 className="w-8 h-8 text-amber-500" />
+      {!hasSufficientData && (
+        <div className="card mb-8 text-center py-12">
+          <div className="w-16 h-16 rounded-2xl bg-amber-50 flex items-center justify-center mx-auto mb-4">
+            <BarChart3 className="w-8 h-8 text-amber-500" />
+          </div>
+          <h2 className="text-lg font-heading font-semibold text-txt-primary mb-2">
+            Insufficient Review Data
+          </h2>
+          <p className="text-sm text-txt-secondary max-w-md mx-auto mb-4">
+            Fewer than 10 AI detections have been reviewed. Accuracy metrics require
+            a minimum sample of accepted and rejected detections to produce meaningful results.
+          </p>
+          <div className="flex items-center justify-center gap-6 text-sm">
+            <div className="text-center">
+              <div className="text-2xl font-bold font-mono text-txt-primary">{metrics.totalReviewed}</div>
+              <div className="text-xs text-txt-secondary">Reviewed</div>
             </div>
-            <h2 className="text-lg font-heading font-semibold text-txt-primary mb-2">
-              Insufficient Review Data
-            </h2>
-            <p className="text-sm text-txt-secondary max-w-md mx-auto mb-4">
-              Fewer than 10 AI detections have been reviewed. Accuracy metrics require
-              a minimum sample of accepted and rejected detections to produce meaningful results.
-            </p>
-            <div className="flex items-center justify-center gap-6 text-sm">
-              <div className="text-center">
-                <div className="text-2xl font-bold font-mono text-txt-primary">{metrics.totalReviewed}</div>
-                <div className="text-xs text-txt-secondary">Reviewed</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold font-mono text-txt-primary">10</div>
-                <div className="text-xs text-txt-secondary">Required</div>
-              </div>
-            </div>
-            <div className="mt-6 mx-auto max-w-xs">
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-amber-400 rounded-full transition-all"
-                  style={{ width: `${Math.min((metrics.totalReviewed / 10) * 100, 100)}%` }}
-                />
-              </div>
-              <p className="text-[11px] text-txt-secondary mt-1">
-                {metrics.totalReviewed}/10 reviews completed
-              </p>
+            <div className="text-center">
+              <div className="text-2xl font-bold font-mono text-txt-primary">10</div>
+              <div className="text-xs text-txt-secondary">Required</div>
             </div>
           </div>
-        </>
-      ) : (
+          <div className="mt-6 mx-auto max-w-xs">
+            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-amber-400 rounded-full transition-all"
+                style={{ width: `${Math.min((metrics.totalReviewed / 10) * 100, 100)}%` }}
+              />
+            </div>
+            <p className="text-[11px] text-txt-secondary mt-1">
+              {metrics.totalReviewed}/10 reviews completed
+            </p>
+          </div>
+        </div>
+      )}
+
+      {hasSufficientData && (
         <>
           {/* Overall stat cards */}
           <div className="grid grid-cols-4 gap-4 mb-8">
@@ -283,13 +252,21 @@ export default function AIGovernanceClient({ metrics, fnMetrics }: Props) {
             <h2 className="text-lg font-heading font-semibold text-txt-primary mb-2">Model Information</h2>
             <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm">
               <div className="text-txt-secondary">Provider</div>
-              <div className="text-txt-primary font-medium">Azure OpenAI GPT-4o</div>
-              <div className="text-txt-secondary">Version</div>
-              <div className="text-txt-primary font-mono text-xs">2024-11-20</div>
-              <div className="text-txt-secondary">Last updated</div>
-              <div className="text-txt-primary">15 Mar 2026</div>
-              <div className="text-txt-secondary">Training data</div>
-              <div className="text-txt-primary">NZ Government document corpus (anonymised)</div>
+              <div className="text-txt-primary font-medium">Azure OpenAI</div>
+              <div className="text-txt-secondary">Deployment</div>
+              <div className="text-txt-primary font-mono text-xs">
+                {modelConfig.deployment || <span className="text-txt-secondary italic">Not configured</span>}
+              </div>
+              <div className="text-txt-secondary">Status</div>
+              <div className="text-txt-primary">
+                {modelConfig.endpointConfigured ? (
+                  <span className="text-green-600">Connected</span>
+                ) : (
+                  <span className="text-txt-secondary italic">Endpoint not configured</span>
+                )}
+              </div>
+              <div className="text-txt-secondary">Approach</div>
+              <div className="text-txt-primary">LGOIMA-specific system prompt with contextual detection</div>
             </div>
           </div>
         </div>
@@ -299,8 +276,8 @@ export default function AIGovernanceClient({ metrics, fnMetrics }: Props) {
       <div className="flex items-start gap-2 text-xs text-txt-secondary bg-surface-bg border border-border rounded-card px-4 py-3">
         <Shield className="w-4 h-4 flex-shrink-0 mt-0.5" />
         <p>
-          {useMock
-            ? "Metrics will appear here once 10 or more AI detections have been reviewed. Continue reviewing documents to populate this dashboard."
+          {!hasSufficientData
+            ? "Accuracy metrics will appear once 10 or more AI detections have been reviewed. Continue reviewing documents to populate this dashboard."
             : `Metrics based on ${metrics.totalReviewed} reviewed detection(s). Updated on a rolling basis as reviews are completed.`}
         </p>
       </div>

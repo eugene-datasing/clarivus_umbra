@@ -1,5 +1,6 @@
 import { computeAccuracyMetrics } from "@/lib/data/ai-metrics";
 import { computeFalseNegativeRate } from "@/lib/pipeline/feedback-examples";
+import { env } from "@/lib/config/env";
 import AIGovernanceClient from "./ai-governance-client";
 
 export default async function AIGovernancePage() {
@@ -8,5 +9,10 @@ export default async function AIGovernancePage() {
     computeFalseNegativeRate(),
   ]);
 
-  return <AIGovernanceClient metrics={metrics} fnMetrics={fnMetrics} />;
+  const modelConfig = {
+    deployment: env.AZURE_OPENAI_DEPLOYMENT || null,
+    endpointConfigured: !!env.AZURE_OPENAI_ENDPOINT,
+  };
+
+  return <AIGovernanceClient metrics={metrics} fnMetrics={fnMetrics} modelConfig={modelConfig} />;
 }
