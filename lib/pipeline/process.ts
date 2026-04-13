@@ -22,6 +22,7 @@ import { validateFile } from "./file-validator";
 import { convertFromPages } from "./format-converter";
 import { detectPatterns } from "./patterns";
 import { detectWithAI } from "./ai-detect";
+import { classifyDocument, type DocumentClassification } from "./doc-classify";
 import { detectDuplicates } from "./duplicate-detect";
 import { executeCustomRules } from "./custom-rules";
 import { calculateBBox } from "./bbox";
@@ -353,6 +354,26 @@ export async function processDocument(docId: string): Promise<void> {
     }
 
     // ------------------------------------------------------------------
+    // 4.7 Document-level classification
+    // ------------------------------------------------------------------
+    let docClassification: DocumentClassification | null = null;
+    try {
+      log.info("Running document classification", { docId });
+      docClassification = await classifyDocument(extraction.pages);
+      log.info("Document classification complete", {
+        docId,
+        documentType: docClassification.documentType,
+        likelyGrounds: docClassification.likelyGrounds,
+      });
+    } catch (classifyError) {
+      // Classification is non-critical — log and continue without it
+      log.error("Document classification failed, continuing without context", {
+        docId,
+        error: classifyError instanceof Error ? classifyError.message : String(classifyError),
+      });
+    }
+
+    // ------------------------------------------------------------------
     // 5. Store pages in DocumentPage table
     // ------------------------------------------------------------------
     // Wrap in a transaction to prevent race conditions when processing
@@ -443,7 +464,7 @@ export async function processDocument(docId: string): Promise<void> {
       const aiStart = Date.now();
       const patternTexts = patternMatches.map((m) => m.text);
       const feedbackPrompt = await buildFeedbackPromptSection();
-      aiDetections = await detectWithAI(extraction.pages, patternTexts, feedbackPrompt || undefined, enabledTypes);
+      aiDetections = await detectWithAI(extraction.pages, patternTexts, feedbackPrompt || undefined, enabledTypes, docClassification || undefined);
       aiDetectionMs = Date.now() - aiStart;
       log.info("AI detection complete", { docId, detections: aiDetections.length });
     } catch (aiError) {
@@ -457,6 +478,44 @@ export async function processDocument(docId: string): Promise<void> {
         });
         trackException(aiError, { docId, stage: "ai-detection" });
       }
+    }
+
+    // ------------------------------------------------------------------
+    // 7.5 Deduplicate custom rule matches against pattern + AI results
+    // ------------------------------------------------------------------
+    // Pattern matches take priority, then AI, then custom rules.
+    // Drop custom rule detections whose text overlaps with pattern or AI
+    // detections on the same page.
+    const patternAndAiTexts = new Map<number, string[]>(); // page → texts
+    for (const m of patternMatches) {
+      const arr = patternAndAiTexts.get(m.page) || [];
+      arr.push(m.text);
+      patternAndAiTexts.set(m.page, arr);
+    }
+    for (const d of aiDetections) {
+      const arr = patternAndAiTexts.get(d.page) || [];
+      arr.push(d.text);
+      patternAndAiTexts.set(d.page, arr);
+    }
+
+    const dedupedCustomRuleMatches = customRuleMatches.filter((crm) => {
+      const pageTexts = patternAndAiTexts.get(crm.page);
+      if (!pageTexts) return true;
+      const normCrm = crm.text.toLowerCase().trim();
+      for (const existing of pageTexts) {
+        const normExisting = existing.toLowerCase().trim();
+        if (normCrm === normExisting) return false;
+        if (normExisting.includes(normCrm) || normCrm.includes(normExisting)) return false;
+      }
+      return true;
+    });
+
+    if (dedupedCustomRuleMatches.length < customRuleMatches.length) {
+      log.info("Custom rule dedup removed overlapping matches", {
+        docId,
+        before: customRuleMatches.length,
+        after: dedupedCustomRuleMatches.length,
+      });
     }
 
     // ------------------------------------------------------------------
@@ -517,9 +576,9 @@ export async function processDocument(docId: string): Promise<void> {
       aiDetectionRecords.push(record);
     }
 
-    // Store custom rule detections
+    // Store custom rule detections (using deduped set)
     const customRuleRecords = [];
-    for (const crm of customRuleMatches) {
+    for (const crm of dedupedCustomRuleMatches) {
       const layout = pageLayouts.get(crm.page);
       const bbox = layout
         ? calculateBBox(crm.text, layout.words, layout.width, layout.height)
@@ -592,6 +651,9 @@ export async function processDocument(docId: string): Promise<void> {
         where: { id: docId },
         data: {
           contentJson: JSON.parse(JSON.stringify(content)),
+          classification: docClassification
+            ? JSON.parse(JSON.stringify(docClassification))
+            : undefined,
           detectionCount: totalDetections,
           avgConfidence: Math.round(avgConfidence * 10) / 10,
           status: "ready",

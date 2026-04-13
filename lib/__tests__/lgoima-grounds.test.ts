@@ -5,6 +5,7 @@ import {
   getGroundById,
   getGroundByReference,
   getGroundLabelMap,
+  normaliseGroundToId,
   type LGOIMAGround,
 } from "../lgoima-grounds";
 
@@ -234,5 +235,34 @@ describe("getGroundLabelMap", () => {
   it("contains entries for all 27 grounds (54 keys: 27 IDs + 27 refs)", () => {
     const map = getGroundLabelMap();
     expect(Object.keys(map).length).toBe(54);
+  });
+});
+
+describe("normaliseGroundToId", () => {
+  it("passes through a valid ID format unchanged", () => {
+    expect(normaliseGroundToId("s7_2a")).toBe("s7_2a");
+  });
+
+  it("converts reference format to ID format", () => {
+    expect(normaliseGroundToId("s7(2)(a)")).toBe("s7_2a");
+  });
+
+  it("converts split ground reference format to ID format", () => {
+    expect(normaliseGroundToId("s7(2)(f)(i)")).toBe("s7_2fi");
+  });
+
+  it("passes through unrecognised strings unchanged", () => {
+    expect(normaliseGroundToId("nonsense")).toBe("nonsense");
+  });
+
+  it("converts all s6 reference formats correctly", () => {
+    expect(normaliseGroundToId("s6(a)")).toBe("s6a");
+    expect(normaliseGroundToId("s6(d)")).toBe("s6d");
+  });
+
+  it("converts s17 reference formats correctly", () => {
+    expect(normaliseGroundToId("s17(a)")).toBe("s17a");
+    expect(normaliseGroundToId("s17(c)(i)")).toBe("s17ci");
+    expect(normaliseGroundToId("s17(h)")).toBe("s17h");
   });
 });

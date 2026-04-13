@@ -6,6 +6,37 @@
  */
 
 import { z } from "zod";
+import { lgoimaGrounds } from "@/lib/lgoima-grounds";
+
+// ---------------------------------------------------------------------------
+// LGOIMA ground validation
+// ---------------------------------------------------------------------------
+
+/**
+ * Set of all valid ground identifiers in both ID and reference format.
+ * Used by Zod schemas below to validate user-facing ground inputs.
+ * Pipeline writes (pattern/AI detection) bypass Zod — they write
+ * suggestedGround directly — but normalise to ID format before storage.
+ */
+export const validGroundIds = new Set(
+  lgoimaGrounds.flatMap((g) => [g.id, g.reference]),
+);
+
+const groundIdSchema = z
+  .string()
+  .min(1, "Ground is required")
+  .max(30)
+  .refine((val) => validGroundIds.has(val), {
+    message: "Invalid LGOIMA ground identifier",
+  });
+
+const optionalGroundIdSchema = z
+  .string()
+  .max(30)
+  .refine((val) => val === "" || validGroundIds.has(val), {
+    message: "Invalid LGOIMA ground identifier",
+  })
+  .optional();
 
 // ---------------------------------------------------------------------------
 // Case
@@ -29,7 +60,7 @@ export const detectionIdSchema = z.string().min(1, "Detection ID is required");
 
 export const acceptDetectionSchema = z.object({
   detectionId: detectionIdSchema,
-  ground: z.string().max(30).optional(),
+  ground: optionalGroundIdSchema,
 });
 
 export const rejectDetectionSchema = z.object({
@@ -39,12 +70,12 @@ export const rejectDetectionSchema = z.object({
 
 export const applyGroundSchema = z.object({
   detectionId: detectionIdSchema,
-  groundId: z.string().min(1, "Ground is required").max(30),
+  groundId: groundIdSchema,
 });
 
 export const bulkDetectionSchema = z.object({
   detectionIds: z.array(detectionIdSchema).min(1, "At least one detection is required").max(1000),
-  ground: z.string().max(30).optional(),
+  ground: optionalGroundIdSchema,
 });
 
 export const confidenceThresholdSchema = z.object({
@@ -55,14 +86,14 @@ export const confidenceThresholdSchema = z.object({
 export const bulkApplyGroundToSimilarSchema = z.object({
   caseId: z.string().min(1, "Case ID is required"),
   entityText: z.string().min(1, "Entity text is required").max(5000),
-  ground: z.string().min(1, "Ground is required").max(30),
+  ground: groundIdSchema,
   action: z.enum(["accept", "reject"]),
 });
 
 export const bulkApplyGroundByTypeSchema = z.object({
   caseId: z.string().min(1, "Case ID is required"),
   detectionType: z.string().min(1, "Detection type is required").max(100),
-  ground: z.string().min(1, "Ground is required").max(30),
+  ground: groundIdSchema,
   action: z.enum(["accept", "reject"]),
 });
 
@@ -75,7 +106,7 @@ export const createManualDetectionSchema = z.object({
   text: z.string().min(1, "Detection text is required").max(5000),
   type: z.string().min(1, "Detection type is required").max(50),
   page: z.number().int().positive("Page must be a positive integer"),
-  ground: z.string().max(30).optional(),
+  ground: optionalGroundIdSchema,
   reasoning: z.string().max(2000).optional(),
 });
 
@@ -108,7 +139,7 @@ export const createRuleSchema = z.object({
   keywords: z.string().min(1, "Keywords are required").max(10000),
   scope: z.string().min(1).max(200),
   priority: z.enum(["Low", "Medium", "High", "Critical"]),
-  suggestedGround: z.string().max(30).optional(),
+  suggestedGround: optionalGroundIdSchema,
   description: z.string().max(2000).optional(),
 });
 

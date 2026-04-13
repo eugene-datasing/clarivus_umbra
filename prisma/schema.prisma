@@ -104,6 +104,9 @@ model Document {
   // Document content for review (DocParagraph[] as JSON)
   contentJson Json?
 
+  // AI document-level classification (DocumentClassification as JSON)
+  classification Json?
+
   // Processing timing (WP13)
   processingStartedAt  DateTime?
   processingCompletedAt DateTime?

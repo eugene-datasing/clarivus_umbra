@@ -6,6 +6,14 @@
  *
  * IMPORTANT: There is no s 6(e) in LGOIMA — that provision exists only in the
  * Official Information Act 1982. Do not add it.
+ *
+ * FORMAT CONVENTION:
+ * - Database storage uses ID format (e.g. "s7_2a", "s7_2fi").
+ * - The AI prompt displays reference format (e.g. "s7(2)(a)") for readability,
+ *   but AI output is normalised to ID format before storage.
+ * - getGroundLabelMap() keys by both formats for backward-compatible display.
+ * - All user-facing writes are validated by Zod against validGroundIds in
+ *   lib/validation/schemas.ts.
  */
 
 export interface LGOIMAGround {
@@ -70,6 +78,19 @@ export function getGroundById(id: string) {
 
 export function getGroundByReference(ref: string): LGOIMAGround | undefined {
   return lgoimaGrounds.find((g) => g.reference === ref);
+}
+
+/**
+ * Normalise a ground value to ID format.
+ * Accepts either ID (s7_2a) or reference (s7(2)(a)) format.
+ * Returns the ID format, or the original string if not recognised.
+ */
+export function normaliseGroundToId(value: string): string {
+  const byId = lgoimaGrounds.find((g) => g.id === value);
+  if (byId) return byId.id;
+  const byRef = lgoimaGrounds.find((g) => g.reference === value);
+  if (byRef) return byRef.id;
+  return value;
 }
 
 /**

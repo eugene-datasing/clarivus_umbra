@@ -39,11 +39,11 @@ describe("detectPatterns", () => {
       expect(matches.some((m) => m.type === "ird")).toBe(true);
     });
 
-    it("assigns s7(2)(a) ground to IRD matches", () => {
+    it("assigns s7_2a ground to IRD matches", () => {
       const pages = [makePage(1, "IRD: 12-345-678")];
       const matches = detectPatterns(pages);
       const ird = matches.find((m) => m.type === "ird");
-      expect(ird?.suggestedGround).toBe("s7(2)(a)");
+      expect(ird?.suggestedGround).toBe("s7_2a");
     });
 
     it("assigns confidence of 95", () => {

@@ -18,6 +18,7 @@ import {
 } from "@/lib/validation/schemas";
 import { authorizeForCase } from "@/lib/auth/authorize";
 import { recomputeCaseStatus } from "@/lib/data/cases";
+import { normaliseGroundToId } from "@/lib/lgoima-grounds";
 
 // ---------------------------------------------------------------------------
 // Change tracking (WP12)
@@ -256,7 +257,8 @@ export async function acceptDetection(detectionId: string, ground?: string) {
   });
   if (!detection) throw new Error("Detection not found");
 
-  const appliedGround = validGround || detection.suggestedGround;
+  const appliedGround = validGround
+    || (detection.suggestedGround ? normaliseGroundToId(detection.suggestedGround) : null);
 
   // Record change history
   await recordHistory(validId, "status", detection.status, "accepted", user.name);
@@ -530,7 +532,7 @@ export async function applyConfidenceThreshold(caseId: string, threshold: number
       where: { id: { in: ids } },
       data: {
         status: "accepted",
-        appliedGround: ground,
+        appliedGround: ground ? normaliseGroundToId(ground) : null,
         reviewedAt: new Date(),
       },
     });
