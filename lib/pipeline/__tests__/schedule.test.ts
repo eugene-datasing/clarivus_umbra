@@ -23,7 +23,7 @@ vi.mock("@/lib/lgoima-grounds", () => ({
   getGroundById: vi.fn((id: string) => {
     const grounds: Record<string, { reference: string; label: string; description: string }> = {
       s7_2a: { reference: "s7(2)(a)", label: "Personal privacy", description: "Protect the privacy of natural persons" },
-      s7_2f: { reference: "s7(2)(f)", label: "Free and frank opinions", description: "Maintain free and frank expression" },
+      s7_2fi: { reference: "s7(2)(f)(i)", label: "Free and frank opinions", description: "Maintain free and frank expression of opinions" },
     };
     return grounds[id] ?? null;
   }),
@@ -73,7 +73,7 @@ describe("buildWithholdingSchedule", () => {
     const detections = [
       makeDetection("d1", "s7_2a", "Report.pdf", 1),
       makeDetection("d2", "s7_2a", "Report.pdf", 2),
-      makeDetection("d3", "s7_2f", "Minutes.pdf", 1),
+      makeDetection("d3", "s7_2fi", "Minutes.pdf", 1),
     ];
     (prisma.detection.findMany as ReturnType<typeof vi.fn>).mockResolvedValue(detections);
 

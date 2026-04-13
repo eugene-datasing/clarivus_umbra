@@ -640,25 +640,25 @@ The s 6 IDs and references stay the same (`s6a` → `s6(a)`, etc.) but the label
 
 After all fixes are applied, verify:
 
-- [ ] Every entry in `lgoima-grounds.ts` has a `reference` that matches the actual LGOIMA subsection (verified against the PDF in the repo)
-- [ ] Every entry has a `label` and `description` that accurately reflect the statutory text
-- [ ] No duplicate entries exist (unique IDs and unique references)
-- [ ] s 6(e) does not exist
-- [ ] s 7(2)(ba) exists and is positioned after s 7(2)(b)(ii)
-- [ ] s 7(2)(c)(i) and s 7(2)(c)(ii) are separate entries
-- [ ] s 7(2)(d) describes health/safety measures (not "statutory restriction")
-- [ ] s 7(2)(e) describes material loss prevention (not "public health/safety")
-- [ ] s 7(2)(f)(i) and s 7(2)(f)(ii) are separate entries
-- [ ] s 7(2)(j) describes improper gain/advantage (not "incomplete negotiations")
-- [ ] All s 17 references match actual LGOIMA s 17 subsections from the PDF
-- [ ] `bulk-review/page.tsx` derives labels from the central file (no local `groundLabels`)
-- [ ] `reports.ts` derives labels from the central file (no local `groundLabels`)
-- [ ] No OIA provisions (e.g., "officials advice to Ministers") appear anywhere
-- [ ] The AI system prompt references the correct ground set
-- [ ] All `requiresPI` flags are correct (true for all s 7, false for all s 6 and s 17)
-- [ ] Existing tests pass with updated ground definitions
-- [ ] Seed data uses correct references
-- [ ] The taxonomy document's section 20 table includes all grounds including s 7(2)(ba)
+- [x] Every entry in `lgoima-grounds.ts` has a `reference` that matches the actual LGOIMA subsection (verified against the PDF in the repo)
+- [x] Every entry has a `label` and `description` that accurately reflect the statutory text
+- [x] No duplicate entries exist (unique IDs and unique references)
+- [x] s 6(e) does not exist
+- [x] s 7(2)(ba) exists and is positioned after s 7(2)(b)(ii)
+- [x] s 7(2)(c)(i) and s 7(2)(c)(ii) are separate entries
+- [x] s 7(2)(d) describes health/safety measures (not "statutory restriction")
+- [x] s 7(2)(e) describes material loss prevention (not "public health/safety")
+- [x] s 7(2)(f)(i) and s 7(2)(f)(ii) are separate entries
+- [x] s 7(2)(j) describes improper gain/advantage (not "incomplete negotiations")
+- [x] All s 17 references match actual LGOIMA s 17 subsections from the PDF
+- [x] `bulk-review/page.tsx` derives labels from the central file (no local `groundLabels`)
+- [x] `reports.ts` derives labels from the central file (no local `groundLabels`)
+- [x] No OIA provisions (e.g., "officials advice to Ministers") appear anywhere
+- [x] The AI system prompt references the correct ground set
+- [x] All `requiresPI` flags are correct (true for all s 7, false for all s 6 and s 17)
+- [ ] Existing tests pass with updated ground definitions — needs local `npm run test` (native module issue in CI-like env)
+- [x] Seed data uses correct references
+- [ ] The taxonomy document's section 20 table includes all grounds including s 7(2)(ba) — deferred (Batch 5)
 
 ---
 
