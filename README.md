@@ -94,7 +94,7 @@ AZURE_AD_TENANT_ID=<tenant-id>
 # === OPTIONAL ===
 AUTH_CREDENTIALS_ENABLED=true                  # Enable credentials login (dev mode)
 SCIM_API_TOKEN=                                # SCIM user provisioning bearer token
-AZURE_BLOB_CONNECTION_STRING=                  # Blob storage (falls back to local filesystem)
+AZURE_STORAGE_CONNECTION_STRING=                # Blob storage (falls back to local filesystem)
 AZURE_COMMUNICATION_CONNECTION_STRING=         # Email notifications
 APPLICATIONINSIGHTS_CONNECTION_STRING=         # Telemetry
 UPLOAD_DIR=./uploads                           # Local upload directory (dev only)
@@ -125,12 +125,12 @@ In production, secrets are resolved from Key Vault via App Service managed ident
 
 After `npx prisma db seed`, the database includes:
 
-- **6 users** with roles: request-manager, reviewer, senior-reviewer, final-approver
-- **5 LGOIMA cases** with varying statuses and deadlines
-- **15 documents** with processing states
+- **10 users** with roles: admin, request-manager, reviewer, senior-reviewer, final-approver
+- **18 LGOIMA cases** with varying statuses and deadlines
+- **24 documents** with processing states (PDF, DOCX, XLSX, EML, MSG)
 - **35 AI detections** with confidence scores and LGOIMA grounds
+- **30 audit trail entries** and **6 pipeline milestones**
 - **Departments:** Infrastructure, Planning, Legal, etc.
-- **Audit trail entries** and pipeline milestones
 
 ---
 
@@ -257,7 +257,7 @@ veil-prototype/
 │   ├── page.tsx                           # Dashboard (server component)
 │   ├── login/                             # Login page (Azure AD SSO + credentials fallback)
 │   ├── activate/                          # Post-login activation (enter code, become admin)
-│   ├── landing-page.tsx                     # Public landing page (unauthenticated)
+│   ├── landing-page.tsx                   # Public landing page component (rendered by page.tsx when unauthenticated)
 │   ├── setup/                             # Setup wizard (7 steps)
 │   ├── profile/                           # User profile page
 │   ├── queue/page.tsx                     # My Queue (server component)
@@ -290,6 +290,7 @@ veil-prototype/
 │   │   ├── health/                        # Health check endpoint
 │   │   ├── notifications/                 # Notifications API
 │   │   ├── reports/                       # Cost recovery reports
+│   │   ├── logo/                          # Organisation logo upload/serve/delete
 │   │   ├── scim/                          # SCIM 2.0 provisioning
 │   │   │   ├── Users/                     # SCIM user management
 │   │   │   └── Groups/                    # SCIM group management
@@ -387,6 +388,7 @@ veil-prototype/
 │   ├── storage/
 │   │   ├── types.ts                       # Storage provider interface
 │   │   ├── local.ts                       # Local filesystem storage
+│   │   ├── azure-blob.ts                  # Azure Blob Storage provider
 │   │   └── index.ts                       # Storage factory
 │   └── pipeline/
 │       ├── process.ts                     # Main pipeline orchestrator
@@ -414,10 +416,11 @@ veil-prototype/
 │       ├── redact-pdf.ts                  # PDF redaction orchestrator (calls Python)
 │       ├── schedule.ts                    # Withholding schedule PDF generator
 │       ├── cover-letter.ts                # Cover letter PDF generator
+│       ├── logo-helper.ts                 # Shared PDF logo embedding helper
 │       ├── audit-pdf.ts                   # Audit trail PDF generator
 │       └── export.ts                      # ZIP export package assembler
 ├── prisma/
-│   ├── schema.prisma                      # Database schema (17 migrations)
+│   ├── schema.prisma                      # Database schema (19 models, 17 migrations)
 │   └── seed.ts                            # Demo data seed script
 ├── scripts/
 │   └── generate-activation-code.ts        # Generate activation code for new deployments
@@ -447,7 +450,7 @@ veil-prototype/
 
 ## Database Schema (Prisma)
 
-18 models across 20+ migrations:
+19 models across 17 migrations:
 
 | Model | Purpose |
 |-------|---------|
@@ -468,6 +471,7 @@ veil-prototype/
 | SystemSetting | Organisation-level configuration |
 | CaseMilestone | Milestone tracking per case |
 | CaseAssignment | User-to-case role assignments |
+| ExportJob | Export package generation with progress tracking |
 | ProcessingJob | Persistent job queue entries with retry state |
 
 ---

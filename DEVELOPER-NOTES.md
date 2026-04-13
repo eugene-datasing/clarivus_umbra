@@ -12,7 +12,7 @@
 ### Database
 - **PostgreSQL 16** (Docker, port 5434) with **Prisma ORM**
 - Schema uses a `pg` adapter (`@prisma/adapter-pg`) for connection management
-- 18 models: `User`, `Department`, `UserInvitation`, `ActivationCode`, `Case`, `Document`, `DocumentPage`, `Detection`, `DetectionHistory`, `DetectionSnapshot`, `FeedbackExample`, `AuditEntry`, `FileUpload`, `CustomRule`, `SystemSetting`, `CaseMilestone`, `CaseAssignment`, `ProcessingJob`
+- 19 models: `User`, `Department`, `UserInvitation`, `ActivationCode`, `Case`, `Document`, `DocumentPage`, `Detection`, `DetectionHistory`, `DetectionSnapshot`, `FeedbackExample`, `AuditEntry`, `FileUpload`, `CustomRule`, `SystemSetting`, `CaseMilestone`, `CaseAssignment`, `ExportJob`, `ProcessingJob`
 - Prisma client is a singleton via `globalThis` to survive Next.js dev-mode module reloading
 
 ### File Storage
@@ -84,6 +84,7 @@
 | DB-backed rate limiting | Activation rate limiter uses PostgreSQL system_settings instead of in-memory Map |
 | LibreOffice conversion | Non-PDF documents (DOCX, XLSX, TXT) converted to PDF at export time for true redaction |
 | Self-hosted fonts | Fonts bundled at build time via next/font/google — no runtime Google Fonts CDN dependency |
+| Organisation logo | Upload via setup wizard or admin settings, embedded in PDF cover letters, schedules, and chain-of-custody reports |
 | PDF viewer | PDF.js-based viewer with detection overlay highlights for PDF documents |
 
 ---
@@ -91,9 +92,9 @@
 ## 3. Design Decisions
 
 ### Document Viewer
-- **Decision:** Simulated document view (styled HTML paragraphs with highlight spans) instead of PDF.js
-- **Reason:** PDF.js adds significant complexity for the POC. The review UI only needs text with detection highlights — the actual PDF rendering is irrelevant for the detection review workflow.
-- **For production:** Integrate `@react-pdf-viewer/core` with custom highlight overlay layers mapped to bounding-box coordinates from Azure Document Intelligence.
+- **Decision:** Dual viewer — PDF.js-based viewer with detection overlay highlights for PDF documents, styled HTML paragraphs with highlight spans for non-PDF documents.
+- **Reason:** PDF.js provides accurate rendering of original document layout with detection overlays positioned via bounding-box coordinates. Non-PDF documents use the styled HTML view since they lack bounding-box data from Azure Document Intelligence.
+- **For production:** Bounding-box coordinate overlays could be refined for pixel-accurate highlighting on complex PDF layouts.
 
 ### Whitespace Normalisation
 - **Decision:** `content-builder.ts` normalises non-breaking spaces (`\u00A0`, `\u2007`, `\u202F`, `\u2060`) to regular spaces when matching detection text against paragraph text.
