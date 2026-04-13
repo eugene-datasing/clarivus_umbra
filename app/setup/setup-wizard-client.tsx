@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -8,6 +8,8 @@ import {
   Users,
   UserPlus,
   Palette,
+  Upload,
+  X,
   Scale,
   Shield,
   CheckCircle,
@@ -141,6 +143,17 @@ export default function SetupWizardClient({
   const [signatory, setSignatory] = useState<OrgSignatory>(initialSignatory);
   const [ombudsman, setOmbudsman] = useState<OrgOmbudsman>(initialOmbudsman);
   const [footerText, setFooterText] = useState(initialBranding.footerText);
+  const [logoStorageKey, setLogoStorageKey] = useState(initialBranding.logoStorageKey);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  // Load existing logo preview on mount
+  useEffect(() => {
+    if (initialBranding.logoStorageKey) {
+      setLogoPreview("/api/logo");
+    }
+  }, [initialBranding.logoStorageKey]);
 
   // Step 3: LGOIMA
   const [lgoima, setLgoima] = useState<LGOIMAConfig>(initialLgoima);
@@ -190,7 +203,7 @@ export default function SetupWizardClient({
         markComplete(1);
       } else if (currentStep === 2) {
         await saveOrgBranding({
-          logoStorageKey: "",
+          logoStorageKey,
           footerText,
           signatory,
           ombudsman,
@@ -829,12 +842,71 @@ export default function SetupWizardClient({
                       </div>
                     </div>
 
-                    {/* Logo placeholder */}
+                    {/* Logo upload */}
                     <h3 className="text-sm font-semibold text-txt-primary mb-3">Organisation Logo</h3>
-                    <div className="border-2 border-dashed border-border rounded-card p-6 text-center text-txt-secondary mb-6">
-                      <Palette className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                      <p className="text-sm">Logo upload will be available in a future update.</p>
-                    </div>
+                    {logoPreview ? (
+                      <div className="border border-border rounded-card p-4 mb-6 flex items-center gap-4">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={logoPreview}
+                          alt="Organisation logo"
+                          className="h-10 w-auto object-contain"
+                        />
+                        <span className="text-sm text-txt-secondary flex-1">Logo uploaded</span>
+                        <button
+                          type="button"
+                          className="p-1.5 rounded hover:bg-red-50 text-txt-secondary hover:text-red-600 transition-colors"
+                          onClick={async () => {
+                            await fetch("/api/logo", { method: "DELETE" });
+                            setLogoPreview(null);
+                            setLogoStorageKey("");
+                          }}
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        className="border-2 border-dashed border-border rounded-card p-6 text-center text-txt-secondary mb-6 cursor-pointer hover:border-brand-primary/40 hover:bg-brand-primary/5 transition-colors"
+                        onClick={() => logoInputRef.current?.click()}
+                      >
+                        {logoUploading ? (
+                          <Loader2 className="w-8 h-8 mx-auto mb-2 opacity-30 animate-spin" />
+                        ) : (
+                          <Upload className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                        )}
+                        <p className="text-sm">{logoUploading ? "Uploading..." : "Click to upload your logo"}</p>
+                        <p className="text-xs mt-1 opacity-60">PNG or JPEG, max 2 MB</p>
+                      </div>
+                    )}
+                    <input
+                      ref={logoInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setLogoUploading(true);
+                        try {
+                          const fd = new FormData();
+                          fd.append("logo", file);
+                          const res = await fetch("/api/logo", { method: "POST", body: fd });
+                          const json = await res.json();
+                          if (json.success) {
+                            setLogoStorageKey(json.storageKey);
+                            setLogoPreview(URL.createObjectURL(file));
+                          } else {
+                            setError(json.error || "Logo upload failed.");
+                          }
+                        } catch {
+                          setError("Logo upload failed.");
+                        } finally {
+                          setLogoUploading(false);
+                          e.target.value = "";
+                        }
+                      }}
+                    />
 
                     {/* Footer Text */}
                     <h3 className="text-sm font-semibold text-txt-primary mb-3">Footer Text</h3>
@@ -1325,7 +1397,16 @@ export default function SetupWizardClient({
                             <dt className="text-txt-secondary">Ombudsman Email</dt>
                             <dd className="font-medium text-txt-primary">{ombudsman.email}</dd>
                           </div>
-                          <div className="col-span-2">
+                          <div>
+                            <dt className="text-txt-secondary">Logo</dt>
+                            <dd className="font-medium text-txt-primary">
+                              {logoPreview ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={logoPreview} alt="Logo" className="h-6 w-auto object-contain" />
+                              ) : "--"}
+                            </dd>
+                          </div>
+                          <div>
                             <dt className="text-txt-secondary">Footer</dt>
                             <dd className="font-medium text-txt-primary">{footerText || "--"}</dd>
                           </div>

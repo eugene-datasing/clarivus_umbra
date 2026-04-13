@@ -199,10 +199,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
      * for both credentials and Azure AD flows, so the base callback works
      * as-is.
      *
-     * When trigger is "update" (client called session.update()), re-read
-     * the user's current role from the database so that role promotions
-     * (e.g. activation → admin) take effect without requiring a full
-     * sign-out/sign-in cycle.
+     * On every token refresh, re-read the user's current role and
+     * departmentId from the database so that changes (profile save, role
+     * promotion, admin edits) take effect without requiring sign-out.
+     * This is a single indexed SELECT by PK — negligible overhead.
      */
     async jwt({ token, user, trigger }) {
       if (user) {
@@ -211,8 +211,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.departmentId = (user as { departmentId?: string | null }).departmentId ?? null;
       }
 
-      // Re-read from DB when session.update() is called (e.g. after profile save)
-      if (trigger === "update" && token.userId) {
+      // Always re-read role and departmentId from the database so that
+      // changes (profile save, role promotion, admin edits) take effect
+      // without requiring a full sign-out/sign-in cycle. This runs on
+      // every session access but is a single indexed SELECT by PK.
+      if (token.userId) {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.userId as string },
           select: { role: true, departmentId: true },

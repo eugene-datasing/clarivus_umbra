@@ -38,11 +38,14 @@ export default function ProfileClient({ user, departments }: ProfileClientProps)
       const result = await updateProfile({ departmentId: departmentId || null });
       if (result.success) {
         setSaved(true);
-        // Refresh the JWT so the session picks up the new departmentId
-        await updateSession();
-        // Hard reload ensures all useSession() consumers (e.g. ProfileNudge)
-        // get fresh state. Profile save is infrequent so this is fine UX-wise.
-        window.location.reload();
+        // Refresh the JWT so the session picks up the new departmentId.
+        // If this fails (e.g. network hiccup), the hard navigation below
+        // will still pick up the updated DB state on the next page load.
+        try { await updateSession(); } catch { /* non-fatal */ }
+        // Navigate to dashboard so the user sees fresh state and the
+        // profile nudge disappears (hard navigation forces a fresh session read).
+        window.location.href = "/dashboard";
+        return; // Prevent finally from triggering a re-render during navigation
       } else {
         setError(result.error || "Failed to save.");
       }
