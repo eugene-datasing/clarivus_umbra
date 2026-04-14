@@ -230,10 +230,41 @@ export async function verifyAuditIntegrity(caseId?: string): Promise<{
   totalEntries: number;
   brokenAt?: number; // Index of first broken link
 }> {
-  const entries = await prisma.auditEntry.findMany({
-    where: caseId ? { caseId } : undefined,
-    orderBy: [{ timestamp: "asc" }, { id: "asc" }],
-  });
+  // Use raw SQL to read timestamps as text in the exact format used during
+  // hash computation.  The column is `timestamp(3) without time zone` and
+  // createAuditEntry writes `new Date(isoString)` — the stored value is the
+  // UTC time WITHOUT timezone info.  Prisma/pg would normally re-interpret
+  // it in the server's local timezone, producing a different ISO string on
+  // read.  By using `to_char` we bypass that and get the stored value back
+  // in the original format.
+  interface RawAuditRow {
+    id: string;
+    ts_iso: string;
+    userId: string | null;
+    type: string;
+    description: string;
+    target: string;
+    caseId: string | null;
+    integrityHash: string | null;
+    previousHash: string | null;
+  }
+
+  const entries: RawAuditRow[] = caseId
+    ? await prisma.$queryRaw`
+        SELECT id,
+               to_char(timestamp, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "ts_iso",
+               "userId", type, description, target, "caseId",
+               "integrityHash", "previousHash"
+        FROM audit_entries
+        WHERE "caseId" = ${caseId}
+        ORDER BY timestamp ASC, id ASC`
+    : await prisma.$queryRaw`
+        SELECT id,
+               to_char(timestamp, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "ts_iso",
+               "userId", type, description, target, "caseId",
+               "integrityHash", "previousHash"
+        FROM audit_entries
+        ORDER BY timestamp ASC, id ASC`;
 
   if (entries.length === 0) {
     return { valid: true, totalEntries: 0 };
@@ -242,11 +273,10 @@ export async function verifyAuditIntegrity(caseId?: string): Promise<{
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
 
-    if (i === 0) {
-      // First entry: accept whatever previousHash is stored (null for new
-      // per-case chains, or a non-null legacy hash from the old global chain).
-      // We only verify the integrityHash is correct given its own previousHash.
-    } else {
+    // Skip entries without an integrity hash (legacy seed data)
+    if (!entry.integrityHash) continue;
+
+    if (i > 0 && entries[i - 1].integrityHash) {
       const expectedPreviousHash = entries[i - 1].integrityHash;
       if ((entry.previousHash ?? null) !== (expectedPreviousHash ?? null)) {
         return { valid: false, totalEntries: entries.length, brokenAt: i };
@@ -256,7 +286,7 @@ export async function verifyAuditIntegrity(caseId?: string): Promise<{
     // Recompute the integrity hash and verify it matches the stored value
     const recomputedHash = computeIntegrityHash(
       entry.previousHash,
-      entry.timestamp.toISOString(),
+      entry.ts_iso,
       entry.userId,
       entry.type,
       entry.description,
