@@ -8,7 +8,8 @@
  * Follows the same PDF generation pattern as chain-of-custody.ts.
  */
 
-import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { embedFonts } from "./pdf-fonts";
 import { getCostRecoveryData, COST_RATES, type CostRecoveryData } from "@/lib/data/cost-recovery";
 import { getOrgBranding } from "@/lib/data/org-config";
 
@@ -154,9 +155,7 @@ export async function buildCostRecoveryReport(
   ]);
 
   const pdfDoc = await PDFDocument.create();
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const monoFont = await pdfDoc.embedFont(StandardFonts.Courier);
+  const { regular: font, bold: boldFont, mono: monoFont } = await embedFonts(pdfDoc);
 
   const ctx: DrawContext = {
     pdfDoc,

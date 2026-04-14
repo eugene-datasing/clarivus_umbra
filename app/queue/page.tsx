@@ -1,14 +1,16 @@
 import { getCases } from "@/lib/data/cases";
 import { getQueueDocuments } from "@/lib/data/documents";
 import { getProcessingMetrics } from "@/lib/data/processing-metrics";
+import { getLGOIMAConfig } from "@/lib/data/org-config";
 import QueueClient from "./queue-client";
 import ProcessingDashboard from "./processing-dashboard";
 
 export default async function QueuePage() {
-  const [queueDocuments, cases, metrics] = await Promise.all([
+  const [queueDocuments, cases, metrics, lgoimaConfig] = await Promise.all([
     getQueueDocuments(),
     getCases(),
     getProcessingMetrics(),
+    getLGOIMAConfig(),
   ]);
 
   return (
@@ -33,7 +35,12 @@ export default async function QueuePage() {
       />
 
       {/* Existing Review Queue */}
-      <QueueClient queueDocuments={queueDocuments} cases={cases} />
+      <QueueClient
+        queueDocuments={queueDocuments}
+        cases={cases}
+        amberWarningDays={lgoimaConfig.amberWarningDays}
+        redWarningDays={lgoimaConfig.redWarningDays}
+      />
     </div>
   );
 }

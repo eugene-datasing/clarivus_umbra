@@ -6,7 +6,8 @@
  * response packages.
  */
 
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { PDFDocument, rgb } from "pdf-lib";
+import { embedFonts } from "./pdf-fonts";
 import { prisma } from "@/lib/db/prisma";
 import { getGroundById } from "@/lib/lgoima-grounds";
 import { getOrgBranding } from "@/lib/data/org-config";
@@ -44,8 +45,7 @@ export async function buildWithholdingSchedule(
   });
 
   const pdfDoc = await PDFDocument.create();
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const { regular: font, bold: boldFont } = await embedFonts(pdfDoc);
   const pageWidth = 595;
   const pageHeight = 842;
   const margin = 50;

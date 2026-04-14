@@ -17,7 +17,8 @@
  *    formatting but guarantees output for every document.
  */
 
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { PDFDocument, rgb } from "pdf-lib";
+import { embedFonts } from "./pdf-fonts";
 import { prisma } from "@/lib/db/prisma";
 import { getStorage } from "@/lib/storage";
 import { getGroundById } from "@/lib/lgoima-grounds";
@@ -326,8 +327,7 @@ async function generateTextPdf(
   });
 
   const pdfDoc = await PDFDocument.create();
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const { regular: font, bold: boldFont } = await embedFonts(pdfDoc);
   const fontSize = 10;
   const lineHeight = 14;
   const margin = 50;

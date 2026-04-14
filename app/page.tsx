@@ -3,6 +3,7 @@ import { isActivated } from "@/lib/data/activation";
 import { auth } from "@/lib/auth/auth-options";
 import { getCases, getDashboardStats } from "@/lib/data/cases";
 import { getRecentActivity } from "@/lib/data/audit";
+import { getLGOIMAConfig } from "@/lib/data/org-config";
 import DashboardClient from "./dashboard-client";
 import LandingPage from "./landing-page";
 
@@ -23,11 +24,20 @@ export default async function RootPage() {
     redirect("/activate");
   }
 
-  const [cases, dashboardStats, recentActivity] = await Promise.all([
+  const [cases, dashboardStats, recentActivity, lgoimaConfig] = await Promise.all([
     getCases(),
     getDashboardStats(),
     getRecentActivity(10),
+    getLGOIMAConfig(),
   ]);
 
-  return <DashboardClient cases={cases} dashboardStats={dashboardStats} recentActivity={recentActivity} />;
+  return (
+    <DashboardClient
+      cases={cases}
+      dashboardStats={dashboardStats}
+      recentActivity={recentActivity}
+      amberWarningDays={lgoimaConfig.amberWarningDays}
+      redWarningDays={lgoimaConfig.redWarningDays}
+    />
+  );
 }

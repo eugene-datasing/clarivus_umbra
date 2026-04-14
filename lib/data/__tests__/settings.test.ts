@@ -156,14 +156,13 @@ describe("default values", () => {
   it("DEFAULT_WORKFLOW_CONFIG has expected fields", () => {
     expect(DEFAULT_WORKFLOW_CONFIG.seniorReview).toBe(true);
     expect(DEFAULT_WORKFLOW_CONFIG.finalApproval).toBe(true);
-    expect(typeof DEFAULT_WORKFLOW_CONFIG.amberWarningDays).toBe("number");
-    expect(typeof DEFAULT_WORKFLOW_CONFIG.redWarningDays).toBe("number");
   });
 
-  it("DEFAULT_LGOIMA_CONFIG has expected response days", () => {
+  it("DEFAULT_LGOIMA_CONFIG has expected fields", () => {
     expect(DEFAULT_LGOIMA_CONFIG.defaultResponseDays).toBe(20);
     expect(DEFAULT_LGOIMA_CONFIG.extensionMaxDays).toBe(40);
-    expect(DEFAULT_LGOIMA_CONFIG.escalationThresholdDays).toBe(15);
+    expect(DEFAULT_LGOIMA_CONFIG.amberWarningDays).toBe(10);
+    expect(DEFAULT_LGOIMA_CONFIG.redWarningDays).toBe(5);
   });
 
   it("DEFAULT_CONFIDENCE_THRESHOLDS has high > medium", () => {

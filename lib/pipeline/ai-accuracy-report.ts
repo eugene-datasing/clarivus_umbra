@@ -5,7 +5,8 @@
  * overall precision, entity breakdown, and confidence distributions.
  */
 
-import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { embedFonts } from "./pdf-fonts";
 import { computeAccuracyMetrics, type AIMetrics } from "@/lib/data/ai-metrics";
 import { getOrgBranding } from "@/lib/data/org-config";
 
@@ -70,9 +71,7 @@ export async function buildAIAccuracyReport(): Promise<AIAccuracyReportResult> {
   ]);
 
   const pdfDoc = await PDFDocument.create();
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const monoFont = await pdfDoc.embedFont(StandardFonts.Courier);
+  const { regular: font, bold: boldFont, mono: monoFont } = await embedFonts(pdfDoc);
 
   const ctx: DrawContext = {
     pdfDoc, font, boldFont, monoFont,

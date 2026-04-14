@@ -9,7 +9,8 @@
  * requirements for defensible disclosure workflows.
  */
 
-import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { embedFonts } from "./pdf-fonts";
 import { prisma } from "@/lib/db/prisma";
 import { getOrgBranding } from "@/lib/data/org-config";
 import { embedOrgLogo } from "./logo-helper";
@@ -121,9 +122,7 @@ export async function buildChainOfCustodyReport(
 
   // Create PDF
   const pdfDoc = await PDFDocument.create();
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const monoFont = await pdfDoc.embedFont(StandardFonts.Courier);
+  const { regular: font, bold: boldFont, mono: monoFont } = await embedFonts(pdfDoc);
 
   const ctx: DrawContext = {
     pdfDoc,

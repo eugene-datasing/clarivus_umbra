@@ -45,6 +45,8 @@ interface QueueGroup {
 interface QueueClientProps {
   queueDocuments: QueueDocument[];
   cases: CaseItem[];
+  amberWarningDays?: number;
+  redWarningDays?: number;
 }
 
 function buildQueueGroups(queueDocs: QueueDocument[], cases: CaseItem[]): QueueGroup[] {
@@ -74,7 +76,7 @@ function DocTypeIcon({ type }: { type: string }) {
   return <FileText className="w-4 h-4 text-red-500" />;
 }
 
-export default function QueueClient({ queueDocuments, cases }: QueueClientProps) {
+export default function QueueClient({ queueDocuments, cases, amberWarningDays, redWarningDays }: QueueClientProps) {
   const queueGroups = buildQueueGroups(queueDocuments, cases);
   const totalQueueCount = queueGroups.reduce((sum, g) => sum + g.docs.length, 0);
 
@@ -110,7 +112,7 @@ export default function QueueClient({ queueDocuments, cases }: QueueClientProps)
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className={cn("text-sm font-semibold", deadlineColor(days))}>
+                  <span className={cn("text-sm font-semibold", deadlineColor(days, { amberDays: amberWarningDays, redDays: redWarningDays }))}>
                     {days < 0
                       ? `${Math.abs(days)}d overdue`
                       : days === 0

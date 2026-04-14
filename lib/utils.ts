@@ -31,10 +31,26 @@ export function workingDaysRemaining(deadline: Date | string): number {
   return count;
 }
 
-export function deadlineColor(daysRemaining: number): string {
+export function addWorkingDays(start: Date, days: number): Date {
+  const result = new Date(start);
+  let added = 0;
+  while (added < days) {
+    result.setDate(result.getDate() + 1);
+    const day = result.getDay();
+    if (day !== 0 && day !== 6) added++;
+  }
+  return result;
+}
+
+export function deadlineColor(
+  daysRemaining: number,
+  opts?: { amberDays?: number; redDays?: number },
+): string {
+  const amber = opts?.amberDays ?? 10;
+  const red = opts?.redDays ?? 5;
   if (daysRemaining < 0) return "text-deadline-urgent bg-red-50";
-  if (daysRemaining <= 5) return "text-deadline-urgent";
-  if (daysRemaining <= 10) return "text-deadline-warning";
+  if (daysRemaining <= red) return "text-deadline-urgent";
+  if (daysRemaining <= amber) return "text-deadline-warning";
   return "text-deadline-safe";
 }
 

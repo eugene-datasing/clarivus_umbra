@@ -11,6 +11,7 @@ import {
 import {
   getOrgIdentity,
   getConfidenceThresholds,
+  getLGOIMAConfig,
 } from "@/lib/data/org-config";
 import { getAllDepartments } from "@/lib/data/departments";
 import { prisma } from "@/lib/db/prisma";
@@ -21,7 +22,7 @@ import { getBackupStatus, getBackupHistory } from "@/lib/data/backup-restore";
 import SettingsClient from "./settings-client";
 
 export default async function SettingsPage() {
-  const [detectionToggles, workflowConfig, notificationPrefs, orgIdentity, thresholds, departments, dbUsers] =
+  const [detectionToggles, workflowConfig, notificationPrefs, orgIdentity, thresholds, lgoimaConfig, departments, dbUsers] =
     await Promise.all([
       getSetting<DetectionToggle[]>(
         SETTING_KEYS.DETECTION_TOGGLES,
@@ -37,6 +38,7 @@ export default async function SettingsPage() {
       ),
       getOrgIdentity(),
       getConfidenceThresholds(),
+      getLGOIMAConfig(),
       getAllDepartments(),
       prisma.user.findMany({
         orderBy: { name: "asc" },
@@ -179,6 +181,7 @@ export default async function SettingsPage() {
     <SettingsClient
       initialDetectionToggles={detectionToggles}
       initialWorkflowConfig={workflowConfig}
+      initialLGOIMAConfig={lgoimaConfig}
       initialNotificationPrefs={notificationPrefs}
       orgIdentity={orgIdentity}
       thresholds={thresholds}

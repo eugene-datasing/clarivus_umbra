@@ -132,15 +132,11 @@ export async function getEnabledDetectionTypes(): Promise<Set<string>> {
 export interface WorkflowConfig {
   seniorReview: boolean;
   finalApproval: boolean;
-  amberWarningDays: number;
-  redWarningDays: number;
 }
 
 export const DEFAULT_WORKFLOW_CONFIG: WorkflowConfig = {
   seniorReview: true,
   finalApproval: true,
-  amberWarningDays: 10,
-  redWarningDays: 5,
 };
 
 export interface NotificationPref {
@@ -225,13 +221,15 @@ export const DEFAULT_ORG_OMBUDSMAN: OrgOmbudsman = {
 export interface LGOIMAConfig {
   defaultResponseDays: number;
   extensionMaxDays: number;
-  escalationThresholdDays: number;
+  amberWarningDays: number;
+  redWarningDays: number;
 }
 
 export const DEFAULT_LGOIMA_CONFIG: LGOIMAConfig = {
   defaultResponseDays: 20,
   extensionMaxDays: 40,
-  escalationThresholdDays: 15,
+  amberWarningDays: 10,
+  redWarningDays: 5,
 };
 
 export interface ConfidenceThresholds {

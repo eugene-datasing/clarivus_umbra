@@ -2,7 +2,8 @@
  * Audit trail PDF generator for LGOIMA export packages.
  */
 
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { PDFDocument, rgb } from "pdf-lib";
+import { embedFonts } from "./pdf-fonts";
 import { prisma } from "@/lib/db/prisma";
 import { getOrgBranding } from "@/lib/data/org-config";
 import { verifyAuditIntegrity } from "@/lib/data/audit";
@@ -20,9 +21,7 @@ export async function buildAuditTrailPdf(caseId: string): Promise<Uint8Array> {
   });
 
   const pdfDoc = await PDFDocument.create();
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const monoFont = await pdfDoc.embedFont(StandardFonts.Courier);
+  const { regular: font, bold: boldFont, mono: monoFont } = await embedFonts(pdfDoc);
   const pageWidth = 595;
   const pageHeight = 842;
   const margin = 50;

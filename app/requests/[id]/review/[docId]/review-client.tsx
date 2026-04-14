@@ -31,10 +31,13 @@ import {
   rejectDetection,
   revertDetection,
   applyGround,
+  changeDetectionType,
+  acceptRemainingDetections,
   submitForSeniorReview,
   signOffDocument,
   requestChanges,
 } from "@/lib/actions/detection-actions";
+import { getDefaultGroundForType } from "@/lib/detection-type-grounds";
 import { createManualDetection, deleteManualDetection } from "@/lib/actions/manual-detection-actions";
 import ManualDetectionPopover from "@/components/review/manual-detection-popover";
 import AILearningPanel from "@/components/review/ai-learning-panel";
@@ -66,6 +69,7 @@ type TabFilter = "all" | "personal" | "commercial" | "other";
 interface DetectionState {
   status: DetectionStatus;
   appliedGround: string | null;
+  type: string;
 }
 
 /** Shape returned by getDetectionsForDocument() */
@@ -118,7 +122,8 @@ function GroundSelector({
   onSelect: (detectionId: string, groundId: string) => void;
   onClose: () => void;
 }) {
-  const commonGrounds = lgoimaGrounds.filter((g) => g.common);
+  const s6Grounds = lgoimaGrounds.filter((g) => g.section === "s6");
+  const s7Grounds = lgoimaGrounds.filter((g) => g.section === "s7");
   return (
     <div className="absolute z-50 right-0 top-full mt-1 w-80 bg-surface-card border border-border rounded-card shadow-lg p-3">
       <div className="flex items-center justify-between mb-2">
@@ -136,8 +141,14 @@ function GroundSelector({
           </span>
         </div>
       )}
-      <div className="space-y-0.5 max-h-48 overflow-y-auto">
-        {commonGrounds.map((g) => (
+      <div className="space-y-0.5 max-h-72 overflow-y-auto">
+        {/* Section 6 — Conclusive */}
+        <div className="px-2 pt-2 pb-1">
+          <span className="text-[9px] font-bold text-txt-secondary uppercase tracking-widest">
+            Section 6 — Conclusive
+          </span>
+        </div>
+        {s6Grounds.map((g) => (
           <button
             key={g.id}
             onClick={() => {
@@ -154,10 +165,99 @@ function GroundSelector({
               {g.reference}
             </span>
             <span className="truncate">{g.label}</span>
+            {g.common && (
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-primary/50 shrink-0" title="Commonly used" />
+            )}
             {suggestedGround === g.id && (
               <Star size={10} className="text-amber-500 ml-auto shrink-0" />
             )}
             {appliedGround === g.id && (
+              <Check size={10} className="text-brand-primary ml-auto shrink-0" />
+            )}
+          </button>
+        ))}
+        {/* Section 7 — Public interest test */}
+        <div className="px-2 pt-3 pb-1">
+          <span className="text-[9px] font-bold text-txt-secondary uppercase tracking-widest">
+            Section 7 — Public interest test required
+          </span>
+        </div>
+        {s7Grounds.map((g) => (
+          <button
+            key={g.id}
+            onClick={() => {
+              onSelect(detectionId, g.id);
+              onClose();
+            }}
+            className={cn(
+              "w-full text-left px-2 py-1.5 rounded-input text-xs hover:bg-surface-hover transition-colors flex items-center gap-2",
+              appliedGround === g.id && "bg-brand-primary/10 text-brand-primary font-medium",
+              suggestedGround === g.id && appliedGround !== g.id && "bg-amber-50"
+            )}
+          >
+            <span className="font-mono text-[10px] text-txt-secondary w-16 shrink-0">
+              {g.reference}
+            </span>
+            <span className="truncate">{g.label}</span>
+            {g.common && (
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-primary/50 shrink-0" title="Commonly used" />
+            )}
+            {suggestedGround === g.id && (
+              <Star size={10} className="text-amber-500 ml-auto shrink-0" />
+            )}
+            {appliedGround === g.id && (
+              <Check size={10} className="text-brand-primary ml-auto shrink-0" />
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Type selector (inline)                                                     */
+/* -------------------------------------------------------------------------- */
+
+function TypeSelector({
+  detectionId,
+  currentType,
+  onSelect,
+  onClose,
+}: {
+  detectionId: string;
+  currentType: string;
+  onSelect: (detectionId: string, newType: string) => void;
+  onClose: () => void;
+}) {
+  const types = Object.entries(detectionTypeConfig) as [string, { label: string; color: string }][];
+  return (
+    <div className="absolute z-50 left-0 top-full mt-1 w-56 bg-surface-card border border-border rounded-card shadow-lg p-2">
+      <div className="flex items-center justify-between mb-1.5 px-1">
+        <span className="text-[10px] font-semibold text-txt-primary uppercase tracking-wide">
+          Change Type
+        </span>
+        <button onClick={onClose} className="text-txt-secondary hover:text-txt-primary">
+          <X size={12} />
+        </button>
+      </div>
+      <div className="space-y-0.5 max-h-64 overflow-y-auto">
+        {types.map(([key, conf]) => (
+          <button
+            key={key}
+            onClick={() => {
+              onSelect(detectionId, key);
+              onClose();
+            }}
+            className={cn(
+              "w-full text-left px-2 py-1.5 rounded-input text-xs hover:bg-surface-hover transition-colors flex items-center gap-2",
+              currentType === key && "bg-brand-primary/10 font-medium"
+            )}
+          >
+            <span className={cn("badge text-[9px] px-1.5 py-0.5", conf.color)}>
+              {conf.label}
+            </span>
+            {currentType === key && (
               <Check size={10} className="text-brand-primary ml-auto shrink-0" />
             )}
           </button>
@@ -191,7 +291,7 @@ export default function ReviewClient({
   const [detectionStates, setDetectionStates] = useState<Record<string, DetectionState>>(() => {
     const init: Record<string, DetectionState> = {};
     for (const d of detections) {
-      init[d.id] = { status: d.status as DetectionStatus, appliedGround: d.appliedGround };
+      init[d.id] = { status: d.status as DetectionStatus, appliedGround: d.appliedGround, type: d.type };
     }
     return init;
   });
@@ -203,7 +303,7 @@ export default function ReviewClient({
       const next = { ...prev };
       for (const d of detections) {
         if (!next[d.id]) {
-          next[d.id] = { status: d.status as DetectionStatus, appliedGround: d.appliedGround };
+          next[d.id] = { status: d.status as DetectionStatus, appliedGround: d.appliedGround, type: d.type };
           changed = true;
         }
       }
@@ -232,6 +332,13 @@ export default function ReviewClient({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyData, setHistoryData] = useState<DetectionHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Type selector state
+  const [typeSelectorId, setTypeSelectorId] = useState<string | null>(null);
+
+  // Accept remaining state
+  const [showAcceptRemainingConfirm, setShowAcceptRemainingConfirm] = useState(false);
+  const [acceptRemainingAlert, setAcceptRemainingAlert] = useState<{ skipped: number; texts: string[] } | null>(null);
 
   // Confidence popover for table badge
   const [confidencePopoverId, setConfidencePopoverId] = useState<string | null>(null);
@@ -556,6 +663,98 @@ export default function ReviewClient({
     },
     [router],
   );
+
+  // ----- Handle type change with auto-ground -----
+  const handleTypeChange = useCallback(
+    async (detectionId: string, newType: string) => {
+      const state = detectionStates[detectionId];
+      if (!state) return;
+
+      const oldType = state.type;
+      const oldDefaultGround = getDefaultGroundForType(oldType);
+      const newDefaultGround = getDefaultGroundForType(newType);
+
+      // Auto-update ground if it's empty or matches the old type's default
+      const shouldAutoGround =
+        !state.appliedGround || state.appliedGround === oldDefaultGround;
+      const newGround = shouldAutoGround && newDefaultGround ? newDefaultGround : state.appliedGround;
+
+      // Optimistic update
+      setDetectionStates((prev) => ({
+        ...prev,
+        [detectionId]: { ...prev[detectionId], type: newType, appliedGround: newGround },
+      }));
+      setTypeSelectorId(null);
+
+      try {
+        await changeDetectionType(detectionId, newType);
+        if (shouldAutoGround && newDefaultGround) {
+          await applyGround(detectionId, newDefaultGround);
+        }
+      } catch {
+        // Revert on error
+        setDetectionStates((prev) => ({
+          ...prev,
+          [detectionId]: { ...prev[detectionId], type: oldType, appliedGround: state.appliedGround },
+        }));
+      }
+    },
+    [detectionStates],
+  );
+
+  // ----- Handle accept remaining -----
+  const handleAcceptRemaining = useCallback(async () => {
+    setShowAcceptRemainingConfirm(false);
+    setAcceptRemainingAlert(null);
+
+    // Save previous states for rollback
+    const prevStates = { ...detectionStates };
+
+    // Optimistic update: accept all pending, fill in grounds from suggested
+    setDetectionStates((prev) => {
+      const next = { ...prev };
+      for (const d of detections) {
+        const state = next[d.id];
+        if (state?.status === "pending") {
+          const ground = state.appliedGround || (d.suggestedGround ? d.suggestedGround : null);
+          if (ground) {
+            next[d.id] = { ...state, status: "accepted", appliedGround: ground };
+          }
+        }
+      }
+      return next;
+    });
+
+    try {
+      const result = await acceptRemainingDetections(docId);
+      if (result.skipped > 0) {
+        const skippedTexts = detections
+          .filter((d) => result.skippedIds.includes(d.id))
+          .map((d) => d.text.length > 50 ? d.text.slice(0, 50) + "..." : d.text);
+        setAcceptRemainingAlert({ skipped: result.skipped, texts: skippedTexts });
+
+        // Revert skipped detections back to pending
+        setDetectionStates((prev) => {
+          const next = { ...prev };
+          for (const id of result.skippedIds) {
+            if (prevStates[id]) {
+              next[id] = prevStates[id];
+            }
+          }
+          return next;
+        });
+
+        // Scroll to first skipped detection
+        if (result.skippedIds[0]) {
+          const row = detectionRowRefs.current[result.skippedIds[0]];
+          if (row) row.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }
+    } catch {
+      // Revert all on error
+      setDetectionStates(prevStates);
+    }
+  }, [detectionStates, detections, docId]);
 
   // ----- Focus management: move focus to next detection after action -----
   const focusNextDetection = useCallback(
@@ -995,6 +1194,47 @@ export default function ReviewClient({
               {stats.pending}
             </span>
           </div>
+          {/* Accept Remaining */}
+          {stats.pending > 0 && (docStatus === "in-review" || docStatus === "ready") && (
+            <div className="relative">
+              <button
+                onClick={() => setShowAcceptRemainingConfirm((v) => !v)}
+                className="btn-ghost flex items-center gap-1 text-xs border border-brand-primary/30 text-brand-primary hover:bg-brand-primary/5"
+              >
+                <Check size={13} />
+                <span className="hidden sm:inline">Accept Remaining</span>
+                <span className="px-1.5 py-0.5 rounded-full bg-brand-primary/10 text-[10px] font-semibold">
+                  {stats.pending}
+                </span>
+              </button>
+              {showAcceptRemainingConfirm && (
+                <div className="absolute right-0 top-full mt-2 w-80 bg-surface-card border border-border rounded-card shadow-lg p-4 z-50">
+                  <div className="flex items-start gap-2 mb-3">
+                    <Shield size={16} className="text-brand-primary mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium text-txt-primary">Accept Remaining</p>
+                      <p className="text-xs text-txt-secondary mt-1">
+                        Accept all {stats.pending} remaining pending detection(s) with their current grounds?
+                        Detections without an assigned ground will use the AI-suggested ground.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => setShowAcceptRemainingConfirm(false)} className="btn-ghost text-xs">
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleAcceptRemaining}
+                      className="btn-primary text-xs"
+                    >
+                      Accept All
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="h-5 w-px bg-border shrink-0" />
           {/* Status-aware action buttons */}
           {(docStatus === "in-review" || docStatus === "ready") && (
             <div className="relative">
@@ -1153,6 +1393,27 @@ export default function ReviewClient({
           )}
         </div>
       </header>
+
+      {/* ===== Accept Remaining alert banner ===== */}
+      {acceptRemainingAlert && (
+        <div className="shrink-0 bg-amber-50 border-b border-amber-200 px-5 py-2 flex items-start gap-2">
+          <AlertCircle size={14} className="text-amber-600 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="text-xs text-amber-800 font-medium">
+              {acceptRemainingAlert.skipped} detection(s) skipped — no ground assigned or suggested
+            </p>
+            <p className="text-[10px] text-amber-700 mt-0.5">
+              {acceptRemainingAlert.texts.join(", ")}
+            </p>
+          </div>
+          <button
+            onClick={() => setAcceptRemainingAlert(null)}
+            className="text-amber-600 hover:text-amber-800 shrink-0"
+          >
+            <X size={13} />
+          </button>
+        </div>
+      )}
 
       {/* ===== MAIN CONTENT: Split Panels + Bottom Detection Table ===== */}
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -1351,7 +1612,8 @@ export default function ReviewClient({
                   const isSelected = selectedDetectionId === det.id;
                   const isAccepted = state?.status === "accepted";
                   const isRejected = state?.status === "rejected";
-                  const typeConf = detectionTypeConfig[det.type as keyof typeof detectionTypeConfig];
+                  const effectiveType = state?.type ?? det.type;
+                  const typeConf = detectionTypeConfig[effectiveType as keyof typeof detectionTypeConfig];
 
                   return (
                     <tr
@@ -1361,7 +1623,7 @@ export default function ReviewClient({
                       tabIndex={0}
                       role="option"
                       aria-selected={isSelected}
-                      aria-label={`Detection ${idx + 1}: ${det.text.length > 40 ? det.text.slice(0, 40) + "..." : det.text}, ${typeConf?.label ?? det.type}, ${det.confidence}% confidence, ${state?.status ?? "pending"}`}
+                      aria-label={`Detection ${idx + 1}: ${det.text.length > 40 ? det.text.slice(0, 40) + "..." : det.text}, ${typeConf?.label ?? effectiveType}, ${det.confidence}% confidence, ${state?.status ?? "pending"}`}
                       className={cn(
                         "border-b border-border/50 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-primary/60",
                         isSelected
@@ -1401,9 +1663,26 @@ export default function ReviewClient({
 
                       {/* Type */}
                       <td className="px-2 py-2">
-                        <span className={cn("badge text-[10px]", typeConf?.color ?? "bg-gray-100 text-gray-700")}>
-                          {typeConf?.label ?? det.type}
-                        </span>
+                        <div className="relative" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => setTypeSelectorId(typeSelectorId === det.id ? null : det.id)}
+                            className={cn(
+                              "badge text-[10px] cursor-pointer hover:ring-1 hover:ring-brand-primary/30 transition-all",
+                              typeConf?.color ?? "bg-gray-100 text-gray-700"
+                            )}
+                            title="Click to change type"
+                          >
+                            {typeConf?.label ?? effectiveType}
+                          </button>
+                          {typeSelectorId === det.id && (
+                            <TypeSelector
+                              detectionId={det.id}
+                              currentType={effectiveType}
+                              onSelect={handleTypeChange}
+                              onClose={() => setTypeSelectorId(null)}
+                            />
+                          )}
+                        </div>
                       </td>
 
                       {/* Confidence */}
@@ -1710,7 +1989,8 @@ export default function ReviewClient({
       {selectedDetectionId && (() => {
         const det = detectionById.get(selectedDetectionId);
         if (!det) return null;
-        const typeConf = detectionTypeConfig[det.type as keyof typeof detectionTypeConfig];
+        const detailType = detectionStates[det.id]?.type ?? det.type;
+        const typeConf = detectionTypeConfig[detailType as keyof typeof detectionTypeConfig];
         return (
           <div style={{ bottom: panelHeight + 16 }} className="fixed right-6 w-80 bg-surface-card border border-border rounded-card shadow-lg p-4 z-40 max-h-[60vh] overflow-y-auto">
             {/* Header */}

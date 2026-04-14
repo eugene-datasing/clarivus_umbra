@@ -29,10 +29,12 @@ import {
   saveDetectionToggles,
   saveWorkflowConfig,
   saveNotificationPrefs,
+  saveLGOIMAWarningThresholds,
 } from "@/lib/actions/settings-actions";
 import type {
   DetectionToggle,
   WorkflowConfig,
+  LGOIMAConfig,
   NotificationPref,
   OrgIdentity,
   ConfidenceThresholds,
@@ -145,6 +147,7 @@ interface SettingsUser {
 interface SettingsClientProps {
   initialDetectionToggles: DetectionToggle[];
   initialWorkflowConfig: WorkflowConfig;
+  initialLGOIMAConfig: LGOIMAConfig;
   initialNotificationPrefs: NotificationPref[];
   orgIdentity: OrgIdentity;
   thresholds: ConfidenceThresholds;
@@ -164,6 +167,7 @@ interface SettingsClientProps {
 export default function SettingsClient({
   initialDetectionToggles,
   initialWorkflowConfig,
+  initialLGOIMAConfig,
   initialNotificationPrefs,
   orgIdentity,
   thresholds,
@@ -186,8 +190,8 @@ export default function SettingsClient({
   // Workflow state
   const [seniorReview, setSeniorReview] = useState(initialWorkflowConfig.seniorReview);
   const [finalApproval, setFinalApproval] = useState(initialWorkflowConfig.finalApproval);
-  const [amberDays, setAmberDays] = useState(initialWorkflowConfig.amberWarningDays);
-  const [redDays, setRedDays] = useState(initialWorkflowConfig.redWarningDays);
+  const [amberDays, setAmberDays] = useState(initialLGOIMAConfig.amberWarningDays);
+  const [redDays, setRedDays] = useState(initialLGOIMAConfig.redWarningDays);
   const [notifications, setNotifications] = useState(initialNotificationPrefs);
   const [workflowDirty, setWorkflowDirty] = useState(false);
   const [workflowSaveStatus, setWorkflowSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -244,9 +248,8 @@ export default function SettingsClient({
         await saveWorkflowConfig({
           seniorReview,
           finalApproval,
-          amberWarningDays: amberDays,
-          redWarningDays: redDays,
         });
+        await saveLGOIMAWarningThresholds(amberDays, redDays);
         await saveNotificationPrefs(notifications);
         setWorkflowSaveStatus("saved");
         setWorkflowDirty(false);

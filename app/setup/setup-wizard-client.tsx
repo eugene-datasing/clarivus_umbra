@@ -971,21 +971,45 @@ export default function SetupWizardClient({
 
                       <div className="card bg-surface-bg">
                         <label className="block text-sm font-medium text-txt-primary mb-1.5">
-                          Escalation Threshold Days
+                          Amber Warning Days
                         </label>
                         <p className="text-xs text-txt-secondary mb-2">
-                          Number of working days remaining before automatic escalation alerts are triggered.
+                          Number of working days remaining before amber warning indicators appear on cases.
                         </p>
                         <input
                           type="number"
                           className="input-field w-32"
-                          value={lgoima.escalationThresholdDays}
+                          value={lgoima.amberWarningDays}
                           onChange={(e) =>
-                            setLgoima({ ...lgoima, escalationThresholdDays: Number(e.target.value) })
+                            setLgoima({ ...lgoima, amberWarningDays: Number(e.target.value) })
                           }
-                          min={1}
+                          min={2}
                           max={30}
                         />
+                      </div>
+
+                      <div className="card bg-surface-bg">
+                        <label className="block text-sm font-medium text-txt-primary mb-1.5">
+                          Red Warning Days
+                        </label>
+                        <p className="text-xs text-txt-secondary mb-2">
+                          Number of working days remaining before red (urgent) warning indicators appear on cases.
+                        </p>
+                        <input
+                          type="number"
+                          className="input-field w-32"
+                          value={lgoima.redWarningDays}
+                          onChange={(e) =>
+                            setLgoima({ ...lgoima, redWarningDays: Number(e.target.value) })
+                          }
+                          min={1}
+                          max={29}
+                        />
+                        {lgoima.amberWarningDays <= lgoima.redWarningDays && (
+                          <p className="text-xs text-red-600 mt-2">
+                            Amber warning days must be greater than red warning days.
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1434,8 +1458,12 @@ export default function SetupWizardClient({
                             <dd className="font-medium text-txt-primary">{lgoima.extensionMaxDays} days</dd>
                           </div>
                           <div>
-                            <dt className="text-txt-secondary">Escalation Threshold</dt>
-                            <dd className="font-medium text-txt-primary">{lgoima.escalationThresholdDays} days</dd>
+                            <dt className="text-txt-secondary">Amber Warning</dt>
+                            <dd className="font-medium text-txt-primary">{lgoima.amberWarningDays} days</dd>
+                          </div>
+                          <div>
+                            <dt className="text-txt-secondary">Red Warning</dt>
+                            <dd className="font-medium text-txt-primary">{lgoima.redWarningDays} days</dd>
                           </div>
                         </dl>
                       </div>

@@ -41,9 +41,11 @@ interface DashboardClientProps {
   cases: CaseItem[];
   dashboardStats: DashboardStats;
   recentActivity: ActivityItem[];
+  amberWarningDays?: number;
+  redWarningDays?: number;
 }
 
-export default function DashboardClient({ cases, dashboardStats, recentActivity }: DashboardClientProps) {
+export default function DashboardClient({ cases, dashboardStats, recentActivity, amberWarningDays, redWarningDays }: DashboardClientProps) {
   // Compute dynamic stat cards from real data
   const activeCases = cases.filter((r) => r.status !== "released" && r.status !== "draft");
   const pendingDocs = cases
@@ -123,7 +125,7 @@ export default function DashboardClient({ cases, dashboardStats, recentActivity 
                       </div>
                     </div>
                     <div className="text-right ml-4">
-                      <div className={cn("text-sm font-semibold", deadlineColor(days))}>
+                      <div className={cn("text-sm font-semibold", deadlineColor(days, { amberDays: amberWarningDays, redDays: redWarningDays }))}>
                         {days < 0 ? Math.abs(days) + "d overdue" : days + "d remaining"}
                       </div>
                       <div className="text-xs text-txt-secondary">{formatDate(req.deadline)}</div>

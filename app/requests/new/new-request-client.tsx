@@ -5,24 +5,16 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronRight, CheckCircle, Loader } from "lucide-react";
 import { createCase } from "@/lib/actions/case-actions";
-
-function addWorkingDays(start: Date, days: number): Date {
-  const result = new Date(start);
-  let added = 0;
-  while (added < days) {
-    result.setDate(result.getDate() + 1);
-    const day = result.getDay();
-    if (day !== 0 && day !== 6) added++;
-  }
-  return result;
-}
+import { addWorkingDays } from "@/lib/utils";
 
 export default function NewRequestClient({
   nextReference,
   departments,
+  defaultResponseDays = 20,
 }: {
   nextReference: string;
   departments: string[];
+  defaultResponseDays?: number;
 }) {
   const router = useRouter();
   const today = new Date().toISOString().split("T")[0];
@@ -36,7 +28,7 @@ export default function NewRequestClient({
 
   const statutoryDeadline = addWorkingDays(
     new Date(dateReceived || today),
-    20
+    defaultResponseDays,
   );
   const deadlineFormatted = statutoryDeadline.toLocaleDateString("en-NZ", {
     day: "numeric",

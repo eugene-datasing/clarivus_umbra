@@ -44,7 +44,7 @@ export default function ProfileClient({ user, departments }: ProfileClientProps)
         try { await updateSession(); } catch { /* non-fatal */ }
         // Navigate to dashboard so the user sees fresh state and the
         // profile nudge disappears (hard navigation forces a fresh session read).
-        window.location.href = "/dashboard";
+        window.location.href = "/";
         return; // Prevent finally from triggering a re-render during navigation
       } else {
         setError(result.error || "Failed to save.");

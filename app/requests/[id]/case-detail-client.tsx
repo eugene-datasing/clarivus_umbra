@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { statusConfig, docTypeConfig, type RequestStatus, type DocType } from "@/lib/db/mappers";
-import { workingDaysRemaining, deadlineColor, formatDate, cn, confidenceColor } from "@/lib/utils";
+import { workingDaysRemaining, deadlineColor, formatDate, addWorkingDays, cn, confidenceColor } from "@/lib/utils";
 import { bulkExcludeDocuments, deleteDocument, bulkAssignReviewer } from "@/lib/actions/document-actions";
+import { extendDeadline } from "@/lib/actions/case-actions";
 import {
   FileText, Mail, Search, Filter, Upload, CheckCircle,
-  XCircle, ChevronRight, ArrowRight, Trash2, UserPlus,
+  XCircle, ChevronRight, ArrowRight, Trash2, UserPlus, CalendarPlus, Loader2,
 } from "lucide-react";
 
 const docStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
@@ -68,9 +69,12 @@ export interface DocumentRow {
 interface CaseDetailClientProps {
   caseData: CaseData;
   documents: DocumentRow[];
+  amberWarningDays?: number;
+  redWarningDays?: number;
+  extensionMaxDays?: number;
 }
 
-export default function CaseDetailClient({ caseData, documents }: CaseDetailClientProps) {
+export default function CaseDetailClient({ caseData, documents, amberWarningDays, redWarningDays, extensionMaxDays }: CaseDetailClientProps) {
   const router = useRouter();
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
@@ -79,6 +83,11 @@ export default function CaseDetailClient({ caseData, documents }: CaseDetailClie
   const [isDeleting, setIsDeleting] = useState(false);
   const [showAssign, setShowAssign] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
+  const [showExtendModal, setShowExtendModal] = useState(false);
+  const [extendDate, setExtendDate] = useState("");
+  const [extendReason, setExtendReason] = useState("");
+  const [extendError, setExtendError] = useState("");
+  const [isPendingExtend, startExtendTransition] = useTransition();
 
   const request = caseData;
   const cfg = statusConfig[request.status as RequestStatus];
@@ -150,14 +159,28 @@ export default function CaseDetailClient({ caseData, documents }: CaseDetailClie
             </div>
           </div>
           <div className="text-right ml-6 flex-shrink-0">
-            <div className={cn("text-lg font-bold", deadlineColor(days))}>
+            <div className={cn("text-lg font-bold", deadlineColor(days, { amberDays: amberWarningDays, redDays: redWarningDays }))}>
               {days < 0
                 ? `${Math.abs(days)}d overdue`
                 : days === 0
                 ? "Due today"
                 : `${days}d remaining`}
             </div>
-            <div className="text-sm text-txt-secondary">{formatDate(request.deadline)}</div>
+            <div className="flex items-center justify-end gap-2">
+              <div className="text-sm text-txt-secondary">{formatDate(request.deadline)}</div>
+              <button
+                className="btn-ghost text-xs flex items-center gap-1"
+                onClick={() => {
+                  setExtendDate("");
+                  setExtendReason("");
+                  setExtendError("");
+                  setShowExtendModal(true);
+                }}
+              >
+                <CalendarPlus className="w-3.5 h-3.5" />
+                Extend
+              </button>
+            </div>
           </div>
         </div>
         {/* Progress bar */}
@@ -449,6 +472,89 @@ export default function CaseDetailClient({ caseData, documents }: CaseDetailClie
           </button>
         </div>
       )}
+
+      {/* Extend Deadline Modal */}
+      {showExtendModal && (() => {
+        const currentDeadline = new Date(request.deadline);
+        const maxExtDate = addWorkingDays(currentDeadline, extensionMaxDays ?? 40);
+        const minDate = new Date(currentDeadline);
+        minDate.setDate(minDate.getDate() + 1);
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={() => setShowExtendModal(false)}>
+            <div className="bg-white rounded-card shadow-xl p-6 w-[420px]" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-lg font-heading font-bold text-txt-primary mb-3">Extend Deadline</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-txt-primary block mb-1">Current Deadline</label>
+                  <div className="text-sm text-txt-secondary">{formatDate(request.deadline)}</div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-txt-primary block mb-1">Maximum Extension Date</label>
+                  <div className="text-sm text-txt-secondary">{formatDate(maxExtDate)}</div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-txt-primary block mb-1">New Deadline</label>
+                  <input
+                    type="date"
+                    className="input-field w-full"
+                    value={extendDate}
+                    min={minDate.toISOString().split("T")[0]}
+                    max={maxExtDate.toISOString().split("T")[0]}
+                    onChange={(e) => setExtendDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-txt-primary block mb-1">Reason for Extension</label>
+                  <textarea
+                    className="input-field w-full h-24 resize-none"
+                    placeholder="Reason for extension under s 14 LGOIMA..."
+                    value={extendReason}
+                    onChange={(e) => setExtendReason(e.target.value)}
+                  />
+                </div>
+                <p className="text-xs text-txt-secondary">
+                  Under s 14 LGOIMA, extensions require notification to the requester with reasons.
+                </p>
+                {extendError && (
+                  <p className="text-xs text-red-600">{extendError}</p>
+                )}
+                <div className="flex items-center gap-2 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowExtendModal(false)}
+                    className="btn-secondary text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    disabled={isPendingExtend || !extendDate || !extendReason.trim()}
+                    className="btn-primary text-sm flex items-center gap-1.5"
+                    onClick={() => {
+                      setExtendError("");
+                      startExtendTransition(async () => {
+                        try {
+                          await extendDeadline({
+                            caseId: request.id,
+                            newDeadline: extendDate,
+                            reason: extendReason.trim(),
+                          });
+                          setShowExtendModal(false);
+                          router.refresh();
+                        } catch (err) {
+                          setExtendError(err instanceof Error ? err.message : "Extension failed");
+                        }
+                      });
+                    }}
+                  >
+                    {isPendingExtend && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    {isPendingExtend ? "Extending..." : "Extend Deadline"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Assign Reviewer Modal */}
       {showAssign && (

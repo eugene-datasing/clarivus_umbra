@@ -15,6 +15,8 @@ import {
   confidenceThresholdSchema,
   bulkApplyGroundToSimilarSchema,
   bulkApplyGroundByTypeSchema,
+  changeDetectionTypeSchema,
+  acceptRemainingSchema,
 } from "@/lib/validation/schemas";
 import { authorizeForCase } from "@/lib/auth/authorize";
 import { recomputeCaseStatus } from "@/lib/data/cases";
@@ -746,4 +748,123 @@ export async function bulkApplyGroundByType(
   });
 
   return { updatedCount: detections.length };
+}
+
+// ---------------------------------------------------------------------------
+// Change detection type
+// ---------------------------------------------------------------------------
+
+/**
+ * Change the type of a single detection. Used when a reviewer reclassifies
+ * a detection (e.g. from "phone" to "ird").
+ */
+export async function changeDetectionType(
+  detectionId: string,
+  newType: string,
+): Promise<{ success: true }> {
+  const validated = changeDetectionTypeSchema.parse({ detectionId, newType });
+
+  const user = await requireUser();
+  await authorizeForDetection(user, validated.detectionId);
+
+  const detection = await prisma.detection.findUnique({
+    where: { id: validated.detectionId },
+    select: { type: true },
+  });
+  if (!detection) throw new Error("Detection not found");
+
+  await recordHistory(
+    validated.detectionId,
+    "type",
+    detection.type,
+    validated.newType,
+    user.name,
+  );
+
+  await prisma.detection.update({
+    where: { id: validated.detectionId },
+    data: { type: validated.newType },
+  });
+
+  return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// Accept remaining detections on a document
+// ---------------------------------------------------------------------------
+
+/**
+ * Bulk-accept all pending detections on a document. Detections without any
+ * ground (neither applied nor suggested) are skipped.
+ */
+export async function acceptRemainingDetections(
+  documentId: string,
+): Promise<{ accepted: number; skipped: number; skippedIds: string[] }> {
+  const validated = acceptRemainingSchema.parse({ documentId });
+
+  const user = await requireUser();
+  await authorizeForDocument(user, validated.documentId);
+
+  const doc = await prisma.document.findUnique({
+    where: { id: validated.documentId },
+    select: { name: true, caseId: true },
+  });
+  if (!doc) throw new Error("Document not found");
+
+  // Fetch all pending detections for this document
+  const pending = await prisma.detection.findMany({
+    where: { documentId: validated.documentId, status: "pending" },
+    select: {
+      id: true,
+      suggestedGround: true,
+      appliedGround: true,
+      type: true,
+      text: true,
+    },
+  });
+
+  const toAccept: { id: string; ground: string }[] = [];
+  const skippedIds: string[] = [];
+
+  for (const det of pending) {
+    const ground =
+      det.appliedGround ||
+      (det.suggestedGround ? normaliseGroundToId(det.suggestedGround) : null);
+
+    if (ground) {
+      toAccept.push({ id: det.id, ground });
+    } else {
+      skippedIds.push(det.id);
+    }
+  }
+
+  // Update each accepted detection with its specific ground
+  for (const item of toAccept) {
+    await prisma.detection.update({
+      where: { id: item.id },
+      data: {
+        status: "accepted",
+        appliedGround: item.ground,
+        reviewedAt: new Date(),
+      },
+    });
+  }
+
+  await recomputeDocumentStatus(validated.documentId);
+
+  await createAuditEntry({
+    userName: user.name,
+    userRole: user.role,
+    type: "review",
+    description: `Bulk accepted ${toAccept.length} remaining detection(s)${skippedIds.length > 0 ? `, skipped ${skippedIds.length} without ground` : ""}`,
+    target: doc.name,
+    caseId: doc.caseId,
+    detail: `Accepted: ${toAccept.length}, Skipped: ${skippedIds.length}`,
+  });
+
+  return {
+    accepted: toAccept.length,
+    skipped: skippedIds.length,
+    skippedIds,
+  };
 }

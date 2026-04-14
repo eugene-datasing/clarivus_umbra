@@ -52,6 +52,31 @@ describe("detectPatterns", () => {
       const ird = matches.find((m) => m.type === "ird");
       expect(ird?.confidence).toBe(95);
     });
+
+    it("does not match NZ mobile number 021 544 908 as IRD", () => {
+      const pages = [makePage(1, "Mobile: 021 544 908")];
+      const matches = detectPatterns(pages);
+      expect(matches.some((m) => m.type === "ird")).toBe(false);
+      expect(matches.some((m) => m.type === "phone")).toBe(true);
+    });
+
+    it("does not match 027 prefix as IRD", () => {
+      const pages = [makePage(1, "Phone: 027-123-456")];
+      const matches = detectPatterns(pages);
+      expect(matches.some((m) => m.type === "ird")).toBe(false);
+    });
+
+    it("does not match 022 prefix as IRD", () => {
+      const pages = [makePage(1, "Call 022 456 789")];
+      const matches = detectPatterns(pages);
+      expect(matches.some((m) => m.type === "ird")).toBe(false);
+    });
+
+    it("still matches non-02x 3-digit prefixed IRDs", () => {
+      const pages = [makePage(1, "IRD: 123-456-789")];
+      const matches = detectPatterns(pages);
+      expect(matches.some((m) => m.type === "ird")).toBe(true);
+    });
   });
 
   // -----------------------------------------------------------------------

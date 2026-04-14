@@ -26,9 +26,11 @@ interface CasesListClientProps {
   cases: CaseRow[];
   totalCount: number;
   activeCount: number;
+  amberWarningDays?: number;
+  redWarningDays?: number;
 }
 
-export default function CasesListClient({ cases, totalCount, activeCount }: CasesListClientProps) {
+export default function CasesListClient({ cases, totalCount, activeCount, amberWarningDays, redWarningDays }: CasesListClientProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [filterStatus, setFilterStatus] = useState("");
@@ -175,7 +177,7 @@ export default function CasesListClient({ cases, totalCount, activeCount }: Case
                   </td>
                   <td className="px-4 py-3">
                     <Link href={`/requests/${req.id}`} className="block">
-                      <div className={cn("font-medium text-xs", deadlineColor(days))}>
+                      <div className={cn("font-medium text-xs", deadlineColor(days, { amberDays: amberWarningDays, redDays: redWarningDays }))}>
                         {days < 0
                           ? `${Math.abs(days)}d overdue`
                           : days === 0

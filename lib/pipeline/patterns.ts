@@ -47,7 +47,10 @@ interface PatternDef {
 const PATTERNS: PatternDef[] = [
   {
     type: "ird",
-    regex: /\b\d{2,3}[-\s]?\d{3}[-\s]?\d{3}\b/g,
+    // 8-digit (XX-XXX-XXX) or 9-digit (XXX-XXX-XXX) IRD numbers.
+    // Negative lookahead excludes NZ mobile prefixes (02x) which overlap
+    // in 3-3-3 format (e.g. 021 544 908 is a cellphone, not an IRD).
+    regex: /\b(?!02[0-9][-\s]?\d{3}[-\s]?\d{3}\b)\d{2,3}[-\s]?\d{3}[-\s]?\d{3}\b/g,
     suggestedGround: "s7_2a",
     reasoning:
       "Matches an NZ IRD number pattern. IRD numbers are sensitive personal identifiers that should be withheld to protect individual privacy.",
@@ -130,6 +133,10 @@ export function detectPatterns(
   for (const page of pages) {
     if (!page.text) continue;
 
+    // Track occupied character ranges on this page so that the same text
+    // span cannot be claimed by multiple pattern types.
+    const occupied: { start: number; end: number }[] = [];
+
     for (const pattern of activePatterns) {
       // Use matchAll to iterate over all regex matches in the page text
       const allMatches = page.text.matchAll(pattern.regex);
@@ -140,6 +147,16 @@ export function detectPatterns(
         // Skip very short or obviously invalid matches
         if (matchedText.length < 3) continue;
 
+        const start = m.index ?? 0;
+        const end = start + m[0].length;
+
+        // Skip if this span overlaps with a match from an earlier pattern
+        const overlaps = occupied.some(
+          (r) => start < r.end && end > r.start,
+        );
+        if (overlaps) continue;
+
+        occupied.push({ start, end });
         matches.push({
           type: pattern.type,
           text: matchedText,
@@ -147,7 +164,7 @@ export function detectPatterns(
           page: page.pageNumber,
           suggestedGround: pattern.suggestedGround,
           reasoning: pattern.reasoning,
-          offset: m.index ?? 0,
+          offset: start,
         });
       }
     }

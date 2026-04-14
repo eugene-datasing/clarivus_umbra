@@ -2,7 +2,8 @@
  * Cover letter PDF generator for LGOIMA responses.
  */
 
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { PDFDocument, rgb } from "pdf-lib";
+import { embedFonts } from "./pdf-fonts";
 import { prisma } from "@/lib/db/prisma";
 import { getOrgIdentity, getOrgSignatory, getOrgOmbudsman } from "@/lib/data/org-config";
 import { embedOrgLogo } from "./logo-helper";
@@ -44,8 +45,7 @@ export async function buildCoverLetterPdf(
   const orgMaoriName = orgIdentity.maoriName || "Te Kaunihera-a-Rohe o Ngamotu";
 
   const pdfDoc = await PDFDocument.create();
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const { regular: font, bold: boldFont } = await embedFonts(pdfDoc);
   const pageWidth = 595;
   const pageHeight = 842;
   const margin = 60;

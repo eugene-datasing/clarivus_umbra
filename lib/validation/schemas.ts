@@ -52,6 +52,12 @@ export const createCaseSchema = z.object({
   description: z.string().min(1, "Description is required").max(10000),
 });
 
+export const extendDeadlineSchema = z.object({
+  caseId: z.string().min(1, "Case ID is required"),
+  newDeadline: z.string().refine((s) => !isNaN(Date.parse(s)), "Invalid date"),
+  reason: z.string().min(1, "Extension reason is required under s 14 LGOIMA").max(2000),
+});
+
 // ---------------------------------------------------------------------------
 // Detection review
 // ---------------------------------------------------------------------------
@@ -88,6 +94,15 @@ export const bulkApplyGroundToSimilarSchema = z.object({
   entityText: z.string().min(1, "Entity text is required").max(5000),
   ground: groundIdSchema,
   action: z.enum(["accept", "reject"]),
+});
+
+export const changeDetectionTypeSchema = z.object({
+  detectionId: detectionIdSchema,
+  newType: z.string().min(1, "Detection type is required").max(30),
+});
+
+export const acceptRemainingSchema = z.object({
+  documentId: z.string().min(1, "Document ID is required"),
 });
 
 export const bulkApplyGroundByTypeSchema = z.object({
