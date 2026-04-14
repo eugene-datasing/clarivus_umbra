@@ -114,10 +114,13 @@ const specs: EnvVarSpec[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Validate on import
+// Validate on import (skip during Next.js production build — env vars are
+// injected at runtime via Azure App Service / Key Vault, not at build time)
 // ---------------------------------------------------------------------------
 
-validateEnv(specs);
+if (process.env.NEXT_PHASE !== "phase-production-build") {
+  validateEnv(specs);
+}
 
 // ---------------------------------------------------------------------------
 // Typed env object
