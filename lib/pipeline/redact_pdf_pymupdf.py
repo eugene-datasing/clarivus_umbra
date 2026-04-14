@@ -70,86 +70,62 @@ def redact_by_coordinates(doc, redactions):
 
 
 def redact_by_text_search(doc, redactions):
-    """Apply redactions by searching for text strings in each page."""
+    """Apply redactions by searching for text strings on every page.
+
+    Each unique (text, label) pair is searched across ALL pages of the PDF
+    and every occurrence found is redacted.  The declared page number from
+    the detection database is intentionally ignored because:
+      - DOCX files processed via Mammoth always report page=1
+      - After LibreOffice conversion the content may reflow across pages
+      - Searching everywhere is safe: if the text isn't on a page, search_for
+        simply returns an empty list
+    """
     page_count = len(doc)
     applied = 0
     missed = 0
     skipped_dupes = 0
     padding = 2  # Extra pixels around found text for clean redaction
-    processed = set()  # (page_num, text) pairs already handled
+    processed = {}  # text → label (dedup by text across entire document)
 
     for r in redactions:
-        page_num = r["page"] - 1  # Convert to 0-based
         search_text = r.get("text", "")
         label = r.get("label", "")
 
         if not search_text:
             continue
 
-        # Belt-and-braces dedup: skip if already processed this (page, text)
-        dedup_key = (page_num, search_text)
-        if dedup_key in processed:
+        # Dedup by text only — each unique string is searched once across
+        # all pages.  First label wins (they should all be the same).
+        if search_text in processed:
             skipped_dupes += 1
             continue
-        processed.add(dedup_key)
-
-        if page_num < 0 or page_num >= page_count:
-            # Text might appear on a different page after conversion —
-            # search all pages as fallback
-            pages_to_search = range(page_count)
-        else:
-            # Search the target page first, then all others if not found
-            pages_to_search = [page_num]
+        processed[search_text] = label
 
         found = False
-        for pn in pages_to_search:
+        for pn in range(page_count):
             page = doc[pn]
             rects = page.search_for(search_text)
 
-            if rects:
-                for rect in rects:
-                    # Add slight padding for clean appearance
-                    padded = rect + fitz.Rect(-padding, -padding, padding, padding)
-                    page.add_redact_annot(
-                        padded,
-                        text=label,
-                        fontname="helv",
-                        fontsize=0,
-                        fill=(0, 0, 0),
-                        text_color=(1, 1, 1),
-                    )
-                    applied += 1
+            for rect in rects:
+                padded = rect + fitz.Rect(-padding, -padding, padding, padding)
+                page.add_redact_annot(
+                    padded,
+                    text=label,
+                    fontname="helv",
+                    fontsize=0,
+                    fill=(0, 0, 0),
+                    text_color=(1, 1, 1),
+                )
+                applied += 1
                 found = True
-                break  # Found on this page, stop searching others
-
-        if not found and page_num >= 0 and page_num < page_count:
-            # Try searching all pages if we only searched the target page
-            for pn in range(page_count):
-                if pn == page_num:
-                    continue
-                page = doc[pn]
-                rects = page.search_for(search_text)
-                if rects:
-                    for rect in rects:
-                        padded = rect + fitz.Rect(-padding, -padding, padding, padding)
-                        page.add_redact_annot(
-                            padded,
-                            text=label,
-                            fontname="helv",
-                            fontsize=0,
-                            fill=(0, 0, 0),
-                            text_color=(1, 1, 1),
-                        )
-                        applied += 1
-                    found = True
-                    break
+            # Do NOT break — continue searching remaining pages
 
         if not found:
             missed += 1
             print(f"WARNING: text not found in PDF: {search_text[:80]!r}", file=sys.stderr)
 
     if skipped_dupes > 0:
-        print(f"INFO: skipped {skipped_dupes} duplicate (page, text) entries", file=sys.stderr)
+        print(f"INFO: skipped {skipped_dupes} duplicate text entries", file=sys.stderr)
 
     return applied, missed
 
