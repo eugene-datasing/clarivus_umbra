@@ -66,6 +66,18 @@ export default async function BulkReviewPage({
           ],
         }));
 
+      // Compute per-group status counts
+      const pendingCount = dets.filter((d) => d.status === "pending").length;
+      const acceptedCount = dets.filter((d) => d.status === "accepted").length;
+      const rejectedCount = dets.filter((d) => d.status === "rejected").length;
+      const totalCount = dets.length;
+
+      let groupStatus: "pending" | "accepted" | "partial" | "rejected";
+      if (acceptedCount === totalCount) groupStatus = "accepted";
+      else if (rejectedCount === totalCount) groupStatus = "rejected";
+      else if (pendingCount === totalCount) groupStatus = "pending";
+      else groupStatus = "partial";
+
       return {
         id: idx + 1,
         entity,
@@ -79,12 +91,16 @@ export default async function BulkReviewPage({
         ),
         snippets,
         detectionIds: dets.map((d) => d.id),
-        // Include per-detection statuses so the client can filter post-threshold
         detectionStatuses: dets.map((d) => ({
           id: d.id,
           status: d.status,
           confidence: d.confidence,
         })),
+        totalCount,
+        pendingCount,
+        acceptedCount,
+        rejectedCount,
+        groupStatus,
       };
     }
   );

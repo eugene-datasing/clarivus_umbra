@@ -79,9 +79,10 @@ export interface ExportDocument {
   missingGrounds: number;
 }
 
-type ReadinessCategory = "exportable" | "warning" | "blocked";
+type ReadinessCategory = "exportable" | "warning" | "missing-grounds" | "blocked";
 
 function getReadiness(doc: ExportDocument): ReadinessCategory {
+  if (doc.missingGrounds > 0) return "missing-grounds";
   if (doc.status === "signed-off") return "exportable";
   if (doc.status === "reviewed" || doc.status === "in-review") return "warning";
   return "blocked";
@@ -93,6 +94,8 @@ function readinessLabel(cat: ReadinessCategory): { text: string; color: string; 
       return { text: "Signed Off", color: "text-green-700", bg: "bg-green-50", icon: CheckCircle };
     case "warning":
       return { text: "Not Signed Off", color: "text-amber-700", bg: "bg-amber-50", icon: AlertTriangle };
+    case "missing-grounds":
+      return { text: "Missing Grounds", color: "text-red-700", bg: "bg-red-50", icon: XCircle };
     case "blocked":
       return { text: "Review Incomplete", color: "text-red-700", bg: "bg-red-50", icon: XCircle };
   }
@@ -168,7 +171,9 @@ export default function ExportClient({
   const readinessGroups = useMemo(() => {
     const groups = { exportable: [] as ExportDocument[], warning: [] as ExportDocument[], blocked: [] as ExportDocument[] };
     for (const doc of documents) {
-      groups[getReadiness(doc)].push(doc);
+      const r = getReadiness(doc);
+      const bucket = r === "missing-grounds" ? "blocked" : r;
+      groups[bucket].push(doc);
     }
     return groups;
   }, [documents]);
@@ -197,7 +202,7 @@ export default function ExportClient({
   const hasWarnings = selectedWarnings.length > 0;
   const canGenerate =
     selectedDocs.length > 0 &&
-    selectedDocs.every((d) => getReadiness(d) !== "blocked") &&
+    selectedDocs.every((d) => { const r = getReadiness(d); return r !== "blocked" && r !== "missing-grounds"; }) &&
     (!hasWarnings || warningAcknowledged);
 
   // Reset warning acknowledgment when selection changes
@@ -208,7 +213,8 @@ export default function ExportClient({
   // Toggle document selection
   const toggleDoc = (docId: string) => {
     const doc = documents.find((d) => d.id === docId);
-    if (!doc || getReadiness(doc) === "blocked") return;
+    const r = doc ? getReadiness(doc) : null;
+    if (!doc || r === "blocked" || r === "missing-grounds") return;
     setSelectedDocIds((prev) => {
       const next = new Set(prev);
       if (next.has(docId)) next.delete(docId);
@@ -468,7 +474,7 @@ export default function ExportClient({
               {documents.map((doc) => {
                 const readiness = getReadiness(doc);
                 const rl = readinessLabel(readiness);
-                const isBlocked = readiness === "blocked";
+                const isBlocked = readiness === "blocked" || readiness === "missing-grounds";
                 const isSelected = selectedDocIds.has(doc.id);
                 const Icon = rl.icon;
 
@@ -525,6 +531,17 @@ export default function ExportClient({
                     </td>
                     <td className="px-4 py-3 text-center font-mono text-sm">
                       {doc.acceptedCount > 0 ? doc.acceptedCount : "--"}
+                      {doc.missingGrounds > 0 && (
+                        <Link
+                          href={`/requests/${requestId}/review/${doc.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="ml-1.5 inline-flex items-center gap-0.5 text-[11px] font-sans font-medium text-red-600 bg-red-50 px-1.5 py-0.5 rounded hover:bg-red-100 transition-colors"
+                          title="Open review page to assign grounds"
+                        >
+                          <AlertTriangle className="w-3 h-3" />
+                          {doc.missingGrounds} no ground
+                        </Link>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center font-mono text-sm">
                       {doc.pageCount}

@@ -240,6 +240,58 @@ async function convertToPdfWithLibreOffice(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Text-search dedup + filter (exported for testing)
+// ---------------------------------------------------------------------------
+
+/** Max text length for text-search redaction. Detections longer than this are
+ *  AI-generated contextual summaries, not literal document text. */
+export const TEXT_SEARCH_MAX_LENGTH = 80;
+
+interface TextSearchDetection {
+  text: string;
+  page: number;
+  appliedGround: string | null;
+  suggestedGround: string | null;
+}
+
+interface TextSearchRedaction {
+  page: number;
+  text: string;
+  label: string;
+}
+
+/**
+ * Deduplicate by (page, text) and filter out long AI-summary detections
+ * that aren't literal document text. Returns the filtered redaction entries.
+ */
+export function dedupeTextSearchRedactions(
+  detections: TextSearchDetection[],
+): TextSearchRedaction[] {
+  const seen = new Set<string>();
+  const redactions: TextSearchRedaction[] = [];
+  for (const det of detections) {
+    if (det.text.length > TEXT_SEARCH_MAX_LENGTH) continue;
+
+    const key = `${det.page}|${det.text}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const groundId = det.appliedGround || det.suggestedGround;
+    const ground = groundId ? getGroundById(groundId) : null;
+    redactions.push({
+      page: det.page,
+      text: det.text,
+      label: ground ? ground.reference : (groundId || ""),
+    });
+  }
+  return redactions;
+}
+
+// ---------------------------------------------------------------------------
+// Non-PDF originals — text-search redaction via PyMuPDF
+// ---------------------------------------------------------------------------
+
 /**
  * Redact a PDF using text-search mode in PyMuPDF.
  *
@@ -249,22 +301,11 @@ async function convertToPdfWithLibreOffice(
  */
 async function redactByTextSearch(
   pdfBuffer: Buffer,
-  detections: Array<{
-    text: string;
-    appliedGround: string | null;
-    suggestedGround: string | null;
-    page: number;
-  }>,
+  detections: TextSearchDetection[],
 ): Promise<RedactedResult> {
-  const redactions = detections.map((det) => {
-    const groundId = det.appliedGround || det.suggestedGround;
-    const ground = groundId ? getGroundById(groundId) : null;
-    return {
-      page: det.page,
-      text: det.text,
-      label: ground ? ground.reference : (groundId || ""),
-    };
-  });
+  const before = detections.length;
+  const redactions = dedupeTextSearchRedactions(detections);
+  console.log(`[redact-pdf] Deduped: ${before} → ${redactions.length} redaction entries`);
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "veil-redact-ts-"));
   const inputPath = path.join(tmpDir, "input.pdf");

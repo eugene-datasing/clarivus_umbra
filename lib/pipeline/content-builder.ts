@@ -7,8 +7,12 @@
  * frontend can highlight and annotate detected entities inline.
  */
 
-import type { DocParagraph, DocSegment } from "@/lib/db/mappers";
+import type { DocParagraph, DocSegment, DocTableRow, DocTableCell } from "@/lib/db/mappers";
+import type { ContentBlock } from "./format-converter";
 import type { ExtractedPage } from "./extract";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ module: "content-builder" });
 
 // ---------------------------------------------------------------------------
 // Types for the detection input
@@ -56,7 +60,7 @@ function guessParagraphHeading(text: string): string | undefined {
  * paragraph.  When multiple detections match the same region, the first one
  * wins.
  */
-function buildSegmentsForText(
+export function buildSegmentsForText(
   text: string,
   detections: DetectionInput[],
 ): DocSegment[] {
@@ -222,4 +226,192 @@ export function buildContent(
   }
 
   return paragraphs;
+}
+
+// ---------------------------------------------------------------------------
+// Structured content builder (DOCX with ContentBlocks)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a DocParagraph[] structure from typed ContentBlocks.
+ *
+ * Used for DOCX files where mammoth produces HTML that is parsed into
+ * structured ContentBlocks (heading, paragraph, list, table, image-placeholder).
+ * Preserves document structure so the review UI can render headings, lists, etc.
+ *
+ * @param blocks - Structured content blocks from htmlToContentBlocks()
+ * @param detections - All detections with their DB IDs
+ * @param pageNumber - Page number to assign (DOCX = 1 since mammoth has no page breaks)
+ * @returns An array of DocParagraph objects with type information
+ */
+export function buildContentFromBlocks(
+  blocks: ContentBlock[],
+  detections: DetectionInput[],
+  pageNumber: number = 1,
+): DocParagraph[] {
+  const paragraphs: DocParagraph[] = [];
+
+  for (const block of blocks) {
+    switch (block.type) {
+      case "heading": {
+        const segments = buildSegmentsForText(block.content, detections);
+        paragraphs.push({
+          type: "heading",
+          level: block.level ?? 2,
+          page: pageNumber,
+          segments,
+        });
+        break;
+      }
+
+      case "paragraph": {
+        const segments = buildSegmentsForText(block.content, detections);
+        paragraphs.push({
+          type: "paragraph",
+          page: pageNumber,
+          segments,
+        });
+        break;
+      }
+
+      case "list": {
+        // List content is newline-separated items from htmlToContentBlocks()
+        const itemTexts = block.content.split("\n").filter((t) => t.trim());
+        const items: DocParagraph[] = itemTexts.map((itemText) => ({
+          type: "paragraph" as const,
+          page: pageNumber,
+          segments: buildSegmentsForText(itemText, detections),
+        }));
+
+        paragraphs.push({
+          type: "list",
+          listStyle: "bullet",
+          page: pageNumber,
+          segments: [], // List itself has no direct segments — items do
+          items,
+        });
+        break;
+      }
+
+      case "image-placeholder": {
+        paragraphs.push({
+          type: "image",
+          page: pageNumber,
+          segments: [{ text: block.content || "[Embedded image]" }],
+        });
+        break;
+      }
+
+      case "table": {
+        const rawRows = block.content.split("\n").filter((r) => r.trim());
+        if (rawRows.length === 0) break;
+
+        // Parse tab-separated cells per row
+        const parsedRows = rawRows.map((r) => r.split("\t"));
+
+        // Pad shorter rows so all rows have the same column count
+        const maxCols = Math.max(...parsedRows.map((r) => r.length));
+        for (const row of parsedRows) {
+          while (row.length < maxCols) row.push("");
+        }
+
+        // Build DocTableRow[] with cell-level detection segments
+        const tableRows: DocTableRow[] = parsedRows.map((cellTexts, ri) => ({
+          cells: cellTexts.map((cellText): DocTableCell => ({
+            segments: cellText.trim()
+              ? buildSegmentsForText(cellText.trim(), detections)
+              : [],
+            ...(ri === 0 ? { isHeader: true } : {}),
+          })),
+        }));
+
+        paragraphs.push({
+          type: "table",
+          page: pageNumber,
+          segments: [], // Table uses rows/cells, not direct segments
+          rows: tableRows,
+        });
+        break;
+      }
+
+      case "metadata": {
+        const segments = buildSegmentsForText(block.content, detections);
+        paragraphs.push({
+          type: "paragraph",
+          page: pageNumber,
+          segments,
+        });
+        break;
+      }
+
+      default: {
+        // Unknown block type — render as paragraph
+        const segments = buildSegmentsForText(block.content, detections);
+        paragraphs.push({
+          type: "paragraph",
+          page: pageNumber,
+          segments,
+        });
+        break;
+      }
+    }
+  }
+
+  return paragraphs;
+}
+
+// ---------------------------------------------------------------------------
+// Detection coverage verification
+// ---------------------------------------------------------------------------
+
+/**
+ * Verify that every detection was matched to at least one segment in the
+ * content. Logs warnings for unmatched detections but does not throw.
+ *
+ * This catches text mismatches between htmlToContentBlocks (which strips HTML)
+ * and extractRawText (which produces slightly different whitespace/encoding).
+ */
+export function verifyDetectionCoverage(
+  content: DocParagraph[],
+  detections: DetectionInput[],
+): string[] {
+  // Collect all detection IDs that appear in segments
+  const matchedIds = new Set<string>();
+
+  function collectFromParagraphs(paras: DocParagraph[]) {
+    for (const para of paras) {
+      for (const seg of para.segments) {
+        if (seg.detectionId) matchedIds.add(seg.detectionId);
+      }
+      if (para.items) {
+        collectFromParagraphs(para.items);
+      }
+      if (para.rows) {
+        for (const row of para.rows) {
+          for (const cell of row.cells) {
+            for (const seg of cell.segments) {
+              if (seg.detectionId) matchedIds.add(seg.detectionId);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  collectFromParagraphs(content);
+
+  const unmatched: string[] = [];
+  for (const det of detections) {
+    if (!matchedIds.has(det.id)) {
+      const msg = `Detection ${det.id} (type=${det.type}, text="${det.text.slice(0, 50)}") not matched to any block`;
+      log.warn(msg);
+      unmatched.push(msg);
+    }
+  }
+
+  if (unmatched.length > 0) {
+    log.warn(`${unmatched.length} of ${detections.length} detection(s) not matched to structured content`);
+  }
+
+  return unmatched;
 }

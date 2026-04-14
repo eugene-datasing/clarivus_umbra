@@ -19,14 +19,14 @@ import { recomputeCaseStatus } from "@/lib/data/cases";
 import { getStorage } from "@/lib/storage";
 import { extractText, OCRUnavailableError, ExtractionCorruptionError } from "./extract";
 import { validateFile } from "./file-validator";
-import { convertFromPages } from "./format-converter";
+import { convertFromPages, convertToReviewFormat } from "./format-converter";
 import { detectPatterns } from "./patterns";
 import { detectWithAI } from "./ai-detect";
 import { classifyDocument, type DocumentClassification } from "./doc-classify";
 import { detectDuplicates } from "./duplicate-detect";
 import { executeCustomRules } from "./custom-rules";
 import { calculateBBox } from "./bbox";
-import { buildContent } from "./content-builder";
+import { buildContent, buildContentFromBlocks, verifyDetectionCoverage } from "./content-builder";
 import { buildFeedbackPromptSection } from "./feedback-examples";
 import { createAuditEntry } from "@/lib/data/audit";
 import { getEnabledDetectionTypes } from "@/lib/data/settings";
@@ -632,7 +632,36 @@ export async function processDocument(docId: string): Promise<void> {
       suggestedGround: r.suggestedGround,
     }));
 
-    const content = buildContent(extraction.pages, contentDetections);
+    // For DOCX files, use structured content from mammoth HTML conversion
+    // to preserve headings, lists, and other document structure.
+    // All other formats use the plain-text buildContent() path.
+    let content;
+    if (doc.fileType.toUpperCase() === "DOCX") {
+      try {
+        const structured = await convertToReviewFormat(buffer, doc.fileType, doc.name);
+        if (structured.pages.length > 0 && structured.pages[0].structuredContent.length > 0) {
+          const blocks = structured.pages[0].structuredContent;
+          content = buildContentFromBlocks(blocks, contentDetections, 1);
+          verifyDetectionCoverage(content, contentDetections);
+          log.info("Built structured DOCX content", {
+            docId,
+            blocks: blocks.length,
+            paragraphs: content.length,
+          });
+        } else {
+          content = buildContent(extraction.pages, contentDetections);
+          log.info("DOCX structured conversion produced no blocks, using plain text fallback", { docId });
+        }
+      } catch (structuredErr) {
+        log.warn("Structured DOCX content failed, falling back to plain text", {
+          docId,
+          error: structuredErr instanceof Error ? structuredErr.message : String(structuredErr),
+        });
+        content = buildContent(extraction.pages, contentDetections);
+      }
+    } else {
+      content = buildContent(extraction.pages, contentDetections);
+    }
 
     // ------------------------------------------------------------------
     // 10. Update document with results

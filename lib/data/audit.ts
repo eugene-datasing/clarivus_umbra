@@ -26,6 +26,13 @@ export async function getAuditLog(caseId?: string) {
 }
 
 /**
+ * CHAIN SCOPE: Per-case.
+ * Each case has its own independent hash chain. Entries without a caseId
+ * are standalone (previousHash is null). This allows per-case verification
+ * and export without needing the full global audit history.
+ */
+
+/**
  * Compute a SHA-256 integrity hash for an audit entry.
  * The hash covers: previousHash | timestamp | userId | type | description | target | caseId
  */
@@ -74,42 +81,51 @@ export async function createAuditEntry(data: {
     newValue: data.newValue ? stripPiiPatterns(data.newValue) : undefined,
   };
 
-  // Fetch the most recent audit entry to get its integrity hash
-  const lastEntry = await prisma.auditEntry.findFirst({
-    orderBy: { timestamp: "desc" },
-    select: { integrityHash: true },
-  });
+  const caseId = data.caseId;
 
-  const previousHash = lastEntry?.integrityHash ?? null;
-  const timestamp = new Date().toISOString();
+  // Wrap read-previous + create in a serializable transaction to prevent
+  // race conditions where two concurrent writes read the same previousHash.
+  return prisma.$transaction(async (tx) => {
+    // Chain within the case scope. Entries without a caseId are standalone.
+    const lastEntry = caseId
+      ? await tx.auditEntry.findFirst({
+          where: { caseId },
+          orderBy: { timestamp: "desc" },
+          select: { integrityHash: true },
+        })
+      : null;
 
-  const integrityHash = computeIntegrityHash(
-    previousHash,
-    timestamp,
-    data.userId,
-    data.type,
-    sanitized.description,
-    sanitized.target,
-    data.caseId,
-  );
+    const previousHash = lastEntry?.integrityHash ?? null;
+    const timestamp = new Date().toISOString();
 
-  return prisma.auditEntry.create({
-    data: {
-      timestamp: new Date(timestamp),
-      userId: data.userId,
-      userName: data.userName,
-      userRole: data.userRole,
-      type: data.type,
-      description: sanitized.description,
-      target: sanitized.target,
-      caseId: data.caseId,
-      detail: sanitized.detail,
-      previousValue: sanitized.previousValue,
-      newValue: sanitized.newValue,
-      integrityHash,
+    const integrityHash = computeIntegrityHash(
       previousHash,
-    },
-  });
+      timestamp,
+      data.userId,
+      data.type,
+      sanitized.description,
+      sanitized.target,
+      caseId,
+    );
+
+    return tx.auditEntry.create({
+      data: {
+        timestamp: new Date(timestamp),
+        userId: data.userId,
+        userName: data.userName,
+        userRole: data.userRole,
+        type: data.type,
+        description: sanitized.description,
+        target: sanitized.target,
+        caseId,
+        detail: sanitized.detail,
+        previousValue: sanitized.previousValue,
+        newValue: sanitized.newValue,
+        integrityHash,
+        previousHash,
+      },
+    });
+  }, { isolationLevel: "Serializable" });
 }
 
 /**
@@ -199,9 +215,15 @@ function mapAuditType(type: string): "approval" | "review" | "detection" | "inge
 }
 
 /**
- * Verify the integrity of the audit hash chain.
- * Walks all entries in chronological order, recomputing each hash and
- * verifying it matches the stored value and that previousHash links are correct.
+ * Verify the integrity of the per-case audit hash chain.
+ * Walks all entries for the given case in chronological order, recomputing
+ * each hash and verifying it matches the stored value and that previousHash
+ * links are correct.
+ *
+ * Legacy tolerance: the first entry in a case's chain may have a non-null
+ * previousHash left over from the old global chain. This is accepted for the
+ * first entry only (index 0) — the hash is still recomputed and verified
+ * using whatever previousHash is stored.
  */
 export async function verifyAuditIntegrity(caseId?: string): Promise<{
   valid: boolean;
@@ -210,7 +232,7 @@ export async function verifyAuditIntegrity(caseId?: string): Promise<{
 }> {
   const entries = await prisma.auditEntry.findMany({
     where: caseId ? { caseId } : undefined,
-    orderBy: { timestamp: "asc" },
+    orderBy: [{ timestamp: "asc" }, { id: "asc" }],
   });
 
   if (entries.length === 0) {
@@ -219,11 +241,16 @@ export async function verifyAuditIntegrity(caseId?: string): Promise<{
 
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
-    const expectedPreviousHash = i === 0 ? null : entries[i - 1].integrityHash;
 
-    // Verify the previousHash link matches the prior entry's integrityHash
-    if ((entry.previousHash ?? null) !== (expectedPreviousHash ?? null)) {
-      return { valid: false, totalEntries: entries.length, brokenAt: i };
+    if (i === 0) {
+      // First entry: accept whatever previousHash is stored (null for new
+      // per-case chains, or a non-null legacy hash from the old global chain).
+      // We only verify the integrityHash is correct given its own previousHash.
+    } else {
+      const expectedPreviousHash = entries[i - 1].integrityHash;
+      if ((entry.previousHash ?? null) !== (expectedPreviousHash ?? null)) {
+        return { valid: false, totalEntries: entries.length, brokenAt: i };
+      }
     }
 
     // Recompute the integrity hash and verify it matches the stored value

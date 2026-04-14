@@ -42,6 +42,8 @@ interface DetectionStatus {
   confidence: number;
 }
 
+type GroupStatus = "pending" | "accepted" | "partial" | "rejected";
+
 interface EntityGroup {
   id: number;
   entity: string;
@@ -54,6 +56,11 @@ interface EntityGroup {
   snippets: Snippet[];
   detectionIds: string[];
   detectionStatuses: DetectionStatus[];
+  totalCount: number;
+  pendingCount: number;
+  acceptedCount: number;
+  rejectedCount: number;
+  groupStatus: GroupStatus;
 }
 
 interface ThresholdDetection {
@@ -84,7 +91,6 @@ export default function BulkReviewClient({
   thresholdData,
 }: BulkReviewClientProps) {
   const router = useRouter();
-  const [reviewed, setReviewed] = useState<Set<number>>(new Set());
   const [actionInProgress, setActionInProgress] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -171,22 +177,23 @@ export default function BulkReviewClient({
     };
   }, [thresholdData, threshold]);
 
-  // After threshold is applied, filter entity groups to only show those with pending detections
+  // Sort groups: pending first, partial second, accepted/rejected last
+  const STATUS_ORDER: Record<GroupStatus, number> = {
+    pending: 0,
+    partial: 1,
+    accepted: 2,
+    rejected: 3,
+  };
   const visibleGroups = useMemo(() => {
-    if (!thresholdApplied) return entityGroups;
-    // After applying threshold, entity groups with all detections accepted
-    // will be refreshed from the server. But locally, we can filter to groups
-    // that still have pending detections.
-    return entityGroups.filter((group) =>
-      group.detectionStatuses.some((d) => d.status === "pending"),
+    return [...entityGroups].sort(
+      (a, b) => STATUS_ORDER[a.groupStatus] - STATUS_ORDER[b.groupStatus],
     );
-  }, [entityGroups, thresholdApplied]);
+  }, [entityGroups]);
 
   const handleAcceptAll = async (group: EntityGroup) => {
     setActionInProgress(group.id);
     try {
       await bulkAcceptDetections(group.detectionIds, group.groundRef || undefined);
-      setReviewed((prev) => new Set(prev).add(group.id));
       startTransition(() => router.refresh());
     } catch (err) {
       console.error("Bulk accept failed:", err);
@@ -199,17 +206,12 @@ export default function BulkReviewClient({
     setActionInProgress(group.id);
     try {
       await bulkRejectDetections(group.detectionIds);
-      setReviewed((prev) => new Set(prev).add(group.id));
       startTransition(() => router.refresh());
     } catch (err) {
       console.error("Bulk reject failed:", err);
     } finally {
       setActionInProgress(null);
     }
-  };
-
-  const handleReviewEach = (group: EntityGroup) => {
-    setReviewed((prev) => new Set(prev).add(group.id));
   };
 
   const handleBulkApplyGroundToSimilar = async (group: EntityGroup) => {
@@ -226,7 +228,6 @@ export default function BulkReviewClient({
       setBulkGroundSuccess(
         `Applied ${groundLabel} to ${result.updatedCount} detections of "${group.entity}"`,
       );
-      setReviewed((prev) => new Set(prev).add(group.id));
       setBulkGroundEntity(null);
       setBulkGroundValue("");
       startTransition(() => router.refresh());
@@ -301,7 +302,9 @@ export default function BulkReviewClient({
     }
   };
 
-  const reviewedCount = reviewed.size;
+  const reviewedCount = visibleGroups.filter(
+    (g) => g.groupStatus === "accepted" || g.groupStatus === "rejected",
+  ).length;
   const totalGroups = visibleGroups.length;
   const progressPct = totalGroups > 0 ? Math.round((reviewedCount / totalGroups) * 100) : 0;
 
@@ -739,26 +742,38 @@ export default function BulkReviewClient({
       {/* Entity group cards */}
       <div className="space-y-5">
         {visibleGroups.map((group) => {
-          const isReviewed = reviewed.has(group.id);
+          const isDone = group.groupStatus === "accepted" || group.groupStatus === "rejected";
+          const isPartial = group.groupStatus === "partial";
 
           return (
             <div
               key={group.id}
               className={`card transition-all ${
-                isReviewed ? "opacity-60" : ""
+                isDone ? "opacity-50" : ""
               }`}
             >
               {/* Entity header */}
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <div className="flex items-center gap-3 mb-1">
-                    <h3 className="text-lg font-semibold text-txt-primary font-mono">
+                    <h3 className={`text-lg font-semibold font-mono ${isDone ? "text-txt-secondary" : "text-txt-primary"}`}>
                       &ldquo;{group.entity}&rdquo;
                     </h3>
-                    {isReviewed && (
+                    {group.groupStatus === "accepted" && (
                       <span className="badge bg-green-50 text-confidence-high">
                         <CheckCircle className="w-3 h-3" />
-                        Reviewed
+                        Accepted
+                      </span>
+                    )}
+                    {group.groupStatus === "rejected" && (
+                      <span className="badge bg-red-50 text-red-600">
+                        <X className="w-3 h-3" />
+                        Rejected
+                      </span>
+                    )}
+                    {isPartial && (
+                      <span className="badge bg-amber-50 text-amber-700">
+                        {group.acceptedCount + group.rejectedCount} of {group.totalCount} reviewed
                       </span>
                     )}
                   </div>
@@ -824,7 +839,7 @@ export default function BulkReviewClient({
               </div>
 
               {/* Action buttons */}
-              {!isReviewed && (
+              {!isDone && (
                 <div>
                   <div className="flex items-center gap-3 pt-3 border-t border-border">
                     <button
@@ -857,14 +872,13 @@ export default function BulkReviewClient({
                       <Sparkles className="w-4 h-4" />
                       Apply to All Similar
                     </button>
-                    <button
-                      onClick={() => handleReviewEach(group)}
-                      disabled={actionInProgress === group.id}
+                    <Link
+                      href={`/requests/${requestId}`}
                       className="btn-secondary flex items-center gap-2"
                     >
                       <Eye className="w-4 h-4" />
                       Review Each
-                    </button>
+                    </Link>
                     <button
                       onClick={() => handleSkip(group)}
                       disabled={actionInProgress === group.id}

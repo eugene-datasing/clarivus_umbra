@@ -74,7 +74,9 @@ def redact_by_text_search(doc, redactions):
     page_count = len(doc)
     applied = 0
     missed = 0
+    skipped_dupes = 0
     padding = 2  # Extra pixels around found text for clean redaction
+    processed = set()  # (page_num, text) pairs already handled
 
     for r in redactions:
         page_num = r["page"] - 1  # Convert to 0-based
@@ -83,6 +85,13 @@ def redact_by_text_search(doc, redactions):
 
         if not search_text:
             continue
+
+        # Belt-and-braces dedup: skip if already processed this (page, text)
+        dedup_key = (page_num, search_text)
+        if dedup_key in processed:
+            skipped_dupes += 1
+            continue
+        processed.add(dedup_key)
 
         if page_num < 0 or page_num >= page_count:
             # Text might appear on a different page after conversion —
@@ -138,6 +147,9 @@ def redact_by_text_search(doc, redactions):
         if not found:
             missed += 1
             print(f"WARNING: text not found in PDF: {search_text[:80]!r}", file=sys.stderr)
+
+    if skipped_dupes > 0:
+        print(f"INFO: skipped {skipped_dupes} duplicate (page, text) entries", file=sys.stderr)
 
     return applied, missed
 

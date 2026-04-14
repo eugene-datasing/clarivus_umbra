@@ -87,8 +87,31 @@ export interface DocSegment {
   detectionId?: string;
 }
 
+/** Block type for structured document rendering. Defaults to "paragraph" for backwards compatibility. */
+export type DocBlockType = "heading" | "paragraph" | "list" | "image" | "table";
+
+export interface DocTableCell {
+  segments: DocSegment[];
+  /** True for header row cells (rendered as <th>) */
+  isHeader?: boolean;
+}
+
+export interface DocTableRow {
+  cells: DocTableCell[];
+}
+
 export interface DocParagraph {
   heading?: string;
   page?: number;
   segments: DocSegment[];
+  /** Block type — omitted for legacy data, defaults to "paragraph" in the renderer */
+  type?: DocBlockType;
+  /** Heading level (2-6) when type === "heading" */
+  level?: number;
+  /** List style when type === "list" */
+  listStyle?: "bullet" | "number";
+  /** List items when type === "list" — each item has its own segments for detection highlighting */
+  items?: DocParagraph[];
+  /** Table rows when type === "table" */
+  rows?: DocTableRow[];
 }

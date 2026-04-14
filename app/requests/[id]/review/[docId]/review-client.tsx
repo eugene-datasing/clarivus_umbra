@@ -964,145 +964,360 @@ export default function ReviewClient({
   /*  Render helpers                                                         */
   /* ---------------------------------------------------------------------- */
 
-  /** Render paragraph segments -- original view with state-based highlights */
-  function renderOriginalParagraph(para: DocParagraph, idx: number) {
-    return (
-      <div key={idx} className={para.heading ? "mt-5" : "mt-3"} data-page={para.page ?? 1}>
-        {para.heading && (
-          <h3 className="font-heading text-sm font-bold text-txt-primary mb-1 leading-snug">
-            {para.heading}
-          </h3>
-        )}
-        <p className="text-[11.5px] leading-[1.7] text-txt-primary/90 whitespace-pre-line">
-          {para.segments.map((seg, si) => {
-            if (!seg.detectionId) return <span key={si}>{seg.text}</span>;
+  /** Render segments with original-view state-based highlights (shared by all block types) */
+  function renderOriginalSegments(segments: DocParagraph["segments"]) {
+    return segments.map((seg, si) => {
+      if (!seg.detectionId) return <span key={si}>{seg.text}</span>;
 
-            const det = detectionById.get(seg.detectionId);
-            if (!det) return <span key={si}>{seg.text}</span>;
+      const det = detectionById.get(seg.detectionId);
+      if (!det) return <span key={si}>{seg.text}</span>;
 
-            const state = detectionStates[det.id];
-            const isSelected = selectedDetectionId === det.id;
-            const isRejected = state?.status === "rejected";
-            const isAccepted = state?.status === "accepted";
+      const state = detectionStates[det.id];
+      const isSelected = selectedDetectionId === det.id;
+      const isRejected = state?.status === "rejected";
+      const isAccepted = state?.status === "accepted";
 
-            return (
-              <span
-                key={si}
-                onClick={() => handleHighlightClick(det.id)}
-                className={cn(
-                  "relative cursor-pointer inline rounded-sm px-0.5 -mx-0.5 border transition-all duration-150",
-                  isRejected
-                    ? "bg-emerald-100/70 border-emerald-300"  // Green = cleared
-                    : isAccepted
-                    ? "bg-red-200/70 border-red-400"          // Red = will be redacted
-                    : "bg-amber-200/70 border-amber-300",     // Yellow = pending
-                  isSelected && "ring-2 ring-brand-primary ring-offset-1"
-                )}
-                title={
-                  isRejected
-                    ? "Cleared — will not be redacted"
-                    : isAccepted
-                    ? `Redacted — ${groundLabel(state?.appliedGround ?? null)}`
-                    : `Pending review — ${det.confidence}% confidence`
-                }
-              >
-                {seg.text}
-              </span>
-            );
-          })}
-        </p>
-      </div>
-    );
+      return (
+        <span
+          key={si}
+          onClick={() => handleHighlightClick(det.id)}
+          className={cn(
+            "relative cursor-pointer inline rounded-sm px-0.5 -mx-0.5 border transition-all duration-150",
+            isRejected
+              ? "bg-emerald-100/70 border-emerald-300"
+              : isAccepted
+              ? "bg-red-200/70 border-red-400"
+              : "bg-amber-200/70 border-amber-300",
+            isSelected && "ring-2 ring-brand-primary ring-offset-1"
+          )}
+          title={
+            isRejected
+              ? "Cleared — will not be redacted"
+              : isAccepted
+              ? `Redacted — ${groundLabel(state?.appliedGround ?? null)}`
+              : `Pending review — ${det.confidence}% confidence`
+          }
+        >
+          {seg.text}
+        </span>
+      );
+    });
   }
 
-  /** Render paragraph segments -- redacted view with highlights */
-  function renderRedactedParagraph(para: DocParagraph, idx: number) {
-    return (
-      <div key={idx} className={para.heading ? "mt-5" : "mt-3"} data-page={para.page ?? 1}>
-        {para.heading && (
-          <h3 className="font-heading text-sm font-bold text-txt-primary mb-1 leading-snug">
-            {para.heading}
-          </h3>
-        )}
-        <p className="text-[11.5px] leading-[1.7] text-txt-primary/90 whitespace-pre-line">
-          {para.segments.map((seg, si) => {
-            if (!seg.detectionId) return <span key={si}>{seg.text}</span>;
+  /** Render segments with redacted-view highlights (shared by all block types) */
+  function renderRedactedSegments(segments: DocParagraph["segments"]) {
+    return segments.map((seg, si) => {
+      if (!seg.detectionId) return <span key={si}>{seg.text}</span>;
 
-            const det = detectionById.get(seg.detectionId);
-            if (!det) return <span key={si}>{seg.text}</span>;
+      const det = detectionById.get(seg.detectionId);
+      if (!det) return <span key={si}>{seg.text}</span>;
 
-            const state = detectionStates[det.id];
-            const isSelected = selectedDetectionId === det.id;
-            const isRejected = state?.status === "rejected";
-            const isAccepted = state?.status === "accepted";
-            const appliedGround = state?.appliedGround;
+      const state = detectionStates[det.id];
+      const isSelected = selectedDetectionId === det.id;
+      const isRejected = state?.status === "rejected";
+      const isAccepted = state?.status === "accepted";
+      const appliedGround = state?.appliedGround;
 
-            // Rejected → plain text, no highlight (cleared for release)
-            if (isRejected) {
-              return (
-                <span
-                  key={si}
-                  ref={(el) => { redactionRefs.current[det.id] = el; }}
-                  onClick={() => handleHighlightClick(det.id)}
-                  className="cursor-pointer"
-                >
-                  {seg.text}
-                </span>
-              );
-            }
+      if (isRejected) {
+        return (
+          <span
+            key={si}
+            ref={(el) => { redactionRefs.current[det.id] = el; }}
+            onClick={() => handleHighlightClick(det.id)}
+            className="cursor-pointer"
+          >
+            {seg.text}
+          </span>
+        );
+      }
 
-            // Accepted/Redacted → black bar with ground superscript
-            if (isAccepted) {
-              const groundRef = appliedGround ? groundLabel(appliedGround) : null;
-              return (
-                <span
-                  key={si}
-                  ref={(el) => { redactionRefs.current[det.id] = el; }}
-                  onClick={() => handleHighlightClick(det.id)}
-                  className={cn(
-                    "relative cursor-pointer inline rounded-sm transition-all duration-150",
-                    isSelected && "ring-2 ring-brand-primary ring-offset-1"
-                  )}
-                  title={groundRef ? `Redacted — ${groundRef}` : "Redacted"}
-                >
-                  <span
-                    className="bg-gray-900 text-transparent select-none px-0.5 rounded-[2px]"
-                    aria-hidden="true"
-                  >
-                    {seg.text}
-                  </span>
-                  {groundRef && (
-                    <span className="absolute -top-2.5 right-0 text-[8px] font-mono font-semibold text-gray-500 select-none whitespace-nowrap pointer-events-none">
-                      {groundRef}
-                    </span>
-                  )}
-                  <span className="sr-only">
-                    Redacted: {seg.text}{groundRef ? ` (${groundRef})` : ""}
-                  </span>
-                </span>
-              );
-            }
-
-            // Pending → yellow highlight
-            return (
-              <span
-                key={si}
-                ref={(el) => { redactionRefs.current[det.id] = el; }}
-                onClick={() => handleHighlightClick(det.id)}
-                className={cn(
-                  "relative cursor-pointer inline rounded-sm px-0.5 -mx-0.5 border transition-all duration-150",
-                  "bg-amber-200/70 border-amber-300",
-                  isSelected && "ring-2 ring-brand-primary ring-offset-1"
-                )}
-                title={`Pending review — ${det.confidence}% confidence`}
-              >
-                {seg.text}
+      if (isAccepted) {
+        const groundRef = appliedGround ? groundLabel(appliedGround) : null;
+        return (
+          <span
+            key={si}
+            ref={(el) => { redactionRefs.current[det.id] = el; }}
+            onClick={() => handleHighlightClick(det.id)}
+            className={cn(
+              "relative cursor-pointer inline rounded-sm transition-all duration-150",
+              isSelected && "ring-2 ring-brand-primary ring-offset-1"
+            )}
+            title={groundRef ? `Redacted — ${groundRef}` : "Redacted"}
+          >
+            <span
+              className="bg-gray-900 text-transparent select-none px-0.5 rounded-[2px]"
+              aria-hidden="true"
+            >
+              {seg.text}
+            </span>
+            {groundRef && (
+              <span className="absolute -top-2.5 right-0 text-[8px] font-mono font-semibold text-gray-500 select-none whitespace-nowrap pointer-events-none">
+                {groundRef}
               </span>
-            );
-          })}
-        </p>
-      </div>
-    );
+            )}
+            <span className="sr-only">
+              Redacted: {seg.text}{groundRef ? ` (${groundRef})` : ""}
+            </span>
+          </span>
+        );
+      }
+
+      return (
+        <span
+          key={si}
+          ref={(el) => { redactionRefs.current[det.id] = el; }}
+          onClick={() => handleHighlightClick(det.id)}
+          className={cn(
+            "relative cursor-pointer inline rounded-sm px-0.5 -mx-0.5 border transition-all duration-150",
+            "bg-amber-200/70 border-amber-300",
+            isSelected && "ring-2 ring-brand-primary ring-offset-1"
+          )}
+          title={`Pending review — ${det.confidence}% confidence`}
+        >
+          {seg.text}
+        </span>
+      );
+    });
+  }
+
+  /** Map heading level to the appropriate HTML element and styling */
+  function renderHeadingTag(level: number | undefined, children: React.ReactNode) {
+    const lvl = level ?? 2;
+    const baseClass = "font-heading font-bold text-txt-primary leading-snug";
+    switch (lvl) {
+      case 2: return <h2 className={`${baseClass} text-base mt-6 mb-2`}>{children}</h2>;
+      case 3: return <h3 className={`${baseClass} text-sm mt-5 mb-1.5`}>{children}</h3>;
+      case 4: return <h4 className={`${baseClass} text-[13px] mt-4 mb-1`}>{children}</h4>;
+      case 5: return <h5 className={`${baseClass} text-xs mt-3 mb-1`}>{children}</h5>;
+      case 6: return <h6 className={`${baseClass} text-xs mt-3 mb-0.5 text-txt-secondary`}>{children}</h6>;
+      default: return <h3 className={`${baseClass} text-sm mt-5 mb-1.5`}>{children}</h3>;
+    }
+  }
+
+  /** Render a paragraph — original view with state-based highlights */
+  function renderOriginalParagraph(para: DocParagraph, idx: number) {
+    const blockType = para.type ?? (para.heading ? "heading" : "paragraph");
+
+    switch (blockType) {
+      case "heading":
+        return (
+          <div key={idx} className="mt-5" data-page={para.page ?? 1}>
+            {renderHeadingTag(para.level, renderOriginalSegments(para.segments))}
+          </div>
+        );
+
+      case "list":
+        return (
+          <div key={idx} className="mt-3" data-page={para.page ?? 1}>
+            {para.listStyle === "number" ? (
+              <ol className="list-decimal list-outside ml-5 text-[11.5px] leading-[1.7] text-txt-primary/90 space-y-0.5">
+                {(para.items ?? []).map((item, li) => (
+                  <li key={li}>{renderOriginalSegments(item.segments)}</li>
+                ))}
+              </ol>
+            ) : (
+              <ul className="list-disc list-outside ml-5 text-[11.5px] leading-[1.7] text-txt-primary/90 space-y-0.5">
+                {(para.items ?? []).map((item, li) => (
+                  <li key={li}>{renderOriginalSegments(item.segments)}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+
+      case "image":
+        return (
+          <div
+            key={idx}
+            className="mt-3 flex items-center justify-center rounded border border-dashed border-gray-300 bg-gray-50 py-6 px-4"
+            data-page={para.page ?? 1}
+          >
+            <span className="text-xs text-gray-400 italic">
+              {para.segments[0]?.text || "[Embedded image]"}
+            </span>
+          </div>
+        );
+
+      case "table": {
+        // Defensive: if rows is missing, fall back to paragraph rendering
+        if (!para.rows || para.rows.length === 0) {
+          return (
+            <div key={idx} className="mt-3" data-page={para.page ?? 1}>
+              <p className="text-[11.5px] leading-[1.7] text-txt-primary/90 whitespace-pre-line">
+                {renderOriginalSegments(para.segments)}
+              </p>
+            </div>
+          );
+        }
+
+        const headerRow = para.rows[0];
+        const bodyRows = para.rows.slice(1);
+
+        return (
+          <div key={idx} className="mt-3 overflow-x-auto" data-page={para.page ?? 1}>
+            <table className="w-full text-[11px] leading-[1.6] border-collapse border border-gray-200">
+              <thead>
+                <tr className="bg-gray-50">
+                  {headerRow.cells.map((cell, ci) => (
+                    <th
+                      key={ci}
+                      className="border border-gray-200 px-2 py-1.5 text-left font-semibold text-txt-primary/90"
+                    >
+                      {cell.segments.length > 0 ? renderOriginalSegments(cell.segments) : null}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              {bodyRows.length > 0 && (
+                <tbody>
+                  {bodyRows.map((row, ri) => (
+                    <tr key={ri} className={ri % 2 === 1 ? "bg-gray-50/50" : ""}>
+                      {row.cells.map((cell, ci) => (
+                        <td
+                          key={ci}
+                          className="border border-gray-200 px-2 py-1 text-txt-primary/90"
+                        >
+                          {cell.segments.length > 0 ? renderOriginalSegments(cell.segments) : null}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              )}
+            </table>
+          </div>
+        );
+      }
+
+      default: {
+        // "paragraph" or legacy format (no type field)
+        return (
+          <div key={idx} className={para.heading ? "mt-5" : "mt-3"} data-page={para.page ?? 1}>
+            {para.heading && (
+              <h3 className="font-heading text-sm font-bold text-txt-primary mb-1 leading-snug">
+                {para.heading}
+              </h3>
+            )}
+            <p className="text-[11.5px] leading-[1.7] text-txt-primary/90 whitespace-pre-line">
+              {renderOriginalSegments(para.segments)}
+            </p>
+          </div>
+        );
+      }
+    }
+  }
+
+  /** Render a paragraph — redacted view with highlights */
+  function renderRedactedParagraph(para: DocParagraph, idx: number) {
+    const blockType = para.type ?? (para.heading ? "heading" : "paragraph");
+
+    switch (blockType) {
+      case "heading":
+        return (
+          <div key={idx} className="mt-5" data-page={para.page ?? 1}>
+            {renderHeadingTag(para.level, renderRedactedSegments(para.segments))}
+          </div>
+        );
+
+      case "list":
+        return (
+          <div key={idx} className="mt-3" data-page={para.page ?? 1}>
+            {para.listStyle === "number" ? (
+              <ol className="list-decimal list-outside ml-5 text-[11.5px] leading-[1.7] text-txt-primary/90 space-y-0.5">
+                {(para.items ?? []).map((item, li) => (
+                  <li key={li}>{renderRedactedSegments(item.segments)}</li>
+                ))}
+              </ol>
+            ) : (
+              <ul className="list-disc list-outside ml-5 text-[11.5px] leading-[1.7] text-txt-primary/90 space-y-0.5">
+                {(para.items ?? []).map((item, li) => (
+                  <li key={li}>{renderRedactedSegments(item.segments)}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+
+      case "image":
+        return (
+          <div
+            key={idx}
+            className="mt-3 flex items-center justify-center rounded border border-dashed border-gray-300 bg-gray-50 py-6 px-4"
+            data-page={para.page ?? 1}
+          >
+            <span className="text-xs text-gray-400 italic">
+              {para.segments[0]?.text || "[Embedded image]"}
+            </span>
+          </div>
+        );
+
+      case "table": {
+        // Defensive: if rows is missing, fall back to paragraph rendering
+        if (!para.rows || para.rows.length === 0) {
+          return (
+            <div key={idx} className="mt-3" data-page={para.page ?? 1}>
+              <p className="text-[11.5px] leading-[1.7] text-txt-primary/90 whitespace-pre-line">
+                {renderRedactedSegments(para.segments)}
+              </p>
+            </div>
+          );
+        }
+
+        const headerRow = para.rows[0];
+        const bodyRows = para.rows.slice(1);
+
+        return (
+          <div key={idx} className="mt-3 overflow-x-auto" data-page={para.page ?? 1}>
+            <table className="w-full text-[11px] leading-[1.6] border-collapse border border-gray-200">
+              <thead>
+                <tr className="bg-gray-50">
+                  {headerRow.cells.map((cell, ci) => (
+                    <th
+                      key={ci}
+                      className="border border-gray-200 px-2 py-1.5 text-left font-semibold text-txt-primary/90"
+                    >
+                      {cell.segments.length > 0 ? renderRedactedSegments(cell.segments) : null}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              {bodyRows.length > 0 && (
+                <tbody>
+                  {bodyRows.map((row, ri) => (
+                    <tr key={ri} className={ri % 2 === 1 ? "bg-gray-50/50" : ""}>
+                      {row.cells.map((cell, ci) => (
+                        <td
+                          key={ci}
+                          className="border border-gray-200 px-2 py-1 text-txt-primary/90"
+                        >
+                          {cell.segments.length > 0 ? renderRedactedSegments(cell.segments) : null}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              )}
+            </table>
+          </div>
+        );
+      }
+
+      default: {
+        // "paragraph" or legacy format (no type field)
+        return (
+          <div key={idx} className={para.heading ? "mt-5" : "mt-3"} data-page={para.page ?? 1}>
+            {para.heading && (
+              <h3 className="font-heading text-sm font-bold text-txt-primary mb-1 leading-snug">
+                {para.heading}
+              </h3>
+            )}
+            <p className="text-[11.5px] leading-[1.7] text-txt-primary/90 whitespace-pre-line">
+              {renderRedactedSegments(para.segments)}
+            </p>
+          </div>
+        );
+      }
+    }
   }
 
   /* ---------------------------------------------------------------------- */
