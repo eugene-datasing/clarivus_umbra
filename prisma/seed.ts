@@ -40,7 +40,7 @@ async function main() {
 
   const users = [
     // DataSing admin (SSO via Azure AD — no password)
-    { id: "u-admin", name: "Eugene Cash", email: "eugene@datasing.com", role: "admin", departmentId: null, passwordHash: null as string | null },
+    { id: "u-admin", name: "Eugene Cash", email: "eugene@datasing.nz", role: "admin", departmentId: null, passwordHash: null as string | null },
 
     // PNCC Request Managers
     { id: "u-001", name: "Sarah Mitchell", email: "s.mitchell@pncc.govt.nz", role: "request-manager", departmentId: "dept-003", passwordHash: devPasswordHash },
@@ -71,7 +71,7 @@ async function main() {
     });
   }
   console.log(`  ✓ ${users.length} users`);
-  console.log(`    → Eugene Cash (eugene@datasing.com) — admin, SSO only`);
+  console.log(`    → Eugene Cash (eugene@datasing.nz) — admin, SSO only`);
   console.log(`    → PNCC staff — password: "password"`);
 
   // --- Cases (5 realistic PNCC LGOIMA requests — no documents, user will upload) ---
@@ -290,7 +290,7 @@ async function main() {
 
   console.log("\n✅ Seed complete! Ready for document uploads.");
   console.log("\nLogin options:");
-  console.log("  SSO:         eugene@datasing.com (Azure AD)");
+  console.log("  SSO:         eugene@datasing.nz (Azure AD)");
   console.log("  Credentials: any @pncc.govt.nz user, password: \"password\"");
   console.log("  e.g.         s.mitchell@pncc.govt.nz / password");
 }

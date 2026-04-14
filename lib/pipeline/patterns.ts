@@ -44,7 +44,19 @@ interface PatternDef {
   reasoning: string;
 }
 
+// Patterns are ordered from most specific to least specific so that longer,
+// more precise matches (e.g. bank account) claim their character spans before
+// shorter, greedier patterns (e.g. phone) can grab substrings.
 const PATTERNS: PatternDef[] = [
+  {
+    type: "bank-account",
+    // NZ bank account: BB-bbbb-AAAAAAA-SS (bank-branch-account-suffix).
+    // Must run before phone/IRD to prevent partial matches.
+    regex: /\b\d{2}[-\s]?\d{4}[-\s]?\d{6,8}[-\s]?\d{2,3}\b/g,
+    suggestedGround: "s7_2a",
+    reasoning:
+      "Matches an NZ bank account number pattern (bank-branch-account-suffix). Bank account numbers are sensitive financial identifiers that should be withheld to protect privacy.",
+  },
   {
     type: "ird",
     // 8-digit (XX-XXX-XXX) or 9-digit (XXX-XXX-XXX) IRD numbers.
@@ -57,7 +69,11 @@ const PATTERNS: PatternDef[] = [
   },
   {
     type: "phone",
-    regex: /\b(?:\+?64|0)[\s-]?(?:\d[\s-]?){7,9}\b/g,
+    // NZ phone numbers starting with +64, 64, or 0.
+    // Negative lookbehind rejects matches preceded by a digit or hyphen,
+    // preventing partial matches inside bank account numbers or other
+    // numeric identifiers (e.g. "0789123-00" inside "12-3056-0789123-00").
+    regex: /(?<![0-9-])(?:\+?64|0)[\s-]?(?:\d[\s-]?){7,9}(?![0-9-])/g,
     suggestedGround: "s7_2a",
     reasoning:
       "Matches a New Zealand phone number pattern. Personal phone numbers should generally be withheld to protect privacy unless they are published contact details for a public official acting in their official capacity.",
@@ -83,13 +99,6 @@ const PATTERNS: PatternDef[] = [
     suggestedGround: "s7_2a",
     reasoning:
       "Matches a New Zealand street address. Personal residential addresses should be withheld to protect privacy.",
-  },
-  {
-    type: "bank-account",
-    regex: /\b\d{2}[-\s]?\d{4}[-\s]?\d{6,8}[-\s]?\d{2,3}\b/g,
-    suggestedGround: "s7_2a",
-    reasoning:
-      "Matches an NZ bank account number pattern (bank-branch-account-suffix). Bank account numbers are sensitive financial identifiers that should be withheld to protect privacy.",
   },
   {
     type: "nz-passport",

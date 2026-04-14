@@ -451,17 +451,30 @@ export default function ReviewClient({
     );
   }, [detections, activeTab]);
 
-  // Build document-order index for detection sorting
+  // Build document-order index for detection sorting.
+  // Walks paragraphs, list items, and table cells so detections in all
+  // content structures get a position (not just top-level segments).
   const detectionOrder = useMemo(() => {
     const order = new Map<string, number>();
     let idx = 0;
-    for (const para of documentContent) {
-      for (const seg of para.segments) {
-        if (seg.detectionId) {
-          order.set(seg.detectionId, idx++);
+    function walk(paras: DocParagraph[]) {
+      for (const para of paras) {
+        for (const seg of para.segments) {
+          if (seg.detectionId) order.set(seg.detectionId, idx++);
+        }
+        if (para.items) walk(para.items);
+        if (para.rows) {
+          for (const row of para.rows) {
+            for (const cell of row.cells) {
+              for (const seg of cell.segments) {
+                if (seg.detectionId) order.set(seg.detectionId, idx++);
+              }
+            }
+          }
         }
       }
     }
+    walk(documentContent);
     return order;
   }, [documentContent]);
 

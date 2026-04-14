@@ -519,40 +519,90 @@ export async function processDocument(docId: string): Promise<void> {
     }
 
     // ------------------------------------------------------------------
-    // 8. Store detections in DB
+    // 8. Deduplicate and store detections in DB
     // ------------------------------------------------------------------
     // Delete any existing detections first (in case of reprocessing)
     await prisma.detection.deleteMany({ where: { documentId: docId } });
 
-    // Store pattern detections
-    const patternDetectionRecords = [];
-    for (const match of patternMatches) {
-      const layout = pageLayouts.get(match.page);
-      const bbox = layout
-        ? calculateBBox(match.text, layout.words, layout.width, layout.height)
-        : { posX: 0, posY: 0, posW: 0, posH: 0 };
-      const record = await prisma.detection.create({
-        data: {
-          documentId: docId,
-          type: match.type,
-          text: match.text,
-          confidence: match.confidence,
-          page: match.page,
-          suggestedGround: match.suggestedGround,
-          reasoning: match.reasoning,
-          piConsideration: "",
-          aiExplanation: `Pattern-detected ${match.type}. ${match.reasoning}`,
-          source: "pattern",
-          status: "pending",
-          ...bbox,
-        },
-      });
-      patternDetectionRecords.push(record);
+    // Build a unified detection list from all three sources
+    interface UnifiedDetection {
+      type: string;
+      text: string;
+      confidence: number;
+      page: number;
+      suggestedGround: string | null;
+      reasoning: string;
+      piConsideration: string;
+      aiExplanation: string;
+      source: string;
     }
 
-    // Store AI detections
-    const aiDetectionRecords = [];
-    for (const det of aiDetections) {
+    const allDetections: UnifiedDetection[] = [
+      ...patternMatches.map((m) => ({
+        type: m.type,
+        text: m.text,
+        confidence: m.confidence,
+        page: m.page,
+        suggestedGround: m.suggestedGround,
+        reasoning: m.reasoning,
+        piConsideration: "",
+        aiExplanation: `Pattern-detected ${m.type}. ${m.reasoning}`,
+        source: "pattern",
+      })),
+      ...aiDetections.map((d) => ({
+        type: d.type,
+        text: d.text,
+        confidence: d.confidence,
+        page: d.page,
+        suggestedGround: d.suggestedGround,
+        reasoning: d.reasoning,
+        piConsideration: d.piConsideration,
+        aiExplanation: d.aiExplanation,
+        source: "ai",
+      })),
+      ...dedupedCustomRuleMatches.map((crm) => ({
+        type: crm.type,
+        text: crm.text,
+        confidence: crm.confidence,
+        page: crm.page,
+        suggestedGround: crm.suggestedGround,
+        reasoning: crm.reasoning,
+        piConsideration: "",
+        aiExplanation: `Custom rule: ${crm.ruleName}. ${crm.reasoning}`,
+        source: "custom-rule",
+      })),
+    ];
+
+    // Deduplicate by (page, type, text). Keep the entry with highest confidence.
+    const beforeDedup = allDetections.length;
+    const seen = new Map<string, number>();
+    const dedupedDetections: UnifiedDetection[] = [];
+
+    for (const det of allDetections) {
+      const key = `${det.page}|${det.type}|${det.text.toLowerCase().trim()}`;
+      const existingIdx = seen.get(key);
+      if (existingIdx !== undefined) {
+        if (det.confidence > dedupedDetections[existingIdx].confidence) {
+          dedupedDetections[existingIdx] = det;
+        }
+        continue;
+      }
+      seen.set(key, dedupedDetections.length);
+      dedupedDetections.push(det);
+    }
+
+    if (beforeDedup !== dedupedDetections.length) {
+      log.info("Detection deduplication", {
+        docId,
+        before: beforeDedup,
+        after: dedupedDetections.length,
+        removed: beforeDedup - dedupedDetections.length,
+      });
+    }
+
+    // Insert deduplicated detections
+    const allDetectionRecords = [];
+    for (const det of dedupedDetections) {
       const layout = pageLayouts.get(det.page);
       const bbox = layout
         ? calculateBBox(det.text, layout.words, layout.width, layout.height)
@@ -568,54 +618,20 @@ export async function processDocument(docId: string): Promise<void> {
           reasoning: det.reasoning,
           piConsideration: det.piConsideration,
           aiExplanation: det.aiExplanation,
-          source: "ai",
+          source: det.source,
           status: "pending",
           ...bbox,
         },
       });
-      aiDetectionRecords.push(record);
+      allDetectionRecords.push(record);
     }
-
-    // Store custom rule detections (using deduped set)
-    const customRuleRecords = [];
-    for (const crm of dedupedCustomRuleMatches) {
-      const layout = pageLayouts.get(crm.page);
-      const bbox = layout
-        ? calculateBBox(crm.text, layout.words, layout.width, layout.height)
-        : { posX: 0, posY: 0, posW: 0, posH: 0 };
-      const record = await prisma.detection.create({
-        data: {
-          documentId: docId,
-          type: crm.type,
-          text: crm.text,
-          confidence: crm.confidence,
-          page: crm.page,
-          suggestedGround: crm.suggestedGround,
-          reasoning: crm.reasoning,
-          piConsideration: "",
-          aiExplanation: `Custom rule: ${crm.ruleName}. ${crm.reasoning}`,
-          source: "custom-rule",
-          status: "pending",
-          ...bbox,
-        },
-      });
-      customRuleRecords.push(record);
-    }
-
-    const allDetectionRecords = [
-      ...patternDetectionRecords,
-      ...aiDetectionRecords,
-      ...customRuleRecords,
-    ];
 
     const totalDetections = allDetectionRecords.length;
 
     log.info("Detections stored", {
       docId,
       total: totalDetections,
-      pattern: patternDetectionRecords.length,
-      ai: aiDetectionRecords.length,
-      customRule: customRuleRecords.length,
+      beforeDedup,
     });
 
     // ------------------------------------------------------------------
@@ -719,9 +735,10 @@ export async function processDocument(docId: string): Promise<void> {
       detail: [
         `File type: ${doc.fileType}`,
         `Pages: ${extraction.pages.length}`,
-        `Pattern detections: ${patternDetectionRecords.length}`,
-        `AI detections: ${aiDetectionRecords.length}`,
-        `Custom rule detections: ${customRuleRecords.length}`,
+        `Pattern detections: ${patternMatches.length}`,
+        `AI detections: ${aiDetections.length}`,
+        `Custom rule detections: ${dedupedCustomRuleMatches.length}`,
+        `After dedup: ${totalDetections}`,
         `Average confidence: ${Math.round(avgConfidence)}%`,
         `Processing time: ${(totalProcessingMs / 1000).toFixed(1)}s (extraction: ${(extractionMs / 1000).toFixed(1)}s, patterns: ${patternDetectionMs}ms, AI: ${(aiDetectionMs / 1000).toFixed(1)}s)`,
       ].join("; "),
