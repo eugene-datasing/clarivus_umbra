@@ -460,14 +460,18 @@ export default function ReviewClient({
     function walk(paras: DocParagraph[]) {
       for (const para of paras) {
         for (const seg of para.segments) {
-          if (seg.detectionId) order.set(seg.detectionId, idx++);
+          if (seg.detectionId && !order.has(seg.detectionId)) {
+            order.set(seg.detectionId, idx++);
+          }
         }
         if (para.items) walk(para.items);
         if (para.rows) {
           for (const row of para.rows) {
             for (const cell of row.cells) {
               for (const seg of cell.segments) {
-                if (seg.detectionId) order.set(seg.detectionId, idx++);
+                if (seg.detectionId && !order.has(seg.detectionId)) {
+                  order.set(seg.detectionId, idx++);
+                }
               }
             }
           }
