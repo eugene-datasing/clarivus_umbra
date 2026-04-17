@@ -4,9 +4,79 @@ All notable changes to the Veil prototype.
 
 ---
 
-## 2026-03-28
+## 2026-04-14
+
+### Added
+- Document-level classification pipeline (`doc-classify.ts`) — GPT-4o classifies document type and content flags before page-level detection (`8606f67`)
+- 7 new detection types: negotiation, safety-concern, law-enforcement, council-commercial, harassment-risk, cultural-sensitivity, health-safety (`8606f67`)
+- Structured DOCX rendering with headings (h2-h6), bulleted/numbered lists, image placeholders, and full HTML table rendering (`320a9c0`)
+- Per-group review status tracking (pending/partial/accepted/rejected) computed server-side (`320a9c0`)
+- Export-time "missing-grounds" readiness check that blocks export when accepted detections lack assigned grounds (`320a9c0`)
+- Inline type and ground editing on document review page — clickable type badges, improved GroundSelector with section headers (`4dfd8a6`)
+- Accept Remaining bulk action with confirmation dialog and optimistic updates (`4dfd8a6`)
+- Extend deadline feature with s14 LGOIMA validation and audit trail (`4dfd8a6`)
+- Comprehensive audit trail test suite (213 lines) (`320a9c0`)
+- DOCX multi-page redaction test (`c23d049`)
+
+### Changed
+- Rewrite seed for Palmerston North City Council demo: 8 departments, 11 users, 5 realistic LGOIMA cases with no documents (`4ac3c82`)
+- Pipeline deduplication: combine pattern, AI, and custom rule detections into unified list and deduplicate by (page, type, text) before DB insertion (`2d8f8ed`)
+- Restructured AI prompt with detection guidance, worked examples, grounds grouped by detection pathway (`8606f67`)
+- DOCX large-page chunking for AI batches, custom rule deduplication, ground format normalisation, Zod validation for all 27 grounds (`8606f67`)
+- Wire LGOIMA workflow configuration: split escalation threshold into amber/red warning days, wire defaultResponseDays to new request form (`4dfd8a6`)
+- Skip env validation during Next.js production build phase (Azure build doesn't have runtime secrets) (`04bcd79`)
 
 ### Fixed
+- Fix DOCX redaction to search all PDF pages, not just declared page — Mammoth tags all content as page=1, now Python searches every page for each unique text (`c23d049`)
+- Fix audit trail integrity verification — `timestamp without time zone` column + pg driver TZ interpretation mismatch; use raw SQL `to_char` to read exact stored format (`2949864`)
+- Fix detection sort order to use first occurrence in document — `Map.set()` was overwriting with last position instead of first (`953a868`)
+- Fix bank account misclassification — reorder patterns (most specific first), add negative lookbehind to phone regex (`2d8f8ed`)
+- Fix PDF export WinAnsi encoding error for te reo Māori macrons — embed Noto Sans via shared font loader across all 9 PDF generation files (`4dfd8a6`)
+- Fix coordinate deduplication to prevent double-redaction of overlapping regions (`320a9c0`)
+
+---
+
+## 2026-04-13
+
+### Added
+- Logo upload API and pipeline logo helper for embedding org logo in PDFs (`2d5dd76`)
+- LGOIMA reference documents and remediation plan (`732e8e5`)
+
+### Changed
+- Replace hardcoded AI governance and report metrics with real data (`e76b8b0`)
+- Fix LGOIMA statutory grounds and wire detection toggles into pipeline (`7b88eed`)
+- Update documentation: fix README accuracy, add CLAUDE.md context (`3ef12f2`)
+
+### Fixed
+- Fix auth session refresh, profile redirect, and setup wizard UX (`6406055`)
+- Fix stale s7_2f ground ID in schedule test (`7434c71`)
+
+---
+
+## 2026-04-01
+
+### Fixed
+- Fix profile nudge persistence, dynamic document headers, and add content seed (`595e4a4`)
+
+---
+
+## 2026-03-29
+
+### Added
+- Automatic PII sanitization in audit trail free-text fields (`2de322c`)
+- Sign-out on activate page and instance reset script (`2de322c`)
+
+---
+
+## 2026-03-28
+
+### Added
+- All 5 remaining report templates with real PDF generation (`6128c20`)
+- Redesign admin settings page: consolidate tabs, fix UX issues (`fd6ef49`)
+
+### Fixed
+- Wire up automatic case status transitions from document workflow (`4b5c466`, `5a23da8`)
+- Fix sidebar layout shift and filter notification noise (`b29e7bc`)
 - Switch Google Fonts to `next/font/google` for build-time bundling — eliminates runtime Google Fonts CDN dependency (`d008ac7`)
 - Restore `'unsafe-inline'` in CSP `script-src` for Next.js hydration — fixes production "Connection closed" error (`6c04637`)
 

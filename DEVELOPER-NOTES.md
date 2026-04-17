@@ -86,6 +86,14 @@
 | Self-hosted fonts | Fonts bundled at build time via next/font/google — no runtime Google Fonts CDN dependency |
 | Organisation logo | Upload via setup wizard or admin settings, embedded in PDF cover letters, schedules, and chain-of-custody reports |
 | PDF viewer | PDF.js-based viewer with detection overlay highlights for PDF documents |
+| Document classification | GPT-4o pre-classifies document type and content flags before detection batches |
+| Structured DOCX rendering | Headings, bulleted/numbered lists, image placeholders, and full HTML table rendering with cell-level detection |
+| Inline type/ground editing | Clickable type badges and improved GroundSelector with section headers on review page |
+| Accept remaining bulk action | One-click accept all pending detections with confirmation dialog |
+| PNCC demo seed | 11 users, 8 departments, 5 realistic LGOIMA cases (no documents — user uploads real files) |
+| Multi-page DOCX redaction | Text-search mode searches ALL pages for each unique detection text, not just declared page |
+| PDF macron support | Noto Sans embedded via shared font loader across all 9 PDF generation files |
+| Extend deadline | s14 LGOIMA validation with audit trail |
 
 ---
 
@@ -130,6 +138,20 @@
 - **Reason:** Non-PDF documents have no bounding-box data from Azure Document Intelligence. LibreOffice conversion preserves original formatting, then PyMuPDF `page.search_for()` locates detection text in the converted PDF for true redaction. Falls back to plain-text PDF if conversion fails.
 - **Three-tier fallback:** (1) Coordinate-based redaction for PDFs, (2) LibreOffice convert + text-search for non-PDFs, (3) Plain-text PDF as last resort.
 
+### Three-Tier PDF Redaction
+- **Decision:** PDF originals use coordinate-based redaction (Tier 1) with fallback to text-search (Tier 2) and plain-text PDF (Tier 3).
+- **Reason:** Azure DI provides word-level polygons for PDFs, giving precise redaction at exact positions. Non-PDFs lack bounding-box data. Tier 2 (LibreOffice convert + PyMuPU text-search) preserves formatting. Tier 3 is a last resort for when both fail.
+- **Known issue:** Tier 1 has two bugs — dedup collapses repeated occurrences, and multi-line detection text produces oversized union bounding boxes. See `docs/tier1-redaction-investigation.md`.
+
+### Document Classification
+- **Decision:** A single GPT-4o call classifies document type and content flags before page-level detection batches.
+- **Reason:** Detection batches run 3 pages at a time and lack document-level context. The classification (document type, likely grounds, content flags like legal-advice, personnel-info, commercial, cultural, enforcement) is injected into every subsequent batch prompt.
+
+### Detection Deduplication
+- **Decision:** All three detection sources (pattern, AI, custom rules) are unified into a single list and deduplicated by `(page, type, text.toLowerCase().trim())` before DB insertion.
+- **Reason:** Pattern and AI detection overlap on the same entities. Custom rules can duplicate pattern matches. The dedup keeps the highest-confidence match per key.
+- **Known issue:** Coordinates are not in the key, so distinct occurrences of the same text at different positions on the same page are collapsed to one.
+
 ### CSRF Protection
 - **Decision:** Added `X-Requested-With: XMLHttpRequest` header requirement for state-changing API routes.
 - **Reason:** Browsers won't send custom headers cross-origin without CORS preflight, preventing cross-site request forgery. Implemented via `lib/csrf.ts` utility applied to upload, process, and export routes.
@@ -163,14 +185,30 @@ Reverting a detection to "pending" on a "reviewed" document automatically regres
 
 ---
 
-## 5. Remaining Gaps
+## 5. Known Bugs
+
+### Tier 1 PDF Redaction — Dedup Collapses Repeated Occurrences (Priority 1)
+**File:** `lib/pipeline/process.ts:577-592`
+Pipeline dedup key is `(page, type, text.toLowerCase().trim())` — coordinates are NOT in the key. If the same entity text appears N times on a page at different positions, only 1 Detection row survives, carrying the bbox of the first occurrence only. Remaining N-1 occurrences are unredacted in the output PDF. See `docs/tier1-redaction-investigation.md`.
+
+### Tier 1 PDF Redaction — Oversized Bounding Boxes (Priority 2)
+**File:** `lib/pipeline/bbox.ts:66-97`
+`computeBoxFromWords` returns the axis-aligned UNION of all matched word polygons. When detection text spans multiple lines in the source, the bbox covers from line-1-top to line-N-bottom (~84% width × ~18% height). AI detections with long narrative text (no `TEXT_SEARCH_MAX_LENGTH` filter on Tier 1) produce section-sized black rectangles.
+
+### Workaround
+DOCX files use Tier 2 (text-search) which correctly finds and redacts all occurrences. Only PDF originals are affected via Tier 1 coordinate-based redaction.
+
+---
+
+## 6. Remaining Gaps
 
 ### Must-Have for Production
 
 | Feature | Status | Notes |
 |---------|--------|-------|
+| Fix Tier 1 PDF redaction dedup | Bug | Dedup key needs coordinates; `calculateBBox` needs to return all matches not just first. See `docs/tier1-redaction-investigation.md`. |
+| Fix Tier 1 oversized bounding boxes | Bug | `computeBoxFromWords` needs line-aware grouping instead of union bounding. |
 | Service Bus job queue | Infrastructure provisioned | `sb-veil-prototype` / `document-processing` queue exists. Currently using in-process persistent queue (`lib/queue/job-queue.ts`). Need to replace with `@azure/service-bus` client for production-grade reliability. |
-| Enhanced PDF viewer | Partially done | PDF.js viewer with detection overlays is implemented. Could benefit from bounding-box coordinate overlays and more interactive annotation tools. |
 | Performance benchmarks | Infrastructure exists | Processing metrics and concurrency control are built. Not yet validated at scale against RFP targets (5,000 pages in 4 hours, 5 concurrent reviewers). |
 
 ### Should-Have
@@ -178,6 +216,7 @@ Reverting a detection to "pending" on a "reviewed" document automatically regres
 | Feature | Notes |
 |---------|-------|
 | Real-time collaborative review | Azure SignalR for live status updates during concurrent review sessions |
+| Tier 1 overdrawn-rectangle sanity fallback | Post-Tier-1 check: if any redaction has `posW > 40%` or `posH > 5%`, retry via text-search for that subset |
 
 ### Could-Have
 
@@ -213,7 +252,7 @@ Each ground includes statutory reference, short label, full description, public 
 
 Items marked with checkmarks are complete.
 
-1. **Azure deployment** — DONE. App Service (Linux B1, custom Docker container) + PostgreSQL Flexible Server + Key Vault + ACR + Service Bus + Blob Storage. All in `australiaeast`. Live at https://veil.datasing.nz
+1. **Azure deployment** — DONE. App Service (Linux B1, custom Docker container) + PostgreSQL Flexible Server + Key Vault + ACR + Service Bus + Blob Storage. All in `australiaeast`. Live at https://veil.datasing.nz. Current image: `cr10`.
 2. **Authentication & RBAC** — DONE. Azure AD SSO working as primary provider, SCIM provisioning at `/api/scim/Users` and `/api/scim/Groups`, activation code system, user invitations via Azure Communication Services. Credentials fallback for development.
 3. **Blob Storage integration** — DONE. `AzureBlobStorageProvider` implemented in `lib/storage/azure-blob.ts`. Local filesystem as dev fallback.
 4. **GitHub Actions CI/CD** — DONE. 3 workflows: ci (lint/test/typecheck), docker (ACR build + App Service deploy), migrate (Prisma migrations).
@@ -221,7 +260,10 @@ Items marked with checkmarks are complete.
 6. **Duplicate detection** — DONE. Exact + near-duplicate detection via text similarity scoring.
 7. **Email ingestion** — DONE. EML + MSG parsing and ingestion.
 8. **Admin & governance** — DONE. Settings persistence via `SystemSetting` model, AI governance metrics dashboard, custom rules management.
-9. **Service Bus integration** — REMAINING. Replace in-process persistent queue with `@azure/service-bus` for production-grade job processing.
-10. **PDF viewer** — PARTIALLY DONE. PDF.js viewer with detection overlays implemented. Bounding-box coordinate overlays for pixel-accurate highlighting would improve precision.
-11. **Real-time updates** — REMAINING. Azure SignalR for live detection progress and collaborative review.
-12. **Testing at scale** — REMAINING. Load testing against RFP benchmarks (5,000 pages / 4 hours, 10,000 doc duplicate detection / 1 hour, 5 concurrent reviewers).
+9. **Document classification** — DONE. GPT-4o pre-classifies document type and content flags, context injected into detection batches.
+10. **Structured DOCX rendering** — DONE. Headings, lists, tables with cell-level detection highlighting.
+11. **PNCC demo seed** — DONE. 11 users, 8 departments, 5 cases, no seeded documents.
+12. **Tier 1 PDF redaction fixes** — IN PROGRESS. Dedup collapses repeated occurrences, oversize bounding boxes. See `docs/tier1-redaction-investigation.md`.
+13. **Service Bus integration** — REMAINING. Replace in-process persistent queue with `@azure/service-bus` for production-grade job processing.
+14. **Real-time updates** — REMAINING. Azure SignalR for live detection progress and collaborative review.
+15. **Testing at scale** — REMAINING. Load testing against RFP benchmarks (5,000 pages / 4 hours, 10,000 doc duplicate detection / 1 hour, 5 concurrent reviewers).

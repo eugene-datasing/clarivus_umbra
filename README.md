@@ -125,12 +125,10 @@ In production, secrets are resolved from Key Vault via App Service managed ident
 
 After `npx prisma db seed`, the database includes:
 
-- **10 users** with roles: admin, request-manager, reviewer, senior-reviewer, final-approver
-- **18 LGOIMA cases** with varying statuses and deadlines
-- **24 documents** with processing states (PDF, DOCX, XLSX, EML, MSG)
-- **35 AI detections** with confidence scores and LGOIMA grounds
-- **30 audit trail entries** and **6 pipeline milestones**
-- **Departments:** Infrastructure, Planning, Legal, etc.
+- **11 users** — Eugene Cash (SSO admin, eugene@datasing.nz) + 10 Palmerston North City Council staff with credentials login
+- **8 departments** — City Planning, Infrastructure, Finance, Parks & Reserves, Environmental Services, Building Services, Community Services, Corporate Services
+- **5 realistic LGOIMA cases** — no documents (user uploads real files during demo)
+- **Pipeline milestones** and org identity settings (PNCC branding)
 
 ---
 
@@ -159,6 +157,7 @@ After `npx prisma db seed`, the database includes:
 | [`docs/azure-infrastructure-spec.md`](docs/azure-infrastructure-spec.md) | Azure architecture and deployment |
 | [`docs/auth-and-onboarding-spec.md`](docs/auth-and-onboarding-spec.md) | Authentication and first-run onboarding design |
 | [`docs/client-deployment-activation-spec.md`](docs/client-deployment-activation-spec.md) | Client activation and licensing |
+| [`docs/tier1-redaction-investigation.md`](docs/tier1-redaction-investigation.md) | Tier 1 PDF redaction dedup + bbox bug investigation |
 
 ---
 
@@ -423,7 +422,10 @@ veil-prototype/
 │   ├── schema.prisma                      # Database schema (19 models, 17 migrations)
 │   └── seed.ts                            # Demo data seed script
 ├── scripts/
-│   └── generate-activation-code.ts        # Generate activation code for new deployments
+│   ├── generate-activation-code.ts        # Generate activation code for new deployments
+│   ├── reset-instance.ts                  # Reset instance state for fresh demo
+│   ├── seed-content.ts                    # Seed content into existing documents
+│   └── check-content.ts                   # Diagnostic: check document content structure
 ├── tests/
 │   └── benchmarks/                        # Performance benchmarks
 ├── .github/workflows/
@@ -510,16 +512,18 @@ When documents are uploaded, Veil processes them through:
 
 1. **File validation** — Detect corrupted or unreadable files before processing
 2. **Format conversion** — Convert documents to a consistent processing format
-3. **Email extraction** — Extract content from email formats (EML, MSG)
-4. **Text extraction** — Azure Document Intelligence for PDFs, mammoth for DOCX
-5. **Regex pattern detection** — NZ IRD numbers, phone numbers, email addresses, NHI numbers, street addresses (95% confidence, deterministic)
-6. **AI contextual detection** — Azure OpenAI GPT-4o analyses text with LGOIMA-specific system prompt, identifies personal names, commercial content, legal privilege, and other sensitive information
-7. **Custom rule matching** — Apply user-defined detection rules
-8. **Deduplication** — Pattern and AI detections are merged, removing overlaps
-9. **Duplicate detection** — Exact and near-duplicate document identification across the case
-10. **Metadata sanitisation** — Strip hidden metadata and embedded content
-11. **Content building** — Extracted text + detections are combined into a structured paragraph/segment model for the review UI
-12. **Storage** — Pages, detections, and content JSON stored in PostgreSQL
+3. **Email extraction** — Extract content from email formats (EML, MSG), with attachments spawned as child documents
+4. **Text extraction** — Azure Document Intelligence `prebuilt-read` for PDFs (with word-level polygons), mammoth for DOCX
+5. **Document classification** — GPT-4o classifies document type and content flags (legal advice, personnel info, commercial, cultural, enforcement) — context injected into subsequent detection batches
+6. **Regex pattern detection** — NZ IRD numbers, phone numbers, email addresses, NHI numbers, street addresses, bank accounts, vehicle registrations (95% confidence, deterministic)
+7. **AI contextual detection** — Azure OpenAI GPT-4o analyses text in 3-page batches with document-level context, identifying 27+ detection types with LGOIMA ground suggestions
+8. **Custom rule matching** — Apply user-defined detection rules
+9. **Cross-source deduplication** — Pattern, AI, and custom rule detections unified and deduplicated by `(page, type, text)`, keeping highest confidence match
+10. **BBox calculation** — Word-level polygon matching to compute percentage-based bounding boxes for PDF originals
+11. **Duplicate detection** — Exact and near-duplicate document identification across the case
+12. **Metadata sanitisation** — Strip hidden metadata and embedded content
+13. **Content building** — Extracted text + detections combined into structured DocParagraph[] model (with heading, list, and table support for DOCX)
+14. **Storage** — Pages, detections, and content JSON stored in PostgreSQL
 
 ### AI Detection Prompt
 
