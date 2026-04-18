@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
       includeReasoning: request.nextUrl.searchParams.get("reasoning") === "true",
     });
 
-    return new NextResponse(Buffer.from(result.pdfBytes), {
+    return new NextResponse(new Uint8Array(result.pdfBytes), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `inline; filename="withholding-schedule-${caseId.slice(0, 8)}.pdf"`,
