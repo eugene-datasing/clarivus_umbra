@@ -83,6 +83,15 @@ interface BulkReviewClientProps {
 // Tick marks for the slider
 const SLIDER_TICKS = [0, 50, 70, 85, 90, 95, 100];
 
+// Sort order for entity group status (stable reference at module scope so
+// the useMemo below doesn't need to depend on it).
+const STATUS_ORDER: Record<GroupStatus, number> = {
+  pending: 0,
+  partial: 1,
+  accepted: 2,
+  rejected: 3,
+};
+
 export default function BulkReviewClient({
   entityGroups,
   caseReference,
@@ -178,12 +187,6 @@ export default function BulkReviewClient({
   }, [thresholdData, threshold]);
 
   // Sort groups: pending first, partial second, accepted/rejected last
-  const STATUS_ORDER: Record<GroupStatus, number> = {
-    pending: 0,
-    partial: 1,
-    accepted: 2,
-    rejected: 3,
-  };
   const visibleGroups = useMemo(() => {
     return [...entityGroups].sort(
       (a, b) => STATUS_ORDER[a.groupStatus] - STATUS_ORDER[b.groupStatus],
