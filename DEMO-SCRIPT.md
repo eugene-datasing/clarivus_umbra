@@ -289,7 +289,7 @@ DATABASE_URL="postgresql://veiladmin:<password>@psql-veil-prototype.postgres.dat
 - **Custom rules** — can be created, tested against sample text, and toggled on/off
 
 ### Closing statement:
-> "Veil is purpose-built for LGOIMA. It understands your statutory grounds, your workflow, and your compliance requirements. Built on Azure NZ North, your data never leaves New Zealand. Every AI suggestion is transparent, every human decision is auditable, and your Ombudsman responses are defensible from day one."
+> "Veil is purpose-built for LGOIMA. It understands your statutory grounds, your workflow, and your compliance requirements. Built on Azure — currently hosted in Australia East, with Azure New Zealand North available as a deployment-time choice for in-country residency. Every AI suggestion is transparent, every human decision is auditable, and your Ombudsman responses are defensible from day one."
 
 ---
 
@@ -332,7 +332,7 @@ DOCUMENT STATUSES:
 | **AI + Human** | AI assists, humans decide — every action is accountable |
 | **Tiered review** | Reviewer → Senior Reviewer → sign-off matches council governance |
 | **Defensible** | Immutable audit trail, statutory ground linkage, reasoning capture |
-| **NZ Data Sovereignty** | Azure NZ North region, data never leaves NZ/AU |
+| **In-Region Data** | Hosted in Azure Australia East today; Azure NZ North (Auckland) is a deployment-time option for customers who require in-country residency |
 | **Scale** | Handles 1,000-10,000+ documents per request |
 
 ---

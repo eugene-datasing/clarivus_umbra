@@ -83,20 +83,20 @@ There is no "off the record" mode. The audit trail is designed to withstand Ombu
 
 ### Bulk Processing at Scale
 
-| Benchmark | Target |
-|-----------|--------|
+| Benchmark | Design target |
+|-----------|---------------|
 | 5,000 pages processed | Under 3 hours |
 | 10,000 document duplicate detection | Under 45 minutes |
 | Concurrent reviewers | 10+ without degradation |
 
-Ingestion, detection, and export pipelines run independently with queue-driven parallelism. The system scales horizontally — no manual capacity provisioning required.
+Ingestion, detection, and export pipelines run independently with queue-driven parallelism. The system scales horizontally — no manual capacity provisioning required. Figures above are architectural design targets; full scale-validation against the RFP benchmarks is planned before production rollout.
 
 ---
 
 ## Document & Format Support
 
 - **Office documents** — PDF, DOCX, XLSX, PPTX, TXT, RTF, HTML
-- **Email archives** — PST, MSG, EML with attachment extraction and thread grouping
+- **Email archives** — MSG and EML with attachment extraction and thread grouping (for `.pst` archives, export individual `.msg` or `.eml` files before upload)
 - **Scanned documents** — OCR with 99%+ accuracy for printed text, 85-95% for handwriting
 - **Hidden content** — Automatic detection and sanitisation of comments, tracked changes, hidden sheets, embedded objects, and document metadata
 - **Duplicate detection** — Exact match (SHA-256 hash) and near-duplicate (vector similarity at 85% threshold)
@@ -130,12 +130,12 @@ All documents exported as PDF/A-2b for long-term archival compliance. Batch expo
 
 ## Security & Data Sovereignty
 
-### Your Data. In New Zealand. Always.
+### Your Data. In-Region. Always.
 
-All data processed and stored in **Azure New Zealand North (Auckland)**. No data leaves New Zealand under any circumstances.
+Veil is currently hosted in **Azure Australia East (Sydney)**. **Azure New Zealand North (Auckland)** is available as a deployment-time choice for customers who require in-country residency — data residency is a deployment decision made with the customer before cutover.
 
 - DataSing is Wellington-based. No offshore contractors access your data.
-- Azure NZ North (primary) + Australia East (disaster recovery read-replicas only)
+- Production region (AU East or NZ North) is locked at deployment; pairing region is configurable for disaster recovery
 - Microsoft confirmed: no customer data used for AI model training
 
 ### Authentication & Access
@@ -177,12 +177,12 @@ All data processed and stored in **Azure New Zealand North (Auckland)**. No data
 |---|---|
 | **60-70%** | Reduction in manual redaction effort |
 | **200-280 hours** | Staff time saved annually (at 80 requests/year) |
-| **5,000 pages** | Processed in under 3 hours |
-| **10,000 documents** | Duplicate detection in under 45 minutes |
-| **10+ reviewers** | Concurrent without performance degradation |
+| **5,000 pages** | Processed in under 3 hours (design target) |
+| **10,000 documents** | Duplicate detection in under 45 minutes (design target) |
+| **10+ reviewers** | Concurrent without performance degradation (design target) |
 | **99.5%** | Uptime SLA with service credits |
-| **23** | Statutory grounds built into the platform |
-| **100%** | NZ data sovereignty — no exceptions |
+| **27** | Statutory grounds built into the platform |
+| **Customer-chosen** | NZ or AU deployment region |
 
 ---
 
