@@ -187,16 +187,7 @@ Reverting a detection to "pending" on a "reviewed" document automatically regres
 
 ## 5. Known Bugs
 
-### Tier 1 PDF Redaction — Dedup Collapses Repeated Occurrences (Priority 1)
-**File:** `lib/pipeline/process.ts:577-592`
-Pipeline dedup key is `(page, type, text.toLowerCase().trim())` — coordinates are NOT in the key. If the same entity text appears N times on a page at different positions, only 1 Detection row survives, carrying the bbox of the first occurrence only. Remaining N-1 occurrences are unredacted in the output PDF. See `docs/tier1-redaction-investigation.md`.
-
-### Tier 1 PDF Redaction — Oversized Bounding Boxes (Priority 2)
-**File:** `lib/pipeline/bbox.ts:66-97`
-`computeBoxFromWords` returns the axis-aligned UNION of all matched word polygons. When detection text spans multiple lines in the source, the bbox covers from line-1-top to line-N-bottom (~84% width × ~18% height). AI detections with long narrative text (no `TEXT_SEARCH_MAX_LENGTH` filter on Tier 1) produce section-sized black rectangles.
-
-### Workaround
-DOCX files use Tier 2 (text-search) which correctly finds and redacts all occurrences. Only PDF originals are affected via Tier 1 coordinate-based redaction.
+No open bugs. The three Tier 1 PDF redaction bugs previously listed here (per-occurrence dedup collapse, oversized multi-line bboxes, no text-length filter) were resolved in April 2026 — see `calculateBBoxAll` / `computeBoxesFromWords` in `lib/pipeline/bbox.ts` and the bbox-before-dedup block in `processDocument` in `lib/pipeline/process.ts`. Background investigation is archived in `docs/tier1-redaction-investigation.md`.
 
 ---
 
@@ -206,8 +197,8 @@ DOCX files use Tier 2 (text-search) which correctly finds and redacts all occurr
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Fix Tier 1 PDF redaction dedup | Bug | Dedup key needs coordinates; `calculateBBox` needs to return all matches not just first. See `docs/tier1-redaction-investigation.md`. |
-| Fix Tier 1 oversized bounding boxes | Bug | `computeBoxFromWords` needs line-aware grouping instead of union bounding. |
+| Fix Tier 1 PDF redaction dedup | Resolved (April 2026) | `processDocument` now enriches detections with `calculateBBoxAll` before dedup and keys dedup on `(page, type, text, posY_rounded)`. |
+| Fix Tier 1 oversized bounding boxes | Resolved (April 2026) | `computeBoxesFromWords` now splits matched words by `yTolerance` into visual lines and emits one bbox per line; detection text >80 chars falls through to Tier 2. |
 | Service Bus job queue | Infrastructure provisioned | `sb-veil-prototype` / `document-processing` queue exists. Currently using in-process persistent queue (`lib/queue/job-queue.ts`). Need to replace with `@azure/service-bus` client for production-grade reliability. |
 | Performance benchmarks | Infrastructure exists | Processing metrics and concurrency control are built. Not yet validated at scale against RFP targets (5,000 pages in 4 hours, 5 concurrent reviewers). |
 
@@ -224,7 +215,7 @@ No outstanding items. Previous could-have features (corrupted file detection, mu
 
 ---
 
-## 6. Known UI Issues
+## 7. Known UI Issues
 
 1. **Responsive design:** Implemented. Mobile bottom navigation bar and hamburger menu for admin items. Desktop layouts optimised for 1920x1080.
 2. **Keyboard navigation:** Implemented for the review screen (A=accept, R=reject, arrow keys for detection navigation, Esc to dismiss). Tab order works for forms.
@@ -234,13 +225,13 @@ No outstanding items. Previous could-have features (corrupted file detection, mu
 
 ---
 
-## 7. LGOIMA Ground Accuracy
+## 8. LGOIMA Ground Accuracy
 
 The LGOIMA grounds in `lib/lgoima-grounds.ts` are sourced from the Local Government Official Information and Meetings Act 1987:
 
-- **Section 6** — Conclusive reasons (must withhold): s6(a) through s6(d)
-- **Section 7** — Other reasons (balanced against public interest): s7(2)(a) through s7(2)(j)
-- **Section 17** — Refusal grounds: s17(c), s17(d), s17(e), s17(f)
+- **Section 6** — Conclusive reasons (must withhold): 4 grounds, s6(a) through s6(d).
+- **Section 7** — Other reasons (balanced against public interest): 14 grounds — s7(2)(a), s7(2)(b)(i), s7(2)(b)(ii), s7(2)(ba), s7(2)(c)(i), s7(2)(c)(ii), s7(2)(d), s7(2)(e), s7(2)(f)(i), s7(2)(f)(ii), s7(2)(g), s7(2)(h), s7(2)(i), s7(2)(j).
+- **Section 17** — Refusal grounds: 9 grounds — s17(a), s17(b), s17(c)(i), s17(c)(ii), s17(d), s17(e), s17(f), s17(g), s17(h).
 
 Each ground includes statutory reference, short label, full description, public interest requirement flag, and common-usage flag.
 
@@ -248,7 +239,7 @@ Each ground includes statutory reference, short label, full description, public 
 
 ---
 
-## 8. Production Build Sequence
+## 9. Production Build Sequence
 
 Items marked with checkmarks are complete.
 
@@ -263,7 +254,7 @@ Items marked with checkmarks are complete.
 9. **Document classification** — DONE. GPT-4o pre-classifies document type and content flags, context injected into detection batches.
 10. **Structured DOCX rendering** — DONE. Headings, lists, tables with cell-level detection highlighting.
 11. **PNCC demo seed** — DONE. 11 users, 8 departments, 5 cases, no seeded documents.
-12. **Tier 1 PDF redaction fixes** — IN PROGRESS. Dedup collapses repeated occurrences, oversize bounding boxes. See `docs/tier1-redaction-investigation.md`.
+12. **Tier 1 PDF redaction fixes** — DONE (April 2026). Per-occurrence dedup (bbox before dedup), line-aware bounding boxes, and 80-character length filter. See `docs/tier1-redaction-investigation.md` for the original investigation.
 13. **Service Bus integration** — REMAINING. Replace in-process persistent queue with `@azure/service-bus` for production-grade job processing.
 14. **Real-time updates** — REMAINING. Azure SignalR for live detection progress and collaborative review.
 15. **Testing at scale** — REMAINING. Load testing against RFP benchmarks (5,000 pages / 4 hours, 10,000 doc duplicate detection / 1 hour, 5 concurrent reviewers).

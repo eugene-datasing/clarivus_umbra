@@ -203,13 +203,15 @@ Veil uses NextAuth v5 with **Azure AD (Entra ID)** as the primary authentication
 
 ### Roles
 
-| Role | Responsibility |
-|------|---------------|
-| **Admin** | Full system access, organisation setup, user management |
-| **LGOIMA Coordinator** | Creates cases, assigns work, manages deadlines |
-| **Initial Reviewer** | Reviews AI detections, accepts/rejects, assigns withholding grounds |
-| **Senior Reviewer** | Signs off or requests changes on reviewed documents |
-| **Final Approver** | Signs off on the complete response package before release |
+Role names below match the enum stored in the database (`admin`, `request-manager`, `senior-reviewer`, `final-approver`, `reviewer`). UI labels are in parentheses.
+
+| Role (enum) | UI label | Responsibility |
+|-------------|----------|----------------|
+| `admin` | Administrator | Full system access, organisation setup, user management |
+| `request-manager` | Request Manager | Creates cases, assigns work, manages deadlines |
+| `reviewer` | Reviewer | Reviews AI detections, accepts/rejects, assigns withholding grounds |
+| `senior-reviewer` | Senior Reviewer | Signs off or requests changes on reviewed documents |
+| `final-approver` | Final Approver | Signs off on the complete response package before release |
 
 ---
 
@@ -419,7 +421,7 @@ veil-prototype/
 │       ├── audit-pdf.ts                   # Audit trail PDF generator
 │       └── export.ts                      # ZIP export package assembler
 ├── prisma/
-│   ├── schema.prisma                      # Database schema (19 models, 17 migrations)
+│   ├── schema.prisma                      # Database schema (19 models, 18 migrations)
 │   └── seed.ts                            # Demo data seed script
 ├── scripts/
 │   ├── generate-activation-code.ts        # Generate activation code for new deployments
@@ -452,7 +454,7 @@ veil-prototype/
 
 ## Database Schema (Prisma)
 
-19 models across 17 migrations:
+19 models across 18 migrations:
 
 | Model | Purpose |
 |-------|---------|
@@ -481,8 +483,8 @@ veil-prototype/
 ## Key Screens
 
 ### Fully Working (with real data)
-- **Landing Page** (`/`) — Public-facing product page with feature showcase, screenshots, stats, and demo request form
-- **Dashboard** (`/dashboard`) — Active cases, queue summary, recent activity
+- **Landing Page** (`/`, unauthenticated) — Public-facing product page with feature showcase, screenshots, stats, and demo request form
+- **Dashboard** (`/`, authenticated) — Active cases, queue summary, recent activity
 - **Cases List** (`/requests`) — All LGOIMA requests with search and filters
 - **New Request** (`/requests/new`) — Intake form with auto-deadline and DB persistence
 - **Case Detail** (`/requests/[id]`) — Document table with real status tracking
@@ -576,7 +578,7 @@ Responsive design with mobile-friendly layout and bottom navigation bar on small
 npm run build    # Production build
 npm run start    # Start production server
 npm run lint     # Strict ESLint (0 warnings policy)
-npm run test     # Run Vitest tests (216 tests)
+npm run test     # Run Vitest tests (319 tests)
 
 # Docker (local — use --platform on ARM Macs)
 docker build --platform linux/amd64 -t veil-prototype .
@@ -592,7 +594,7 @@ az webapp restart --name app-veil-prototype --resource-group rg-veil-prototype
 GitHub Actions runs on every push and pull request (`.github/workflows/ci.yml`):
 - ESLint (strict, 0 warnings)
 - TypeScript type checking
-- Vitest test suite (216 tests)
+- Vitest test suite (319 tests)
 - Production build
 
 Additional workflows handle Docker image builds (`docker.yml`) and database migrations (`migrate.yml`).

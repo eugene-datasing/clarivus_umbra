@@ -19,8 +19,8 @@ This is NOT just a redaction tool — it's a full disclosure workflow: intake, A
 | PDF redaction | PyMuPDF via Python3 subprocess (3-tier: coordinate, text-search, plain-text) |
 | Dev DB port | 5434 (not 5432) |
 | Dev DB creds | `postgresql://veil:veil_dev@localhost:5434/veil` |
-| Models | 19 Prisma models, 17+ migrations |
-| Tests | 216 Vitest unit tests + 297 Playwright e2e tests |
+| Models | 19 Prisma models, 18 migrations |
+| Tests | 319 Vitest unit tests + 298 Playwright e2e tests |
 | Live URL | https://veil.datasing.nz |
 | Azure region | `australiaeast` (App Service B1 + PostgreSQL Flexible Server + ACR + Key Vault + Blob Storage) |
 
@@ -97,7 +97,7 @@ For storage:
 ### Document Processing Pipeline
 Upload -> File validation -> Format conversion -> OCR (Azure DI `prebuilt-read`) -> Document classification (GPT-4o) -> Regex patterns (NZ PII) -> AI detection (GPT-4o, 3-page batches with doc-level context) -> Custom rules -> Cross-source dedup by `(page, type, text)` -> BBox calculation -> Content building -> Storage
 
-**27 detection types** across 4 categories: personal (person-name, phone, email-addr, ird, address, nhi, bank-account, vehicle-reg), commercial (commercial, council-commercial), legal/governance (legal-privilege, negotiation, free-frank-opinion, conduct-obligations), safety/enforcement (safety-concern, law-enforcement, harassment-risk, cultural-sensitivity, health-safety), and more.
+**Detection types** — 19 AI-produced types in `lib/pipeline/ai-detect.ts` and 21 reviewer-assignable types in `lib/detection-type-grounds.ts` (adds `nhi` and `manual`). Personal: `personal-name`, `phone`, `email-addr`, `ird`, `address`, `bank-account`, `nz-passport`, `vehicle-reg`, `nhi` (reviewer-only). Commercial: `commercial`, `council-commercial`. Legal/governance: `legal-privilege`, `negotiation`, `free-frank`, `confidential`. Safety/enforcement: `safety-concern`, `law-enforcement`, `harassment-risk`, `cultural-sensitivity`, `health-safety`. Plus `manual` for manual annotations. See `lib/detection-type-grounds.ts` for the authoritative list.
 
 ### Review Workflow
 ```
@@ -142,9 +142,9 @@ All authorization functions (`requireUser()`, `requireAdmin()`, `authorizeForCas
 ## LGOIMA Grounds
 
 Defined in `lib/lgoima-grounds.ts` — **27 grounds** validated by Zod schema:
-- **Section 6** — Conclusive reasons (must withhold): s6(a)–s6(d)
-- **Section 7** — Other reasons (public interest test): s7(2)(a)–s7(2)(j), including sub-sections like s7(2)(b)(i), s7(2)(b)(ii), s7(2)(c)(i), s7(2)(c)(ii), s7(2)(f)(i), s7(2)(f)(ii)
-- **Section 17** — Refusal grounds: s17(c)–s17(f)
+- **Section 6** — Conclusive reasons (must withhold): 4 grounds — s6(a), s6(b), s6(c), s6(d).
+- **Section 7** — Other reasons (public interest test): 14 grounds — s7(2)(a), s7(2)(b)(i), s7(2)(b)(ii), s7(2)(ba), s7(2)(c)(i), s7(2)(c)(ii), s7(2)(d), s7(2)(e), s7(2)(f)(i), s7(2)(f)(ii), s7(2)(g), s7(2)(h), s7(2)(i), s7(2)(j).
+- **Section 17** — Refusal grounds: 9 grounds — s17(a), s17(b), s17(c)(i), s17(c)(ii), s17(d), s17(e), s17(f), s17(g), s17(h).
 
 Grounds are grouped by detection pathway in the AI prompt (privacy-pathway, commercial-pathway, governance-pathway, enforcement-pathway) with worked examples.
 
@@ -169,8 +169,8 @@ Grounds are grouped by detection pathway in the AI prompt (privacy-pathway, comm
 ## Testing
 
 ```bash
-npm run test              # 216 Vitest unit tests
-npm run test:e2e          # 297 Playwright e2e tests (seeds test users first)
+npm run test              # 319 Vitest unit tests
+npm run test:e2e          # 298 Playwright e2e tests (seeds test users first)
 npm run test:e2e:ui       # Playwright with UI
 npm run lint              # ESLint (0 warnings policy)
 ```
@@ -211,23 +211,15 @@ After `npx prisma db seed`, the database includes:
 - **5 realistic LGOIMA cases** — no documents (user uploads real files during demo)
 - Pipeline milestones and org identity settings (Palmerston North City Council branding)
 
-## Known Bugs — Tier 1 PDF Redaction
+## Tier 1 PDF Redaction — Resolved
 
-See `docs/tier1-redaction-investigation.md` for full investigation report.
+The three Tier 1 bugs flagged in `docs/tier1-redaction-investigation.md` were addressed in April 2026:
 
-### Bug 1: Dedup collapses repeated text occurrences (priority 1)
-**File:** `lib/pipeline/process.ts:577-592`
-Dedup key is `(page, type, text)` — coordinates are NOT in the key. If "Rohan Patel" appears 3 times on page 1 at different Y positions, only ONE Detection row survives. `calculateBBox` (called after dedup) returns the first occurrence's bbox. Occurrences 2 and 3 are unredacted.
+- **Per-occurrence redaction** — `calculateBBoxAll` in `lib/pipeline/bbox.ts` now returns one bbox per visual line per match; `processDocument` in `lib/pipeline/process.ts` enriches detections with coordinates before dedup and keys dedup on `(page, type, text, posY_rounded)` so repeated occurrences on the same page survive.
+- **Multi-line bboxes** — `computeBoxesFromWords` splits matched words by `yTolerance` into visual lines and emits one tight rectangle per line. Union-across-lines no longer happens.
+- **Text-length guard** — `lib/pipeline/bbox.ts` rejects detection text longer than 80 characters (matching `TEXT_SEARCH_MAX_LENGTH` in `redact-pdf.ts`), so long AI narrative summaries short-circuit to zero bbox and fall through to Tier 2 text-search.
 
-### Bug 2: Oversized bounding boxes (priority 2)
-**File:** `lib/pipeline/bbox.ts:66-97`
-`computeBoxFromWords` returns the axis-aligned UNION of all matched word polygons. When detection text spans multiple lines, the bbox covers from line-1-top to line-N-bottom (observed: 84% width × 18% height). AI detections with long narrative text produce section-sized black rectangles.
-
-### Bug 3: No Tier 1 text-length filter
-Tier 2 has `TEXT_SEARCH_MAX_LENGTH = 80` (`redact-pdf.ts:249`) to reject AI-generated contextual summaries. Tier 1 has no equivalent — long AI texts flow through `calculateBBox` and produce oversized rectangles.
-
-### Workaround
-DOCX files use Tier 2 (text-search) which correctly finds and redacts all occurrences via PyMuPDF `page.search_for()` on every page. Only PDF originals are affected.
+If regressions reappear, the canonical functions to inspect are `calculateBBoxAll` / `computeBoxesFromWords` in `lib/pipeline/bbox.ts` and the dedup block in `processDocument`'s detection-merge step.
 
 ## Common Gotchas
 
