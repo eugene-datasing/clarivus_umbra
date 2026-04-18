@@ -520,8 +520,8 @@ When documents are uploaded, Veil processes them through:
 6. **Regex pattern detection** — NZ IRD numbers, phone numbers, email addresses, NHI numbers, street addresses, bank accounts, vehicle registrations (95% confidence, deterministic)
 7. **AI contextual detection** — Azure OpenAI GPT-4o analyses text in 3-page batches with document-level context, identifying 27+ detection types with LGOIMA ground suggestions
 8. **Custom rule matching** — Apply user-defined detection rules
-9. **Cross-source deduplication** — Pattern, AI, and custom rule detections unified and deduplicated by `(page, type, text)`, keeping highest confidence match
-10. **BBox calculation** — Word-level polygon matching to compute percentage-based bounding boxes for PDF originals
+9. **BBox calculation** — Word-level polygon matching to compute percentage-based per-line bounding boxes for PDF originals; detection text longer than 80 characters short-circuits to zero bbox and falls through to Tier 2 text-search.
+10. **Cross-source deduplication** — Pattern, AI, and custom rule detections unified and deduplicated by `(page, type, text, round(posY * 10) / 10)` so repeated occurrences of the same text at different vertical positions survive as separate Detection rows.
 11. **Duplicate detection** — Exact and near-duplicate document identification across the case
 12. **Metadata sanitisation** — Strip hidden metadata and embedded content
 13. **Content building** — Extracted text + detections combined into structured DocParagraph[] model (with heading, list, and table support for DOCX)

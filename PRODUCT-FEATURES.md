@@ -110,8 +110,8 @@ Three export types for different audiences:
 | Package | Contents |
 |---------|----------|
 | **Requester** | Redacted documents + withholding schedule + cover letter |
-| **Internal** | Above + unredacted originals + full audit trail |
-| **Ombudsman** | Complete evidence package for investigation response |
+| **Internal** | Requester package + full audit trail + chain-of-custody report |
+| **Ombudsman** | Internal package + unredacted original documents (for investigation response) |
 
 All documents exported as PDF/A-2b for long-term archival compliance. Batch export supports 500+ page documents with configurable splitting.
 

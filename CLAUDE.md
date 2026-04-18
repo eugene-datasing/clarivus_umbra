@@ -95,7 +95,7 @@ For storage:
 5. SCIM provisioning available at `/api/scim/Users` and `/api/scim/Groups`
 
 ### Document Processing Pipeline
-Upload -> File validation -> Format conversion -> OCR (Azure DI `prebuilt-read`) -> Document classification (GPT-4o) -> Regex patterns (NZ PII) -> AI detection (GPT-4o, 3-page batches with doc-level context) -> Custom rules -> Cross-source dedup by `(page, type, text)` -> BBox calculation -> Content building -> Storage
+Upload -> File validation -> Format conversion -> OCR (Azure DI `prebuilt-read`) -> Document classification (GPT-4o) -> Regex patterns (NZ PII) -> AI detection (GPT-4o, 3-page batches with doc-level context) -> Custom rules -> BBox calculation (per-line, >80-char text short-circuits) -> Cross-source dedup by `(page, type, text, posY_rounded)` -> Content building -> Storage. Full per-step description in README.md "Processing Pipeline".
 
 **Detection types** — 19 AI-produced types in `lib/pipeline/ai-detect.ts` and 21 reviewer-assignable types in `lib/detection-type-grounds.ts` (adds `nhi` and `manual`). Personal: `personal-name`, `phone`, `email-addr`, `ird`, `address`, `bank-account`, `nz-passport`, `vehicle-reg`, `nhi` (reviewer-only). Commercial: `commercial`, `council-commercial`. Legal/governance: `legal-privilege`, `negotiation`, `free-frank`, `confidential`. Safety/enforcement: `safety-concern`, `law-enforcement`, `harassment-risk`, `cultural-sensitivity`, `health-safety`. Plus `manual` for manual annotations. See `lib/detection-type-grounds.ts` for the authoritative list.
 
@@ -108,7 +108,7 @@ processing -> ready -> in-review -> reviewed -> signed-off
 ```
 
 ### Export Packages
-Three variants: **requester** (redacted + schedule + cover letter), **internal** (+ audit trail), **ombudsman** (+ originals)
+Three variants built by `lib/pipeline/export.ts`: **requester** (redacted PDFs + schedule + cover letter), **internal** (requester package + audit trail + chain-of-custody), **ombudsman** (internal package + unredacted originals). See README "Export Packages" for the canonical table.
 
 ### PDF Redaction Engine (three tiers)
 
