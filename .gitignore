@@ -26,3 +26,9 @@ e2e/.auth/
 # misc
 .DS_Store
 *.tsbuildinfo
+
+# Local working files (not shared with the team)
+PNCC-demo-cheatsheet.docx
+test-fixtures/
+playwright_output.txt
+test_output.txt

@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
     const result = await buildChainOfCustodyReport(caseId, user.name);
 
-    return new NextResponse(Buffer.from(result.pdfBytes), {
+    return new NextResponse(new Uint8Array(result.pdfBytes), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `inline; filename="chain-of-custody-${caseId.slice(0, 8)}.pdf"`,

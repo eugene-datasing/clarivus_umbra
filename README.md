@@ -125,12 +125,10 @@ In production, secrets are resolved from Key Vault via App Service managed ident
 
 After `npx prisma db seed`, the database includes:
 
-- **10 users** with roles: admin, request-manager, reviewer, senior-reviewer, final-approver
-- **18 LGOIMA cases** with varying statuses and deadlines
-- **24 documents** with processing states (PDF, DOCX, XLSX, EML, MSG)
-- **35 AI detections** with confidence scores and LGOIMA grounds
-- **30 audit trail entries** and **6 pipeline milestones**
-- **Departments:** Infrastructure, Planning, Legal, etc.
+- **11 users** — Eugene Cash (SSO admin, eugene@datasing.nz) + 10 Palmerston North City Council staff with credentials login
+- **8 departments** — City Planning, Infrastructure, Finance, Parks & Reserves, Environmental Services, Building Services, Community Services, Corporate Services
+- **5 realistic LGOIMA cases** — no documents (user uploads real files during demo)
+- **Pipeline milestones** and org identity settings (PNCC branding)
 
 ---
 
@@ -159,6 +157,10 @@ After `npx prisma db seed`, the database includes:
 | [`docs/azure-infrastructure-spec.md`](docs/azure-infrastructure-spec.md) | Azure architecture and deployment |
 | [`docs/auth-and-onboarding-spec.md`](docs/auth-and-onboarding-spec.md) | Authentication and first-run onboarding design |
 | [`docs/client-deployment-activation-spec.md`](docs/client-deployment-activation-spec.md) | Client activation and licensing |
+| [`docs/tier1-redaction-investigation.md`](docs/tier1-redaction-investigation.md) | Tier 1 PDF redaction dedup + bbox bug investigation |
+| [`docs/lgoima-remediation-plan.md`](docs/lgoima-remediation-plan.md) | LGOIMA grounds remediation plan (taxonomy + coverage gaps) |
+| [`docs/lgoima-redaction-taxonomy.md`](docs/lgoima-redaction-taxonomy.md) | Detailed LGOIMA redaction taxonomy reference |
+| [`docs/lgoima-act-2026-01-15.pdf`](docs/lgoima-act-2026-01-15.pdf) | Full text of the Local Government Official Information and Meetings Act 1987 (version as at 15 January 2026) |
 
 ---
 
@@ -204,13 +206,15 @@ Veil uses NextAuth v5 with **Azure AD (Entra ID)** as the primary authentication
 
 ### Roles
 
-| Role | Responsibility |
-|------|---------------|
-| **Admin** | Full system access, organisation setup, user management |
-| **LGOIMA Coordinator** | Creates cases, assigns work, manages deadlines |
-| **Initial Reviewer** | Reviews AI detections, accepts/rejects, assigns withholding grounds |
-| **Senior Reviewer** | Signs off or requests changes on reviewed documents |
-| **Final Approver** | Signs off on the complete response package before release |
+Role names below match the enum stored in the database (`admin`, `request-manager`, `senior-reviewer`, `final-approver`, `reviewer`). UI labels are in parentheses.
+
+| Role (enum) | UI label | Responsibility |
+|-------------|----------|----------------|
+| `admin` | Administrator | Full system access, organisation setup, user management |
+| `request-manager` | Request Manager | Creates cases, assigns work, manages deadlines |
+| `reviewer` | Reviewer | Reviews AI detections, accepts/rejects, assigns withholding grounds |
+| `senior-reviewer` | Senior Reviewer | Signs off or requests changes on reviewed documents |
+| `final-approver` | Final Approver | Signs off on the complete response package before release |
 
 ---
 
@@ -420,10 +424,13 @@ veil-prototype/
 │       ├── audit-pdf.ts                   # Audit trail PDF generator
 │       └── export.ts                      # ZIP export package assembler
 ├── prisma/
-│   ├── schema.prisma                      # Database schema (19 models, 17 migrations)
+│   ├── schema.prisma                      # Database schema (19 models, 18 migrations)
 │   └── seed.ts                            # Demo data seed script
 ├── scripts/
-│   └── generate-activation-code.ts        # Generate activation code for new deployments
+│   ├── generate-activation-code.ts        # Generate activation code for new deployments
+│   ├── reset-instance.ts                  # Reset instance state for fresh demo
+│   ├── seed-content.ts                    # Seed content into existing documents
+│   └── check-content.ts                   # Diagnostic: check document content structure
 ├── tests/
 │   └── benchmarks/                        # Performance benchmarks
 ├── .github/workflows/
@@ -450,7 +457,7 @@ veil-prototype/
 
 ## Database Schema (Prisma)
 
-19 models across 17 migrations:
+19 models across 18 migrations:
 
 | Model | Purpose |
 |-------|---------|
@@ -479,8 +486,8 @@ veil-prototype/
 ## Key Screens
 
 ### Fully Working (with real data)
-- **Landing Page** (`/`) — Public-facing product page with feature showcase, screenshots, stats, and demo request form
-- **Dashboard** (`/dashboard`) — Active cases, queue summary, recent activity
+- **Landing Page** (`/`, unauthenticated) — Public-facing product page with feature showcase, screenshots, stats, and demo request form
+- **Dashboard** (`/`, authenticated) — Active cases, queue summary, recent activity
 - **Cases List** (`/requests`) — All LGOIMA requests with search and filters
 - **New Request** (`/requests/new`) — Intake form with auto-deadline and DB persistence
 - **Case Detail** (`/requests/[id]`) — Document table with real status tracking
@@ -510,16 +517,18 @@ When documents are uploaded, Veil processes them through:
 
 1. **File validation** — Detect corrupted or unreadable files before processing
 2. **Format conversion** — Convert documents to a consistent processing format
-3. **Email extraction** — Extract content from email formats (EML, MSG)
-4. **Text extraction** — Azure Document Intelligence for PDFs, mammoth for DOCX
-5. **Regex pattern detection** — NZ IRD numbers, phone numbers, email addresses, NHI numbers, street addresses (95% confidence, deterministic)
-6. **AI contextual detection** — Azure OpenAI GPT-4o analyses text with LGOIMA-specific system prompt, identifies personal names, commercial content, legal privilege, and other sensitive information
-7. **Custom rule matching** — Apply user-defined detection rules
-8. **Deduplication** — Pattern and AI detections are merged, removing overlaps
-9. **Duplicate detection** — Exact and near-duplicate document identification across the case
-10. **Metadata sanitisation** — Strip hidden metadata and embedded content
-11. **Content building** — Extracted text + detections are combined into a structured paragraph/segment model for the review UI
-12. **Storage** — Pages, detections, and content JSON stored in PostgreSQL
+3. **Email extraction** — Extract content from email formats (EML, MSG), with attachments spawned as child documents
+4. **Text extraction** — Azure Document Intelligence `prebuilt-read` for PDFs (with word-level polygons), mammoth for DOCX
+5. **Document classification** — GPT-4o classifies document type and content flags (legal advice, personnel info, commercial, cultural, enforcement) — context injected into subsequent detection batches
+6. **Regex pattern detection** — NZ IRD numbers, phone numbers, email addresses, NHI numbers, street addresses, bank accounts, vehicle registrations (95% confidence, deterministic)
+7. **AI contextual detection** — Azure OpenAI GPT-4o analyses text in 3-page batches with document-level context, identifying 27+ detection types with LGOIMA ground suggestions
+8. **Custom rule matching** — Apply user-defined detection rules
+9. **BBox calculation** — Word-level polygon matching to compute percentage-based per-line bounding boxes for PDF originals; detection text longer than 80 characters short-circuits to zero bbox and falls through to Tier 2 text-search.
+10. **Cross-source deduplication** — Pattern, AI, and custom rule detections unified and deduplicated by `(page, type, text, round(posY * 10) / 10)` so repeated occurrences of the same text at different vertical positions survive as separate Detection rows.
+11. **Duplicate detection** — Exact and near-duplicate document identification across the case
+12. **Metadata sanitisation** — Strip hidden metadata and embedded content
+13. **Content building** — Extracted text + detections combined into structured DocParagraph[] model (with heading, list, and table support for DOCX)
+14. **Storage** — Pages, detections, and content JSON stored in PostgreSQL
 
 ### AI Detection Prompt
 
@@ -572,7 +581,7 @@ Responsive design with mobile-friendly layout and bottom navigation bar on small
 npm run build    # Production build
 npm run start    # Start production server
 npm run lint     # Strict ESLint (0 warnings policy)
-npm run test     # Run Vitest tests (216 tests)
+npm run test     # Run Vitest tests (319 tests)
 
 # Docker (local — use --platform on ARM Macs)
 docker build --platform linux/amd64 -t veil-prototype .
@@ -588,7 +597,7 @@ az webapp restart --name app-veil-prototype --resource-group rg-veil-prototype
 GitHub Actions runs on every push and pull request (`.github/workflows/ci.yml`):
 - ESLint (strict, 0 warnings)
 - TypeScript type checking
-- Vitest test suite (216 tests)
+- Vitest test suite (319 tests)
 - Production build
 
 Additional workflows handle Docker image builds (`docker.yml`) and database migrations (`migrate.yml`).

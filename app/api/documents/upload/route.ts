@@ -106,6 +106,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Authorize the user for this specific case
+    await authorizeForCase(user, caseId);
+
     const files = formData.getAll("files") as File[];
 
     if (!files || files.length === 0) {
@@ -240,11 +243,21 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(results, { status: 201 });
   } catch (error) {
-    log.error("Upload failed", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    trackException(error, { route: "/api/documents/upload" });
     const message = error instanceof Error ? error.message : String(error);
+
+    if (message.startsWith("Access denied")) {
+      log.warn("Upload blocked — unauthorized for case", { error: message });
+      return NextResponse.json(
+        {
+          error: "You are not authorized to upload documents to this case.",
+          code: "UPLOAD_FORBIDDEN",
+        },
+        { status: 403 },
+      );
+    }
+
+    log.error("Upload failed", { error: message });
+    trackException(error, { route: "/api/documents/upload" });
     return NextResponse.json(
       {
         error: "Upload failed. Please try again.",

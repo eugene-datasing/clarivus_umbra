@@ -97,7 +97,7 @@ export function StatutoryGroundSelector({
                       className="accent-brand-primary"
                     />
                     <div className="flex-1">
-                      <span className="text-sm font-medium">{g.reference}</span>
+                      <span className="inline-block w-24 shrink-0 text-sm font-medium whitespace-nowrap">{g.reference}</span>
                       <span className="text-sm text-txt-secondary ml-2">{g.label}</span>
                       {g.rare && <span className="text-xs text-txt-secondary ml-1">[rarely applicable]</span>}
                     </div>
@@ -132,7 +132,7 @@ export function StatutoryGroundSelector({
                     />
                     <div className="flex-1">
                       <Star className="w-3 h-3 inline text-amber-500 mr-1" />
-                      <span className="text-sm font-medium">{g.reference}</span>
+                      <span className="inline-block w-24 shrink-0 text-sm font-medium whitespace-nowrap">{g.reference}</span>
                       <span className="text-sm text-txt-secondary ml-2">{g.label}</span>
                     </div>
                     {g.id === aiSuggestedGround && (
@@ -167,7 +167,7 @@ export function StatutoryGroundSelector({
                       className="accent-brand-primary"
                     />
                     <div className="flex-1">
-                      <span className="text-sm font-medium">{g.reference}</span>
+                      <span className="inline-block w-24 shrink-0 text-sm font-medium whitespace-nowrap">{g.reference}</span>
                       <span className="text-sm text-txt-secondary ml-2">{g.label}</span>
                     </div>
                   </label>

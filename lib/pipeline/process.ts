@@ -25,7 +25,7 @@ import { detectWithAI } from "./ai-detect";
 import { classifyDocument, type DocumentClassification } from "./doc-classify";
 import { detectDuplicates } from "./duplicate-detect";
 import { executeCustomRules } from "./custom-rules";
-import { calculateBBox } from "./bbox";
+import { calculateBBoxAll } from "./bbox";
 import { buildContent, buildContentFromBlocks, verifyDetectionCoverage } from "./content-builder";
 import { buildFeedbackPromptSection } from "./feedback-examples";
 import { createAuditEntry } from "@/lib/data/audit";
@@ -573,13 +573,27 @@ export async function processDocument(docId: string): Promise<void> {
       })),
     ];
 
-    // Deduplicate by (page, type, text). Keep the entry with highest confidence.
-    const beforeDedup = allDetections.length;
-    const seen = new Map<string, number>();
-    const dedupedDetections: UnifiedDetection[] = [];
-
+    // Enrich with coordinates BEFORE deduplication to allow multiple instances on the same page
+    const enrichedDetections: (UnifiedDetection & { posX: number; posY: number; posW: number; posH: number })[] = [];
     for (const det of allDetections) {
-      const key = `${det.page}|${det.type}|${det.text.toLowerCase().trim()}`;
+      const layout = pageLayouts.get(det.page);
+      const bboxes = layout
+        ? calculateBBoxAll(det.text, layout.words, layout.width, layout.height)
+        : [{ posX: 0, posY: 0, posW: 0, posH: 0 }];
+        
+      for (const bbox of bboxes) {
+        enrichedDetections.push({ ...det, ...bbox });
+      }
+    }
+
+    // Deduplicate by (page, type, text, posY_rounded). Keep the entry with highest confidence.
+    const beforeDedup = enrichedDetections.length;
+    const seen = new Map<string, number>();
+    const dedupedDetections: (UnifiedDetection & { posX: number; posY: number; posW: number; posH: number })[] = [];
+
+    for (const det of enrichedDetections) {
+      const posYRounded = Math.round(det.posY * 10) / 10;
+      const key = `${det.page}|${det.type}|${det.text.toLowerCase().trim()}|${posYRounded}`;
       const existingIdx = seen.get(key);
       if (existingIdx !== undefined) {
         if (det.confidence > dedupedDetections[existingIdx].confidence) {
@@ -603,10 +617,6 @@ export async function processDocument(docId: string): Promise<void> {
     // Insert deduplicated detections
     const allDetectionRecords = [];
     for (const det of dedupedDetections) {
-      const layout = pageLayouts.get(det.page);
-      const bbox = layout
-        ? calculateBBox(det.text, layout.words, layout.width, layout.height)
-        : { posX: 0, posY: 0, posW: 0, posH: 0 };
       const record = await prisma.detection.create({
         data: {
           documentId: docId,
@@ -620,7 +630,10 @@ export async function processDocument(docId: string): Promise<void> {
           aiExplanation: det.aiExplanation,
           source: det.source,
           status: "pending",
-          ...bbox,
+          posX: det.posX,
+          posY: det.posY,
+          posW: det.posW,
+          posH: det.posH,
         },
       });
       allDetectionRecords.push(record);

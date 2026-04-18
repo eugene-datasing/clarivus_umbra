@@ -358,9 +358,11 @@ export default function LandingPage() {
               aria-label="DataSing — visit datasing.nz"
               className="flex-shrink-0"
             >
-              <img
+              <Image
                 src={scrolled ? "/images/Datasing_Logo-01.svg" : "/images/Datasing_Logo-02.svg"}
                 alt="DataSing"
+                width={1355}
+                height={542}
                 className="h-7 w-auto transition-opacity duration-300"
               />
             </a>
@@ -374,9 +376,11 @@ export default function LandingPage() {
               aria-label="DataSing — visit datasing.nz"
               className="flex-shrink-0"
             >
-              <img
+              <Image
                 src={scrolled ? "/images/Datasing_Logo-01.svg" : "/images/Datasing_Logo-02.svg"}
                 alt="DataSing"
+                width={1355}
+                height={542}
                 className="h-5 w-auto"
               />
             </a>

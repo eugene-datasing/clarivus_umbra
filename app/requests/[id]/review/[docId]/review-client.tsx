@@ -161,7 +161,7 @@ function GroundSelector({
               suggestedGround === g.id && appliedGround !== g.id && "bg-amber-50"
             )}
           >
-            <span className="font-mono text-[10px] text-txt-secondary w-16 shrink-0">
+            <span className="font-mono text-[10px] text-txt-secondary w-24 shrink-0 whitespace-nowrap">
               {g.reference}
             </span>
             <span className="truncate">{g.label}</span>
@@ -195,7 +195,7 @@ function GroundSelector({
               suggestedGround === g.id && appliedGround !== g.id && "bg-amber-50"
             )}
           >
-            <span className="font-mono text-[10px] text-txt-secondary w-16 shrink-0">
+            <span className="font-mono text-[10px] text-txt-secondary w-24 shrink-0 whitespace-nowrap">
               {g.reference}
             </span>
             <span className="truncate">{g.label}</span>

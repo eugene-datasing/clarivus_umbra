@@ -80,12 +80,23 @@ async function main() {
     AND tablename != '_prisma_migrations'
   `;
 
-  const tableNames = tables.map((t) => t.tablename);
-  console.log(`Found ${tableNames.length} tables: ${tableNames.join(", ")}\n`);
+  // Allowlist safe identifiers before splicing into raw SQL — Postgres
+  // table names should always match this pattern, but we guard against
+  // any surprise from pg_tables to keep $executeRawUnsafe safe.
+  const SAFE_IDENTIFIER = /^[a-z_][a-z0-9_]*$/;
+  const safeTables: string[] = [];
+  for (const t of tables) {
+    if (SAFE_IDENTIFIER.test(t.tablename)) {
+      safeTables.push(t.tablename);
+    } else {
+      console.warn(`  ! Skipping table with unsafe identifier: ${JSON.stringify(t.tablename)}`);
+    }
+  }
+  console.log(`Found ${safeTables.length} tables: ${safeTables.join(", ")}\n`);
 
   // Step 2: Truncate all tables with CASCADE
-  if (tableNames.length > 0) {
-    const quoted = tableNames.map((t) => `"${t}"`).join(", ");
+  if (safeTables.length > 0) {
+    const quoted = safeTables.map((t) => `"${t}"`).join(", ");
     const sql = `TRUNCATE TABLE ${quoted} CASCADE`;
     console.log("Truncating all tables...");
     await prisma.$executeRawUnsafe(sql);
@@ -132,7 +143,7 @@ async function main() {
   // Verify: count rows in key tables
   console.log("Verification - row counts:");
   for (const table of ["users", "cases", "documents", "system_settings", "activation_codes"]) {
-    if (tableNames.includes(table)) {
+    if (safeTables.includes(table)) {
       const result: { c: bigint }[] = await prisma.$queryRawUnsafe(
         `SELECT count(*) as c FROM "${table}"`
       );

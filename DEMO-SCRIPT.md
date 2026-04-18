@@ -1,5 +1,6 @@
 # VEIL — 20-Minute Demo Script
 ## LGOIMA Disclosure Workflow Platform — DataSing / Clarivus AI
+### Demo Tenant: Palmerston North City Council (PNCC)
 
 ---
 
@@ -14,7 +15,7 @@
 5. Have a test document ready (PDF or DOCX with some PII) for the live upload demo
 6. Have this script on a second screen or printed
 
-**Note:** The Azure deployment uses a clean database. Create demo data live during the demo for maximum impact.
+**Note:** The Azure deployment is seeded with PNCC data: 11 users, 8 departments, 5 realistic LGOIMA cases (no documents — upload real files during demo).
 
 ### Option B: Local Development
 
@@ -29,11 +30,17 @@
 
 **Pre-demo data reset (optional, local only):**
 ```bash
-DATABASE_URL="postgresql://veil:veil_dev@localhost:5434/veil" npx prisma migrate reset
+PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION="yes go ahead" DATABASE_URL="postgresql://veil:veil_dev@localhost:5434/veil" npx prisma migrate reset --force
+```
+
+**Azure DB reset:**
+```bash
+DATABASE_URL="postgresql://veiladmin:<password>@psql-veil-prototype.postgres.database.azure.com:5432/veil?sslmode=require" \
+  PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION="yes go ahead" npx prisma migrate reset --force
 ```
 
 **Talking points to weave throughout:**
-- NZ-hosted (Azure NZ North) — data never leaves NZ/AU
+- NZ-hosted (Azure Australia East currently, NZ North available) — data stays in NZ/AU
 - Purpose-built for LGOIMA, not generic redaction
 - Immutable audit trail for Ombudsman defensibility
 - AI assists, humans decide — every action is accountable
@@ -102,11 +109,14 @@ DATABASE_URL="postgresql://veil:veil_dev@localhost:5434/veil" npx prisma migrate
    - Status shows "Processing"
    - Duplicate detection checks against existing documents in the case
    - Metadata sanitisation strips hidden content
-   - Azure Document Intelligence extracts text (OCR)
-   - Regex patterns detect structured PII (IRD numbers, phones, emails)
-   - GPT-4o analyses text for contextual detections (names, commercial content)
+   - Azure Document Intelligence extracts text (OCR) with word-level polygons
+   - Document classification: GPT-4o classifies document type and content flags
+   - Regex patterns detect structured PII (IRD numbers, phones, emails, bank accounts, etc.)
+   - GPT-4o analyses text for contextual detections (names, commercial content, legal privilege) with document-level context
+   - Custom rules applied
+   - Detections deduplicated across all sources
    - Status changes to "Ready for Review"
-3. Point out: "That entire pipeline — validation, deduplication, OCR, pattern matching, and AI analysis — just ran against real Azure services. The detections are now stored in the database."
+3. Point out: "That entire pipeline — validation, classification, OCR, pattern matching, AI analysis, and custom rules — just ran against real Azure services. The detections are now stored in the database."
 4. **Resilience point:** "The job queue has built-in retry logic — if any step fails, Veil retries up to 3 times before flagging an error. This is important for bulk processing at scale."
 
 ### Then navigate to Case Detail: `/requests/[case-id]`
@@ -279,7 +289,7 @@ DATABASE_URL="postgresql://veil:veil_dev@localhost:5434/veil" npx prisma migrate
 - **Custom rules** — can be created, tested against sample text, and toggled on/off
 
 ### Closing statement:
-> "Veil is purpose-built for LGOIMA. It understands your statutory grounds, your workflow, and your compliance requirements. Built on Azure NZ North, your data never leaves New Zealand. Every AI suggestion is transparent, every human decision is auditable, and your Ombudsman responses are defensible from day one."
+> "Veil is purpose-built for LGOIMA. It understands your statutory grounds, your workflow, and your compliance requirements. Built on Azure — currently hosted in Australia East, with Azure New Zealand North available as a deployment-time choice for in-country residency. Every AI suggestion is transparent, every human decision is auditable, and your Ombudsman responses are defensible from day one."
 
 ---
 
@@ -322,7 +332,7 @@ DOCUMENT STATUSES:
 | **AI + Human** | AI assists, humans decide — every action is accountable |
 | **Tiered review** | Reviewer → Senior Reviewer → sign-off matches council governance |
 | **Defensible** | Immutable audit trail, statutory ground linkage, reasoning capture |
-| **NZ Data Sovereignty** | Azure NZ North region, data never leaves NZ/AU |
+| **In-Region Data** | Hosted in Azure Australia East today; Azure NZ North (Auckland) is a deployment-time option for customers who require in-country residency |
 | **Scale** | Handles 1,000-10,000+ documents per request |
 
 ---

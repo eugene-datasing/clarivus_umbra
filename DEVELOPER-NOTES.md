@@ -86,6 +86,14 @@
 | Self-hosted fonts | Fonts bundled at build time via next/font/google — no runtime Google Fonts CDN dependency |
 | Organisation logo | Upload via setup wizard or admin settings, embedded in PDF cover letters, schedules, and chain-of-custody reports |
 | PDF viewer | PDF.js-based viewer with detection overlay highlights for PDF documents |
+| Document classification | GPT-4o pre-classifies document type and content flags before detection batches |
+| Structured DOCX rendering | Headings, bulleted/numbered lists, image placeholders, and full HTML table rendering with cell-level detection |
+| Inline type/ground editing | Clickable type badges and improved GroundSelector with section headers on review page |
+| Accept remaining bulk action | One-click accept all pending detections with confirmation dialog |
+| PNCC demo seed | 11 users, 8 departments, 5 realistic LGOIMA cases (no documents — user uploads real files) |
+| Multi-page DOCX redaction | Text-search mode searches ALL pages for each unique detection text, not just declared page |
+| PDF macron support | Noto Sans embedded via shared font loader across all 9 PDF generation files |
+| Extend deadline | s14 LGOIMA validation with audit trail |
 
 ---
 
@@ -130,6 +138,20 @@
 - **Reason:** Non-PDF documents have no bounding-box data from Azure Document Intelligence. LibreOffice conversion preserves original formatting, then PyMuPDF `page.search_for()` locates detection text in the converted PDF for true redaction. Falls back to plain-text PDF if conversion fails.
 - **Three-tier fallback:** (1) Coordinate-based redaction for PDFs, (2) LibreOffice convert + text-search for non-PDFs, (3) Plain-text PDF as last resort.
 
+### Three-Tier PDF Redaction
+- **Decision:** PDF originals use coordinate-based redaction (Tier 1) with fallback to text-search (Tier 2) and plain-text PDF (Tier 3).
+- **Reason:** Azure DI provides word-level polygons for PDFs, giving precise redaction at exact positions. Non-PDFs lack bounding-box data. Tier 2 (LibreOffice convert + PyMuPU text-search) preserves formatting. Tier 3 is a last resort for when both fail.
+- **Known issue:** Tier 1 has two bugs — dedup collapses repeated occurrences, and multi-line detection text produces oversized union bounding boxes. See `docs/tier1-redaction-investigation.md`.
+
+### Document Classification
+- **Decision:** A single GPT-4o call classifies document type and content flags before page-level detection batches.
+- **Reason:** Detection batches run 3 pages at a time and lack document-level context. The classification (document type, likely grounds, content flags like legal-advice, personnel-info, commercial, cultural, enforcement) is injected into every subsequent batch prompt.
+
+### Detection Deduplication
+- **Decision:** All three detection sources (pattern, AI, custom rules) are unified into a single list and deduplicated by `(page, type, text.toLowerCase().trim())` before DB insertion.
+- **Reason:** Pattern and AI detection overlap on the same entities. Custom rules can duplicate pattern matches. The dedup keeps the highest-confidence match per key.
+- **Known issue:** Coordinates are not in the key, so distinct occurrences of the same text at different positions on the same page are collapsed to one.
+
 ### CSRF Protection
 - **Decision:** Added `X-Requested-With: XMLHttpRequest` header requirement for state-changing API routes.
 - **Reason:** Browsers won't send custom headers cross-origin without CORS preflight, preventing cross-site request forgery. Implemented via `lib/csrf.ts` utility applied to upload, process, and export routes.
@@ -163,14 +185,21 @@ Reverting a detection to "pending" on a "reviewed" document automatically regres
 
 ---
 
-## 5. Remaining Gaps
+## 5. Known Bugs
+
+No open bugs. The three Tier 1 PDF redaction bugs previously listed here (per-occurrence dedup collapse, oversized multi-line bboxes, no text-length filter) were resolved in April 2026 — see `calculateBBoxAll` / `computeBoxesFromWords` in `lib/pipeline/bbox.ts` and the bbox-before-dedup block in `processDocument` in `lib/pipeline/process.ts`. Background investigation is archived in `docs/tier1-redaction-investigation.md`.
+
+---
+
+## 6. Remaining Gaps
 
 ### Must-Have for Production
 
 | Feature | Status | Notes |
 |---------|--------|-------|
+| Fix Tier 1 PDF redaction dedup | Resolved (April 2026) | `processDocument` now enriches detections with `calculateBBoxAll` before dedup and keys dedup on `(page, type, text, posY_rounded)`. |
+| Fix Tier 1 oversized bounding boxes | Resolved (April 2026) | `computeBoxesFromWords` now splits matched words by `yTolerance` into visual lines and emits one bbox per line; detection text >80 chars falls through to Tier 2. |
 | Service Bus job queue | Infrastructure provisioned | `sb-veil-prototype` / `document-processing` queue exists. Currently using in-process persistent queue (`lib/queue/job-queue.ts`). Need to replace with `@azure/service-bus` client for production-grade reliability. |
-| Enhanced PDF viewer | Partially done | PDF.js viewer with detection overlays is implemented. Could benefit from bounding-box coordinate overlays and more interactive annotation tools. |
 | Performance benchmarks | Infrastructure exists | Processing metrics and concurrency control are built. Not yet validated at scale against RFP targets (5,000 pages in 4 hours, 5 concurrent reviewers). |
 
 ### Should-Have
@@ -178,6 +207,7 @@ Reverting a detection to "pending" on a "reviewed" document automatically regres
 | Feature | Notes |
 |---------|-------|
 | Real-time collaborative review | Azure SignalR for live status updates during concurrent review sessions |
+| Tier 1 overdrawn-rectangle sanity fallback | Post-Tier-1 check: if any redaction has `posW > 40%` or `posH > 5%`, retry via text-search for that subset |
 
 ### Could-Have
 
@@ -185,7 +215,7 @@ No outstanding items. Previous could-have features (corrupted file detection, mu
 
 ---
 
-## 6. Known UI Issues
+## 7. Known UI Issues
 
 1. **Responsive design:** Implemented. Mobile bottom navigation bar and hamburger menu for admin items. Desktop layouts optimised for 1920x1080.
 2. **Keyboard navigation:** Implemented for the review screen (A=accept, R=reject, arrow keys for detection navigation, Esc to dismiss). Tab order works for forms.
@@ -195,13 +225,13 @@ No outstanding items. Previous could-have features (corrupted file detection, mu
 
 ---
 
-## 7. LGOIMA Ground Accuracy
+## 8. LGOIMA Ground Accuracy
 
 The LGOIMA grounds in `lib/lgoima-grounds.ts` are sourced from the Local Government Official Information and Meetings Act 1987:
 
-- **Section 6** — Conclusive reasons (must withhold): s6(a) through s6(d)
-- **Section 7** — Other reasons (balanced against public interest): s7(2)(a) through s7(2)(j)
-- **Section 17** — Refusal grounds: s17(c), s17(d), s17(e), s17(f)
+- **Section 6** — Conclusive reasons (must withhold): 4 grounds, s6(a) through s6(d).
+- **Section 7** — Other reasons (balanced against public interest): 14 grounds — s7(2)(a), s7(2)(b)(i), s7(2)(b)(ii), s7(2)(ba), s7(2)(c)(i), s7(2)(c)(ii), s7(2)(d), s7(2)(e), s7(2)(f)(i), s7(2)(f)(ii), s7(2)(g), s7(2)(h), s7(2)(i), s7(2)(j).
+- **Section 17** — Refusal grounds: 9 grounds — s17(a), s17(b), s17(c)(i), s17(c)(ii), s17(d), s17(e), s17(f), s17(g), s17(h).
 
 Each ground includes statutory reference, short label, full description, public interest requirement flag, and common-usage flag.
 
@@ -209,11 +239,11 @@ Each ground includes statutory reference, short label, full description, public 
 
 ---
 
-## 8. Production Build Sequence
+## 9. Production Build Sequence
 
 Items marked with checkmarks are complete.
 
-1. **Azure deployment** — DONE. App Service (Linux B1, custom Docker container) + PostgreSQL Flexible Server + Key Vault + ACR + Service Bus + Blob Storage. All in `australiaeast`. Live at https://veil.datasing.nz
+1. **Azure deployment** — DONE. App Service (Linux B1, custom Docker container) + PostgreSQL Flexible Server + Key Vault + ACR + Service Bus + Blob Storage. All in `australiaeast`. Live at https://veil.datasing.nz. Current image: `cr10`.
 2. **Authentication & RBAC** — DONE. Azure AD SSO working as primary provider, SCIM provisioning at `/api/scim/Users` and `/api/scim/Groups`, activation code system, user invitations via Azure Communication Services. Credentials fallback for development.
 3. **Blob Storage integration** — DONE. `AzureBlobStorageProvider` implemented in `lib/storage/azure-blob.ts`. Local filesystem as dev fallback.
 4. **GitHub Actions CI/CD** — DONE. 3 workflows: ci (lint/test/typecheck), docker (ACR build + App Service deploy), migrate (Prisma migrations).
@@ -221,7 +251,10 @@ Items marked with checkmarks are complete.
 6. **Duplicate detection** — DONE. Exact + near-duplicate detection via text similarity scoring.
 7. **Email ingestion** — DONE. EML + MSG parsing and ingestion.
 8. **Admin & governance** — DONE. Settings persistence via `SystemSetting` model, AI governance metrics dashboard, custom rules management.
-9. **Service Bus integration** — REMAINING. Replace in-process persistent queue with `@azure/service-bus` for production-grade job processing.
-10. **PDF viewer** — PARTIALLY DONE. PDF.js viewer with detection overlays implemented. Bounding-box coordinate overlays for pixel-accurate highlighting would improve precision.
-11. **Real-time updates** — REMAINING. Azure SignalR for live detection progress and collaborative review.
-12. **Testing at scale** — REMAINING. Load testing against RFP benchmarks (5,000 pages / 4 hours, 10,000 doc duplicate detection / 1 hour, 5 concurrent reviewers).
+9. **Document classification** — DONE. GPT-4o pre-classifies document type and content flags, context injected into detection batches.
+10. **Structured DOCX rendering** — DONE. Headings, lists, tables with cell-level detection highlighting.
+11. **PNCC demo seed** — DONE. 11 users, 8 departments, 5 cases, no seeded documents.
+12. **Tier 1 PDF redaction fixes** — DONE (April 2026). Per-occurrence dedup (bbox before dedup), line-aware bounding boxes, and 80-character length filter. See `docs/tier1-redaction-investigation.md` for the original investigation.
+13. **Service Bus integration** — REMAINING. Replace in-process persistent queue with `@azure/service-bus` for production-grade job processing.
+14. **Real-time updates** — REMAINING. Azure SignalR for live detection progress and collaborative review.
+15. **Testing at scale** — REMAINING. Load testing against RFP benchmarks (5,000 pages / 4 hours, 10,000 doc duplicate detection / 1 hour, 5 concurrent reviewers).
