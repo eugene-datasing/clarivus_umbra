@@ -158,6 +158,9 @@ After `npx prisma db seed`, the database includes:
 | [`docs/auth-and-onboarding-spec.md`](docs/auth-and-onboarding-spec.md) | Authentication and first-run onboarding design |
 | [`docs/client-deployment-activation-spec.md`](docs/client-deployment-activation-spec.md) | Client activation and licensing |
 | [`docs/tier1-redaction-investigation.md`](docs/tier1-redaction-investigation.md) | Tier 1 PDF redaction dedup + bbox bug investigation |
+| [`docs/lgoima-remediation-plan.md`](docs/lgoima-remediation-plan.md) | LGOIMA grounds remediation plan (taxonomy + coverage gaps) |
+| [`docs/lgoima-redaction-taxonomy.md`](docs/lgoima-redaction-taxonomy.md) | Detailed LGOIMA redaction taxonomy reference |
+| [`docs/lgoima-act-2026-01-15.pdf`](docs/lgoima-act-2026-01-15.pdf) | Full text of the Local Government Official Information and Meetings Act 1987 (version as at 15 January 2026) |
 
 ---
 
