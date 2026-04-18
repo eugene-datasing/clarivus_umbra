@@ -143,7 +143,7 @@ async function main() {
   // Verify: count rows in key tables
   console.log("Verification - row counts:");
   for (const table of ["users", "cases", "documents", "system_settings", "activation_codes"]) {
-    if (tableNames.includes(table)) {
+    if (safeTables.includes(table)) {
       const result: { c: bigint }[] = await prisma.$queryRawUnsafe(
         `SELECT count(*) as c FROM "${table}"`
       );
