@@ -54,12 +54,43 @@ import fs from "fs";
 import path from "path";
 import { createHash } from "crypto";
 
-const OUTPUT = path.resolve(
-  __dirname,
-  "../test-fixtures/large-docx-fixture.docx",
-);
+const DEFAULT_OUTPUT = "test-fixtures/phase2-spike/large-23pg.docx";
+const DEFAULT_PAGES = 23;
 
 const FIXED_DATE = new Date("2026-04-01T00:00:00.000Z");
+
+interface Options {
+  pages: number;
+  output: string;
+}
+
+function parseArgs(argv: string[]): Options {
+  const opts: Options = { pages: DEFAULT_PAGES, output: DEFAULT_OUTPUT };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--pages") {
+      opts.pages = parseInt(argv[++i] ?? "", 10);
+    } else if (a.startsWith("--pages=")) {
+      opts.pages = parseInt(a.slice("--pages=".length), 10);
+    } else if (a === "--output") {
+      opts.output = argv[++i] ?? DEFAULT_OUTPUT;
+    } else if (a.startsWith("--output=")) {
+      opts.output = a.slice("--output=".length);
+    } else if (a === "--help" || a === "-h") {
+      console.log(
+        "Usage: npx tsx scripts/generate-docx-fixture.ts [--pages N] [--output PATH]\n" +
+          `Defaults: --pages ${DEFAULT_PAGES} --output ${DEFAULT_OUTPUT}`,
+      );
+      process.exit(0);
+    } else {
+      throw new Error(`Unknown argument: ${a}`);
+    }
+  }
+  if (!Number.isFinite(opts.pages) || opts.pages < 1) {
+    throw new Error(`--pages must be a positive integer (got "${opts.pages}")`);
+  }
+  return opts;
+}
 
 const PII = {
   ird: "123-456-789",
@@ -261,8 +292,11 @@ const SECTION_BUILDERS = [
 
 // --- Document assembly ------------------------------------------------
 
-async function generate(): Promise<Buffer> {
-  const SECTION_COUNT = 22; // target 22 sections → ≥20 pages post LibreOffice
+async function generate(targetPages: number): Promise<Buffer> {
+  // Each section emits one terminal PageBreak, so N sections + title =
+  // N+1 page-break boundaries → approximately N+1 pages in LibreOffice.
+  // Confirmed experimentally against the 22-section = 23-page baseline.
+  const SECTION_COUNT = Math.max(0, targetPages - 1);
   const children: (Paragraph | Table)[] = [];
 
   // Title page
@@ -377,11 +411,14 @@ async function packDeterministically(doc: Document): Promise<Buffer> {
 }
 
 async function main() {
-  const buffer = await generate();
-  fs.mkdirSync(path.dirname(OUTPUT), { recursive: true });
-  fs.writeFileSync(OUTPUT, buffer);
+  const opts = parseArgs(process.argv.slice(2));
+  const outputPath = path.resolve(__dirname, "..", opts.output);
+  const buffer = await generate(opts.pages);
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.writeFileSync(outputPath, buffer);
   const sha = createHash("sha256").update(buffer).digest("hex");
-  console.log(`wrote ${OUTPUT}`);
+  console.log(`wrote ${outputPath}`);
+  console.log(`  target pages ${opts.pages}`);
   console.log(`  size  ${buffer.length} bytes`);
   console.log(`  sha256 ${sha}`);
 }
