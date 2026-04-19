@@ -35,7 +35,7 @@ interface RedactedResult {
 }
 
 /** File types that LibreOffice can convert to PDF with good fidelity. */
-const LIBREOFFICE_CONVERTIBLE = new Set([
+export const LIBREOFFICE_CONVERTIBLE = new Set([
   "docx", "doc", "xlsx", "xls", "pptx", "ppt", "odt", "ods", "odp",
   "rtf", "txt", "csv", "html", "htm",
 ]);
@@ -193,7 +193,7 @@ async function redactOriginalPdf(
  * Works well for DOCX, XLSX, PPTX, RTF, TXT, CSV, HTML.
  * EML/MSG are not supported by LibreOffice — those fall through to Tier 3.
  */
-async function convertToPdfWithLibreOffice(
+export async function convertToPdfWithLibreOffice(
   buffer: Buffer,
   fileType: string,
 ): Promise<Buffer> {
