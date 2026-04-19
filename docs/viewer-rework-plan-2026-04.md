@@ -165,12 +165,13 @@ Two independent code paths reduce the blast radius of any Phase 1 regression: ne
 ### 1. Scope and success criteria
 Every Detection row's `posX/posY/posW/posH` is a valid percentage of the canonical PDF's page dimensions. Tier 1 coordinate-mode redaction works for every format, not just native PDF uploads. Success: on a DOCX with repeated names, the reviewer sees tight per-line redaction rectangles on the canonical PDF for every format.
 
-**Pre-implementation spike (~1 engineer-day, blocks the rest of Phase 2).** Before committing to "DI runs on the LibreOffice-converted PDF" for every DOCX, compare that path against an alternative that synthesises word polygons directly from mammoth's rendered HTML layout (skipping LibreOffice + DI for DOCX). Build a minimal prototype of each, run against a 10-document DOCX corpus from `test-fixtures/dummy-lgoima-pack/` × 3 repeats, measure:
-- p50 / p95 end-to-end processing time per document
-- Detection count delta between the two paths (are we losing or gaining detections by synthesising polygons?)
-- Bbox alignment quality on the canonical PDF viewer (manual visual check)
+**Pre-implementation spike (~1 engineer-day, blocks the rest of Phase 2).** Single-path latency study: measure end-to-end `processDocument()` wall time with DI running against the canonical PDF (vs the Phase 1 baseline of DI running against the original, which is effectively a no-op for non-PDFs today). Corpus: 3 small (≤ 3 pg), 3 medium (6 pg — existing fixtures), 1 large (≥ 20 pg — see prerequisite bullet below). 5 runs per fixture per condition. Record p50 / p95 / p99 per fixture and in aggregate.
 
-**Decision criterion:** p95 DOCX processing time. If mammoth-synthesised polygons stay within p95 ≤ 8 s and bbox alignment is visually identical, ship the mammoth path for DOCX and reserve DI for PDFs and formats without a native layout source (XLSX, PPTX). If p95 goes over 8 s on either path, or the mammoth path shows detection drift > 5 %, ship the DI-on-canonical path for all formats (simpler, consistent, accepted latency cost). Record the outcome in `docs/phase-2-spike-findings.md` and link from the final PR.
+**Rationale for dropping the A/B against mammoth-synthesised polygons:** pre-implementation recon (`docs/viewer-rework-plan-2026-04.md` Implementation log — Phase 2 recon) found that mammoth exposes no positional metadata — its public API returns only HTML plus warnings/errors. Synthesising polygons from mammoth output would require a CSS layout engine, which is out of scope. DI-on-canonical is therefore the only viable path, and the spike measures whether its latency is acceptable rather than comparing two approaches.
+
+**Decision criterion:** p95 DOCX end-to-end ≤ 8 seconds on a medium (6-page) fixture. Outcome of the study is either "ceiling acceptable, proceed with Phase 2 implementation" or "ceiling too low, revisit with the reviewer before touching code". Record the outcome in `docs/phase-2-spike-findings.md` and link from the final PR.
+
+**Prerequisite:** generate a synthetic large DOCX fixture (≥ 20 pages) at `test-fixtures/large-docx-fixture.docx` for representative p95 measurement. Existing fixtures are uniformly 6-page (confirmed by recon on 9 DOCX files, all ~42 KB, all 6 pages post-LibreOffice). Generation method: programmatic — use `docx` (npm) or a templated content-loop; commit the fixture alongside its generation script so the findings are reproducible.
 
 ### 2. Schema changes
 **None.** Detection shape unchanged. `Document.canonicalPdfPageCount` (added Phase 1) replaces `Document.pageCount` for downstream consumers that care about page count against the canonical PDF — `pageCount` remains the original-file page count for legacy rows.
@@ -181,7 +182,7 @@ Every Detection row's `posX/posY/posW/posH` is a valid percentage of the canonic
 
 **Modified files:**
 - `lib/pipeline/extract.ts:92–138` (`extractFromPdf`) — no change to signature; now receives canonical-PDF buffer (done by caller).
-- `lib/pipeline/process.ts:216` — change the input to `extractText()` from "original download" to "canonical-PDF buffer produced in Phase 1". Single-line change.
+- `lib/pipeline/process.ts` — **two-line change**: introduce `const extractionBuffer = canonicalPdfResult?.pdfBuffer ?? buffer;` after the canonical PDF build block, and pass `extractionBuffer` (not `buffer`) to `extractText()`. The existing `buffer` variable MUST remain unchanged so `convertToReviewFormat(buffer, doc.fileType, doc.name)` at `process.ts:730` still receives the original DOCX/XLSX bytes for mammoth parsing (recon finding: `convertToReviewFormat` calls mammoth which needs the DOCX, not a PDF).
 - `lib/pipeline/bbox.ts` — no change; `calculateBBoxAll` already uses page dimensions from DI output. For non-PDF inputs its return value is now non-empty (since DI runs on the canonical PDF, which is always a PDF).
 - `app/api/documents/[docId]/reprocess/route.ts` — **new**, small (see §4).
 
