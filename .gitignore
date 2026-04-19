@@ -44,3 +44,6 @@ test-fixtures/phase2-spike/*
 !test-fixtures/phase2-spike/small-1pg.docx
 !test-fixtures/phase2-spike/small-2pg.docx
 !test-fixtures/phase2-spike/small-3pg.docx
+!test-fixtures/dummy-lgoima-pack/
+test-fixtures/dummy-lgoima-pack/*
+!test-fixtures/dummy-lgoima-pack/B2_Witness_Statement_Torres.pdf
