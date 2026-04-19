@@ -26,6 +26,11 @@ import { classifyDocument, type DocumentClassification } from "./doc-classify";
 import { detectDuplicates } from "./duplicate-detect";
 import { executeCustomRules } from "./custom-rules";
 import { calculateBBoxAll } from "./bbox";
+import {
+  buildCanonicalPdf,
+  isCanonicalPdfSupported,
+  type CanonicalPdfResult,
+} from "./canonical-pdf";
 import { buildContent, buildContentFromBlocks, verifyDetectionCoverage } from "./content-builder";
 import { buildFeedbackPromptSection } from "./feedback-examples";
 import { createAuditEntry } from "@/lib/data/audit";
@@ -195,6 +200,61 @@ export async function processDocument(docId: string): Promise<void> {
       log.warn("File validation passed with warnings", {
         docId,
         warnings: validation.warnings,
+      });
+    }
+
+    // ------------------------------------------------------------------
+    // 2.7 Build canonical PDF (Phase 1, April 2026 — viewer rework)
+    // ------------------------------------------------------------------
+    // One canonical PDF per document, persisted alongside the original at
+    // {caseId}/{docId}/canonical.pdf. For PDF input it's a pass-through of
+    // the original buffer; for Office formats it's the LibreOffice
+    // conversion; for .eml/.msg it's the email transcript PDF. Types
+    // outside the supported set (images, audio, video) skip cleanly —
+    // legacy pipeline paths continue to work for them.
+    //
+    // Phase 1 intentionally does NOT feed the canonical PDF to
+    // extractText; DI still runs on the original. Phase 2 switches DI to
+    // the canonical PDF.
+    let canonicalPdfResult: CanonicalPdfResult | null = null;
+    let canonicalPdfKey: string | null = null;
+    if (isCanonicalPdfSupported(doc.fileType)) {
+      try {
+        canonicalPdfResult = await buildCanonicalPdf(
+          { id: doc.id, fileType: doc.fileType },
+          buffer,
+        );
+        canonicalPdfKey = `${caseId}/${docId}/canonical.pdf`;
+        await storage.upload(
+          canonicalPdfKey,
+          canonicalPdfResult.pdfBuffer,
+          "application/pdf",
+        );
+        log.info("Canonical PDF persisted", {
+          docId,
+          canonicalPdfKey,
+          source: canonicalPdfResult.source,
+          pageCount: canonicalPdfResult.pageCount,
+          sha256: canonicalPdfResult.sha256.slice(0, 16),
+          durationMs: canonicalPdfResult.durationMs,
+        });
+      } catch (canonicalErr) {
+        // Build failed for a supported type (e.g. LibreOffice subprocess
+        // timeout, malformed email). Do NOT mark the document as error —
+        // extractText and legacy redaction still work. Canonical will be
+        // null and the redactor falls back to the legacy branch.
+        log.warn("Canonical PDF build failed, continuing with legacy flow", {
+          docId,
+          fileType: doc.fileType,
+          error: canonicalErr instanceof Error ? canonicalErr.message : String(canonicalErr),
+        });
+        canonicalPdfResult = null;
+        canonicalPdfKey = null;
+      }
+    } else {
+      log.info("Skipping canonical PDF build for unsupported fileType", {
+        docId,
+        fileType: doc.fileType,
       });
     }
 
@@ -721,6 +781,14 @@ export async function processDocument(docId: string): Promise<void> {
           patternDetectionMs,
           aiDetectionMs,
           totalProcessingMs,
+          // Canonical PDF metadata — only written when a canonical was
+          // successfully built and persisted. null for unsupported types
+          // and for supported types where build failed (see section 2.7).
+          canonicalPdfPath: canonicalPdfKey,
+          canonicalPdfSha256: canonicalPdfResult?.sha256 ?? null,
+          canonicalPdfPageCount: canonicalPdfResult?.pageCount ?? null,
+          canonicalPdfBuildMs: canonicalPdfResult?.durationMs ?? null,
+          canonicalPdfSource: canonicalPdfResult?.source ?? null,
         },
       });
 
