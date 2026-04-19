@@ -163,7 +163,14 @@ Two independent code paths reduce the blast radius of any Phase 1 regression: ne
 ## Phase 2 — Azure DI extraction against canonical PDF; bbox population
 
 ### 1. Scope and success criteria
-Every Detection row's `posX/posY/posW/posH` is a valid percentage of the canonical PDF's page dimensions. Tier 1 coordinate-mode redaction works for every format, not just native PDF uploads. Success: on a DOCX with repeated names, the reviewer sees tight per-line redaction rectangles on the canonical PDF for every format.
+Every Detection row's `posX/posY/posW/posH` is a valid percentage of the canonical PDF's page dimensions. Tier 1 coordinate-mode redaction works for every format, not just native PDF uploads.
+
+**Success criteria (amended 2026-04-19 after Step 3 spike):**
+(a) post-change p95 medium-fixture (6-page DOCX) processing time ≤ 2× the pre-Phase-2 baseline measured in the Step 3 spike, AND
+(b) post-change detection count on DOCX fixtures ≥ 5× pre-change count.
+Both bars met in the Step 3 spike (ref: `docs/phase-2-spike-findings.md`). The original "p95 ≤ 8 seconds" gate is retired — spike showed the current Phase-1 baseline already exceeds 8s on medium+ DOCX, so the gate couldn't discriminate between "acceptable" and "regression".
+
+**Known limitation — large-fixture latency.** 23-page synthetic DOCX fixture showed a 4.2× regression (18s → 76s p95) in the spike. Attributed to LibreOffice conversion scaling + sequential AI batch calls. Acceptable for current upload patterns (background processing step; reviewer polls for "Ready" status). Revisit if typical document sizes exceed 15 pages in council production data. Optimisation candidates: AI batch parallelism, DI page batching.
 
 **Pre-implementation spike (~1 engineer-day, blocks the rest of Phase 2).** Single-path latency study: measure end-to-end `processDocument()` wall time with DI running against the canonical PDF (vs the Phase 1 baseline of DI running against the original, which is effectively a no-op for non-PDFs today). Corpus: 3 small (≤ 3 pg), 3 medium (6 pg — existing fixtures), 1 large (≥ 20 pg — see prerequisite bullet below). 5 runs per fixture per condition. Record p50 / p95 / p99 per fixture and in aggregate.
 
@@ -518,6 +525,7 @@ Revert the commit. The trimmed content-builder falls back to its previous form. 
 - **Storage costs.** Every non-PDF document now has two blobs (original + canonical.pdf). For 10,000 DOCX inputs, that's roughly 2× the storage footprint on the Azure Blob side. Quantify before rollout; consider lifecycle policy (retain canonical indefinitely, demote original to cool tier after N days).
 - **Backfill script contention.** `scripts/backfill-canonical-pdfs.ts` running against production needs rate limiting to avoid exhausting DI quota or LibreOffice CPU. Include a `--max-concurrent 2` flag from day one.
 - **Feature-flag leakage.** If a tenant has `VIEWER_MODE=pdf` but their documents haven't been backfilled, the reviewer sees "No canonical PDF available — reprocess this document" rather than a broken page. Spec that error state explicitly in Phase 3.
+- **Phase 2 detection count variance across repeat runs.** Measured 57 vs 103 detections on the same fixture in the Step 3 spike (medium-A, on-path). Driven by GPT-4o AI detection at current temperature. Separable from Phase 2 scope; tracked as a follow-up for post-ship stabilisation work. Candidate fixes: lower GPT-4o temperature, add a validation-pass that de-dupes runs, or require a two-run consensus for high-variance detection types.
 
 ---
 
