@@ -535,6 +535,7 @@ Revert the commit. The trimmed content-builder falls back to its previous form. 
 - Developer ergonomics: LibreOffice binary name differs across platforms (`libreoffice` on Debian/Ubuntu, `soffice` on macOS homebrew). Local dev currently requires a symlink (`ln -sf /opt/homebrew/bin/soffice /opt/homebrew/bin/libreoffice`). Follow-up: implement `LIBREOFFICE_BIN` env var with fallback resolution order (libreoffice -> soffice). Not a prod issue — container always has libreoffice. Deferred beyond Phase 1 scope.
 - E2E Playwright spec requires credentials login to render; dev server must be started with `AZURE_AD_CLIENT_ID=""` to disable Azure AD SSO redirect. Not a prod issue — prod uses SSO. Follow-up: either add an explicit `TEST_MODE` env flag that bypasses SSO gracefully, or document the required env override in `e2e/README`. Deferred beyond Phase 1.
 - Admin metadata endpoint `GET /api/documents/[docId]/canonical` added as a scope addition to support the Playwright spec (Prisma generated client not loadable in Playwright's Node ESM context). Tiny, `requireAdmin`-guarded, exposes only `canonical_pdf_*` + `status`. Kept in Phase 1.
+- `nz-passport` detection is disabled by default in `DEFAULT_DETECTION_TOGGLES` (`lib/data/settings.ts`). Separately review whether this reflects a deliberate product decision or is an oversight; not addressed in the detection-coverage PR because it changes detection behaviour for an already-deployed pattern.
 
 ---
 
