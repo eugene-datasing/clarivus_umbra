@@ -89,6 +89,13 @@ model Document {
   originalPath   String?
   processingError String?
 
+  // Canonical PDF — one-PDF-per-document viewer rework (Phase 1, April 2026)
+  canonicalPdfPath      String? @map("canonical_pdf_path")
+  canonicalPdfSha256    String? @map("canonical_pdf_sha256")
+  canonicalPdfPageCount Int?    @map("canonical_pdf_page_count")
+  canonicalPdfBuildMs   Int?    @map("canonical_pdf_build_ms")
+  canonicalPdfSource    String? @map("canonical_pdf_source") // "original" | "libreoffice" | "email-template"
+
   // AI results (denormalized for list views)
   detectionCount Int   @default(0)
   avgConfidence  Float @default(0)
@@ -127,6 +134,7 @@ model Document {
   @@index([caseId])
   @@index([status])
   @@index([contentHash])
+  @@index([canonicalPdfSha256])
   @@map("documents")
 }
 
