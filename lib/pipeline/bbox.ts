@@ -67,8 +67,15 @@ export function calculateBBoxAll(
     }
   }
   
+  // Pre-Phase-2 this path returned a single zero-bbox placeholder so
+  // non-PDF formats (where `words` was always empty) still got a
+  // Detection row. Post-Phase-2, DI runs against the canonical PDF for
+  // every supported format so empty uniqueBoxes means "no real match
+  // on the rendered page" — we prefer dropping the detection over
+  // persisting a phantom (0,0,0,0) row that would pollute redaction
+  // coordinates and audit trails.
   if (uniqueBoxes.length === 0) {
-      return [{ posX: 0, posY: 0, posW: 0, posH: 0 }];
+    return empty;
   }
 
   return uniqueBoxes;

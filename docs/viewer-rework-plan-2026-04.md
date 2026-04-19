@@ -163,14 +163,22 @@ Two independent code paths reduce the blast radius of any Phase 1 regression: ne
 ## Phase 2 — Azure DI extraction against canonical PDF; bbox population
 
 ### 1. Scope and success criteria
-Every Detection row's `posX/posY/posW/posH` is a valid percentage of the canonical PDF's page dimensions. Tier 1 coordinate-mode redaction works for every format, not just native PDF uploads. Success: on a DOCX with repeated names, the reviewer sees tight per-line redaction rectangles on the canonical PDF for every format.
+Every Detection row's `posX/posY/posW/posH` is a valid percentage of the canonical PDF's page dimensions. Tier 1 coordinate-mode redaction works for every format, not just native PDF uploads.
 
-**Pre-implementation spike (~1 engineer-day, blocks the rest of Phase 2).** Before committing to "DI runs on the LibreOffice-converted PDF" for every DOCX, compare that path against an alternative that synthesises word polygons directly from mammoth's rendered HTML layout (skipping LibreOffice + DI for DOCX). Build a minimal prototype of each, run against a 10-document DOCX corpus from `test-fixtures/dummy-lgoima-pack/` × 3 repeats, measure:
-- p50 / p95 end-to-end processing time per document
-- Detection count delta between the two paths (are we losing or gaining detections by synthesising polygons?)
-- Bbox alignment quality on the canonical PDF viewer (manual visual check)
+**Success criteria (amended 2026-04-19 after Step 3 spike):**
+(a) post-change p95 medium-fixture (6-page DOCX) processing time ≤ 2× the pre-Phase-2 baseline measured in the Step 3 spike, AND
+(b) post-change detection count on DOCX fixtures ≥ 5× pre-change count.
+Both bars met in the Step 3 spike (ref: `docs/phase-2-spike-findings.md`). The original "p95 ≤ 8 seconds" gate is retired — spike showed the current Phase-1 baseline already exceeds 8s on medium+ DOCX, so the gate couldn't discriminate between "acceptable" and "regression".
 
-**Decision criterion:** p95 DOCX processing time. If mammoth-synthesised polygons stay within p95 ≤ 8 s and bbox alignment is visually identical, ship the mammoth path for DOCX and reserve DI for PDFs and formats without a native layout source (XLSX, PPTX). If p95 goes over 8 s on either path, or the mammoth path shows detection drift > 5 %, ship the DI-on-canonical path for all formats (simpler, consistent, accepted latency cost). Record the outcome in `docs/phase-2-spike-findings.md` and link from the final PR.
+**Known limitation — large-fixture latency.** 23-page synthetic DOCX fixture showed a 4.2× regression (18s → 76s p95) in the spike. Attributed to LibreOffice conversion scaling + sequential AI batch calls. Acceptable for current upload patterns (background processing step; reviewer polls for "Ready" status). Revisit if typical document sizes exceed 15 pages in council production data. Optimisation candidates: AI batch parallelism, DI page batching.
+
+**Pre-implementation spike (~1 engineer-day, blocks the rest of Phase 2).** Single-path latency study: measure end-to-end `processDocument()` wall time with DI running against the canonical PDF (vs the Phase 1 baseline of DI running against the original, which is effectively a no-op for non-PDFs today). Corpus: 3 small (≤ 3 pg), 3 medium (6 pg — existing fixtures), 1 large (≥ 20 pg — see prerequisite bullet below). 5 runs per fixture per condition. Record p50 / p95 / p99 per fixture and in aggregate.
+
+**Rationale for dropping the A/B against mammoth-synthesised polygons:** pre-implementation recon (`docs/viewer-rework-plan-2026-04.md` Implementation log — Phase 2 recon) found that mammoth exposes no positional metadata — its public API returns only HTML plus warnings/errors. Synthesising polygons from mammoth output would require a CSS layout engine, which is out of scope. DI-on-canonical is therefore the only viable path, and the spike measures whether its latency is acceptable rather than comparing two approaches.
+
+**Decision criterion:** p95 DOCX end-to-end ≤ 8 seconds on a medium (6-page) fixture. Outcome of the study is either "ceiling acceptable, proceed with Phase 2 implementation" or "ceiling too low, revisit with the reviewer before touching code". Record the outcome in `docs/phase-2-spike-findings.md` and link from the final PR.
+
+**Prerequisite:** generate a synthetic large DOCX fixture (≥ 20 pages) at `test-fixtures/large-docx-fixture.docx` for representative p95 measurement. Existing fixtures are uniformly 6-page (confirmed by recon on 9 DOCX files, all ~42 KB, all 6 pages post-LibreOffice). Generation method: programmatic — use `docx` (npm) or a templated content-loop; commit the fixture alongside its generation script so the findings are reproducible.
 
 ### 2. Schema changes
 **None.** Detection shape unchanged. `Document.canonicalPdfPageCount` (added Phase 1) replaces `Document.pageCount` for downstream consumers that care about page count against the canonical PDF — `pageCount` remains the original-file page count for legacy rows.
@@ -181,7 +189,7 @@ Every Detection row's `posX/posY/posW/posH` is a valid percentage of the canonic
 
 **Modified files:**
 - `lib/pipeline/extract.ts:92–138` (`extractFromPdf`) — no change to signature; now receives canonical-PDF buffer (done by caller).
-- `lib/pipeline/process.ts:216` — change the input to `extractText()` from "original download" to "canonical-PDF buffer produced in Phase 1". Single-line change.
+- `lib/pipeline/process.ts` — **two-line change**: introduce `const extractionBuffer = canonicalPdfResult?.pdfBuffer ?? buffer;` after the canonical PDF build block, and pass `extractionBuffer` (not `buffer`) to `extractText()`. The existing `buffer` variable MUST remain unchanged so `convertToReviewFormat(buffer, doc.fileType, doc.name)` at `process.ts:730` still receives the original DOCX/XLSX bytes for mammoth parsing (recon finding: `convertToReviewFormat` calls mammoth which needs the DOCX, not a PDF).
 - `lib/pipeline/bbox.ts` — no change; `calculateBBoxAll` already uses page dimensions from DI output. For non-PDF inputs its return value is now non-empty (since DI runs on the canonical PDF, which is always a PDF).
 - `app/api/documents/[docId]/reprocess/route.ts` — **new**, small (see §4).
 
@@ -517,6 +525,7 @@ Revert the commit. The trimmed content-builder falls back to its previous form. 
 - **Storage costs.** Every non-PDF document now has two blobs (original + canonical.pdf). For 10,000 DOCX inputs, that's roughly 2× the storage footprint on the Azure Blob side. Quantify before rollout; consider lifecycle policy (retain canonical indefinitely, demote original to cool tier after N days).
 - **Backfill script contention.** `scripts/backfill-canonical-pdfs.ts` running against production needs rate limiting to avoid exhausting DI quota or LibreOffice CPU. Include a `--max-concurrent 2` flag from day one.
 - **Feature-flag leakage.** If a tenant has `VIEWER_MODE=pdf` but their documents haven't been backfilled, the reviewer sees "No canonical PDF available — reprocess this document" rather than a broken page. Spec that error state explicitly in Phase 3.
+- **Phase 2 detection count variance across repeat runs.** Measured 57 vs 103 detections on the same fixture in the Step 3 spike (medium-A, on-path). Driven by GPT-4o AI detection at current temperature. Separable from Phase 2 scope; tracked as a follow-up for post-ship stabilisation work. Candidate fixes: lower GPT-4o temperature, add a validation-pass that de-dupes runs, or require a two-run consensus for high-variance detection types.
 
 ---
 

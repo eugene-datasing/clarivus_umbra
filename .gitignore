@@ -29,6 +29,18 @@ e2e/.auth/
 
 # Local working files (not shared with the team)
 PNCC-demo-cheatsheet.docx
-test-fixtures/
 playwright_output.txt
 test_output.txt
+
+# test-fixtures/: ignore everything by default (local scratch + per-dev
+# fixture packs stay out of the index), then explicitly re-include files
+# committed for shared test / spike use.  Using `test-fixtures/*` rather
+# than `test-fixtures/` so sub-path negations below work — git cannot
+# re-include a file under a fully-excluded directory.
+test-fixtures/*
+!test-fixtures/phase2-spike/
+test-fixtures/phase2-spike/*
+!test-fixtures/phase2-spike/large-23pg.docx
+!test-fixtures/phase2-spike/small-1pg.docx
+!test-fixtures/phase2-spike/small-2pg.docx
+!test-fixtures/phase2-spike/small-3pg.docx
