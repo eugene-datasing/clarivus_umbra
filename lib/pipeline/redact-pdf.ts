@@ -43,12 +43,98 @@ export const LIBREOFFICE_CONVERTIBLE = new Set([
 /**
  * Build a redacted PDF for a document.
  *
- * Three-tier fallback:
- *   1. Coordinate-based PyMuPDF (PDFs with bounding boxes)
- *   2. LibreOffice conversion + text-search PyMuPDF (non-PDFs)
- *   3. Plain text PDF generation (last resort)
+ * Named branch (Phase 1, viewer rework):
+ *   - If the Document has a canonical PDF persisted
+ *     (doc.canonicalPdfPath is set), redact that instead of the original.
+ *   - Otherwise fall back to the legacy three-tier behaviour — kept
+ *     intact until every row has a canonical PDF (backfill + forward
+ *     path). This is a deliberate transition fence, not a code smell.
+ *     See docs/viewer-rework-plan-2026-04.md Phase 1 §5.
  */
 export async function buildRedactedPdf(documentId: string): Promise<RedactedResult> {
+  const peek = await prisma.document.findUniqueOrThrow({
+    where: { id: documentId },
+    select: { canonicalPdfPath: true },
+  });
+
+  if (peek.canonicalPdfPath) {
+    return redactCanonicalPdf(documentId);
+  }
+  return redactLegacy(documentId);
+}
+
+/**
+ * Canonical-PDF redaction path — Phase 1 of the viewer rework.
+ *
+ * Runs the same tiered PyMuPDF strategy but against the persisted canonical
+ * PDF rather than the original:
+ *   1. Coordinate redaction on the canonical PDF, for detections whose
+ *      bboxes are non-zero. For PDFs (canonical = original) this is the
+ *      usual Tier 1. For DOCX / EML / MSG where Phase 1 leaves bboxes
+ *      at (0, 0, 0, 0), the filter is empty and this tier is skipped —
+ *      Phase 2 will populate bboxes against the canonical PDF.
+ *   2. Text-search redaction directly against the canonical PDF. No
+ *      LibreOffice re-conversion needed — the canonical PDF is already
+ *      what today's Tier 2 produces on-demand.
+ *   3. Plain-text PDF fallback (unchanged).
+ */
+async function redactCanonicalPdf(documentId: string): Promise<RedactedResult> {
+  const doc = await prisma.document.findUniqueOrThrow({
+    where: { id: documentId },
+  });
+
+  if (!doc.canonicalPdfPath) {
+    throw new Error(
+      `redactCanonicalPdf invoked but doc has no canonicalPdfPath: ${documentId}`,
+    );
+  }
+
+  const acceptedDetections = await prisma.detection.findMany({
+    where: { documentId, status: "accepted" },
+    orderBy: [{ page: "asc" }, { posY: "asc" }],
+  });
+
+  const usableBboxes = acceptedDetections.filter(
+    (d) => d.posW > 0 && d.posH > 0,
+  );
+
+  // Tier 1: coordinate redaction on the canonical PDF. Reuses
+  // redactOriginalPdf by passing a doc shim whose "originalPath" points
+  // at the canonical PDF's storage key — redactOriginalPdf only touches
+  // doc.id and doc.originalPath, so this is safe.
+  if (usableBboxes.length > 0) {
+    try {
+      return await redactOriginalPdf(
+        { id: doc.id, caseId: doc.caseId, originalPath: doc.canonicalPdfPath },
+        usableBboxes,
+      );
+    } catch (err) {
+      console.warn(
+        `[redact-pdf] Coordinate redaction on canonical failed for ${doc.id}, trying text-search:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+
+  // Tier 2: text-search redaction against the canonical PDF.
+  try {
+    const storage = getStorage();
+    const canonicalBuffer = await storage.download(doc.canonicalPdfPath);
+    return await redactByTextSearch(canonicalBuffer, acceptedDetections);
+  } catch (err) {
+    console.warn(
+      `[redact-pdf] Text-search on canonical failed for ${doc.id}, falling back to text PDF:`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+
+  // Tier 3: plain-text fallback.
+  return generateTextPdf(doc, acceptedDetections);
+}
+
+// TODO: remove after canonical backfill complete;
+// see docs/viewer-rework-plan-2026-04.md Phase 1 §5.
+async function redactLegacy(documentId: string): Promise<RedactedResult> {
   const doc = await prisma.document.findUniqueOrThrow({
     where: { id: documentId },
   });
