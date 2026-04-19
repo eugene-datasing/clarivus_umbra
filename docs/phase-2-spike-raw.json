@@ -1,0 +1,762 @@
+{
+  "fixtures": [
+    {
+      "label": "small-1pg",
+      "bucket": "small",
+      "pages": 1,
+      "fixturePath": "test-fixtures/phase2-spike/small-1pg.docx",
+      "fileType": "DOCX",
+      "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    },
+    {
+      "label": "small-2pg",
+      "bucket": "small",
+      "pages": 2,
+      "fixturePath": "test-fixtures/phase2-spike/small-2pg.docx",
+      "fileType": "DOCX",
+      "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    },
+    {
+      "label": "small-3pg",
+      "bucket": "small",
+      "pages": 3,
+      "fixturePath": "test-fixtures/phase2-spike/small-3pg.docx",
+      "fileType": "DOCX",
+      "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    },
+    {
+      "label": "medium-A",
+      "bucket": "medium",
+      "pages": 6,
+      "fixturePath": "test-fixtures/dummy-lgoima-pack/01_Planning_and_Resource_Consent/04_main_case_file_long.docx",
+      "fileType": "DOCX",
+      "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    },
+    {
+      "label": "medium-B",
+      "bucket": "medium",
+      "pages": 6,
+      "fixturePath": "test-fixtures/dummy-lgoima-pack/01_Planning_and_Resource_Consent/05_internal_briefing_and_recommendation.docx",
+      "fileType": "DOCX",
+      "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    },
+    {
+      "label": "medium-C",
+      "bucket": "medium",
+      "pages": 6,
+      "fixturePath": "test-fixtures/dummy-lgoima-pack/01_Planning_and_Resource_Consent/06_supporting_statements_and_appendices.docx",
+      "fileType": "DOCX",
+      "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    },
+    {
+      "label": "large-23pg",
+      "bucket": "large",
+      "pages": 23,
+      "fixturePath": "test-fixtures/phase2-spike/large-23pg.docx",
+      "fileType": "DOCX",
+      "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    }
+  ],
+  "results": [
+    {
+      "fixture": "small-1pg",
+      "bucket": "small",
+      "pages": 1,
+      "condition": "off",
+      "runIdx": 0,
+      "wallMs": 8553,
+      "detectionCount": 0,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-1pg",
+      "bucket": "small",
+      "pages": 1,
+      "condition": "off",
+      "runIdx": 1,
+      "wallMs": 6701,
+      "detectionCount": 0,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-1pg",
+      "bucket": "small",
+      "pages": 1,
+      "condition": "off",
+      "runIdx": 2,
+      "wallMs": 7026,
+      "detectionCount": 0,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-1pg",
+      "bucket": "small",
+      "pages": 1,
+      "condition": "off",
+      "runIdx": 3,
+      "wallMs": 6453,
+      "detectionCount": 0,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-1pg",
+      "bucket": "small",
+      "pages": 1,
+      "condition": "off",
+      "runIdx": 4,
+      "wallMs": 6947,
+      "detectionCount": 0,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-1pg",
+      "bucket": "small",
+      "pages": 1,
+      "condition": "on",
+      "runIdx": 0,
+      "wallMs": 12490,
+      "detectionCount": 0,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-1pg",
+      "bucket": "small",
+      "pages": 1,
+      "condition": "on",
+      "runIdx": 1,
+      "wallMs": 12140,
+      "detectionCount": 0,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-1pg",
+      "bucket": "small",
+      "pages": 1,
+      "condition": "on",
+      "runIdx": 2,
+      "wallMs": 11968,
+      "detectionCount": 0,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-1pg",
+      "bucket": "small",
+      "pages": 1,
+      "condition": "on",
+      "runIdx": 3,
+      "wallMs": 11898,
+      "detectionCount": 0,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-1pg",
+      "bucket": "small",
+      "pages": 1,
+      "condition": "on",
+      "runIdx": 4,
+      "wallMs": 12834,
+      "detectionCount": 0,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-2pg",
+      "bucket": "small",
+      "pages": 2,
+      "condition": "off",
+      "runIdx": 0,
+      "wallMs": 9667,
+      "detectionCount": 2,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-2pg",
+      "bucket": "small",
+      "pages": 2,
+      "condition": "off",
+      "runIdx": 1,
+      "wallMs": 8615,
+      "detectionCount": 3,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-2pg",
+      "bucket": "small",
+      "pages": 2,
+      "condition": "off",
+      "runIdx": 2,
+      "wallMs": 9072,
+      "detectionCount": 2,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-2pg",
+      "bucket": "small",
+      "pages": 2,
+      "condition": "off",
+      "runIdx": 3,
+      "wallMs": 8020,
+      "detectionCount": 2,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-2pg",
+      "bucket": "small",
+      "pages": 2,
+      "condition": "off",
+      "runIdx": 4,
+      "wallMs": 9567,
+      "detectionCount": 2,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-2pg",
+      "bucket": "small",
+      "pages": 2,
+      "condition": "on",
+      "runIdx": 0,
+      "wallMs": 14304,
+      "detectionCount": 3,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-2pg",
+      "bucket": "small",
+      "pages": 2,
+      "condition": "on",
+      "runIdx": 1,
+      "wallMs": 15587,
+      "detectionCount": 3,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-2pg",
+      "bucket": "small",
+      "pages": 2,
+      "condition": "on",
+      "runIdx": 2,
+      "wallMs": 14156,
+      "detectionCount": 2,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-2pg",
+      "bucket": "small",
+      "pages": 2,
+      "condition": "on",
+      "runIdx": 3,
+      "wallMs": 12989,
+      "detectionCount": 2,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-2pg",
+      "bucket": "small",
+      "pages": 2,
+      "condition": "on",
+      "runIdx": 4,
+      "wallMs": 14639,
+      "detectionCount": 2,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-3pg",
+      "bucket": "small",
+      "pages": 3,
+      "condition": "off",
+      "runIdx": 0,
+      "wallMs": 8831,
+      "detectionCount": 9,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-3pg",
+      "bucket": "small",
+      "pages": 3,
+      "condition": "off",
+      "runIdx": 1,
+      "wallMs": 13007,
+      "detectionCount": 9,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-3pg",
+      "bucket": "small",
+      "pages": 3,
+      "condition": "off",
+      "runIdx": 2,
+      "wallMs": 13873,
+      "detectionCount": 9,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-3pg",
+      "bucket": "small",
+      "pages": 3,
+      "condition": "off",
+      "runIdx": 3,
+      "wallMs": 12843,
+      "detectionCount": 9,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-3pg",
+      "bucket": "small",
+      "pages": 3,
+      "condition": "off",
+      "runIdx": 4,
+      "wallMs": 11917,
+      "detectionCount": 10,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-3pg",
+      "bucket": "small",
+      "pages": 3,
+      "condition": "on",
+      "runIdx": 0,
+      "wallMs": 16423,
+      "detectionCount": 10,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-3pg",
+      "bucket": "small",
+      "pages": 3,
+      "condition": "on",
+      "runIdx": 1,
+      "wallMs": 17603,
+      "detectionCount": 10,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-3pg",
+      "bucket": "small",
+      "pages": 3,
+      "condition": "on",
+      "runIdx": 2,
+      "wallMs": 16927,
+      "detectionCount": 10,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-3pg",
+      "bucket": "small",
+      "pages": 3,
+      "condition": "on",
+      "runIdx": 3,
+      "wallMs": 16975,
+      "detectionCount": 10,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "small-3pg",
+      "bucket": "small",
+      "pages": 3,
+      "condition": "on",
+      "runIdx": 4,
+      "wallMs": 16162,
+      "detectionCount": 11,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-A",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "off",
+      "runIdx": 0,
+      "wallMs": 16425,
+      "detectionCount": 12,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-A",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "off",
+      "runIdx": 1,
+      "wallMs": 15143,
+      "detectionCount": 11,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-A",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "off",
+      "runIdx": 2,
+      "wallMs": 12595,
+      "detectionCount": 12,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-A",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "off",
+      "runIdx": 3,
+      "wallMs": 15355,
+      "detectionCount": 12,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-A",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "off",
+      "runIdx": 4,
+      "wallMs": 13808,
+      "detectionCount": 12,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-A",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "on",
+      "runIdx": 0,
+      "wallMs": 30630,
+      "detectionCount": 57,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-A",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "on",
+      "runIdx": 1,
+      "wallMs": 29115,
+      "detectionCount": 57,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-A",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "on",
+      "runIdx": 2,
+      "wallMs": 27739,
+      "detectionCount": 96,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-A",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "on",
+      "runIdx": 3,
+      "wallMs": 31533,
+      "detectionCount": 103,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-A",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "on",
+      "runIdx": 4,
+      "wallMs": 29138,
+      "detectionCount": 57,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-B",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "off",
+      "runIdx": 0,
+      "wallMs": 17605,
+      "detectionCount": 12,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-B",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "off",
+      "runIdx": 1,
+      "wallMs": 13920,
+      "detectionCount": 11,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-B",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "off",
+      "runIdx": 2,
+      "wallMs": 11944,
+      "detectionCount": 11,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-B",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "off",
+      "runIdx": 3,
+      "wallMs": 14825,
+      "detectionCount": 11,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-B",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "off",
+      "runIdx": 4,
+      "wallMs": 15005,
+      "detectionCount": 11,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-B",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "on",
+      "runIdx": 0,
+      "wallMs": 26332,
+      "detectionCount": 60,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-B",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "on",
+      "runIdx": 1,
+      "wallMs": 28099,
+      "detectionCount": 62,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-B",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "on",
+      "runIdx": 2,
+      "wallMs": 27509,
+      "detectionCount": 88,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-B",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "on",
+      "runIdx": 3,
+      "wallMs": 27149,
+      "detectionCount": 61,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-B",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "on",
+      "runIdx": 4,
+      "wallMs": 27767,
+      "detectionCount": 96,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-C",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "off",
+      "runIdx": 0,
+      "wallMs": 11955,
+      "detectionCount": 11,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-C",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "off",
+      "runIdx": 1,
+      "wallMs": 12869,
+      "detectionCount": 11,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-C",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "off",
+      "runIdx": 2,
+      "wallMs": 12621,
+      "detectionCount": 11,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-C",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "off",
+      "runIdx": 3,
+      "wallMs": 14332,
+      "detectionCount": 12,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-C",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "off",
+      "runIdx": 4,
+      "wallMs": 8026,
+      "detectionCount": 11,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-C",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "on",
+      "runIdx": 0,
+      "wallMs": 25662,
+      "detectionCount": 53,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-C",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "on",
+      "runIdx": 1,
+      "wallMs": 29152,
+      "detectionCount": 61,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-C",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "on",
+      "runIdx": 2,
+      "wallMs": 28598,
+      "detectionCount": 55,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-C",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "on",
+      "runIdx": 3,
+      "wallMs": 25157,
+      "detectionCount": 53,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "medium-C",
+      "bucket": "medium",
+      "pages": 6,
+      "condition": "on",
+      "runIdx": 4,
+      "wallMs": 29294,
+      "detectionCount": 98,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "large-23pg",
+      "bucket": "large",
+      "pages": 23,
+      "condition": "off",
+      "runIdx": 0,
+      "wallMs": 16710,
+      "detectionCount": 13,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "large-23pg",
+      "bucket": "large",
+      "pages": 23,
+      "condition": "off",
+      "runIdx": 1,
+      "wallMs": 18051,
+      "detectionCount": 16,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "large-23pg",
+      "bucket": "large",
+      "pages": 23,
+      "condition": "off",
+      "runIdx": 2,
+      "wallMs": 12882,
+      "detectionCount": 12,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "large-23pg",
+      "bucket": "large",
+      "pages": 23,
+      "condition": "off",
+      "runIdx": 3,
+      "wallMs": 13596,
+      "detectionCount": 12,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "large-23pg",
+      "bucket": "large",
+      "pages": 23,
+      "condition": "off",
+      "runIdx": 4,
+      "wallMs": 12935,
+      "detectionCount": 12,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "large-23pg",
+      "bucket": "large",
+      "pages": 23,
+      "condition": "on",
+      "runIdx": 0,
+      "wallMs": 74349,
+      "detectionCount": 80,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "large-23pg",
+      "bucket": "large",
+      "pages": 23,
+      "condition": "on",
+      "runIdx": 1,
+      "wallMs": 76237,
+      "detectionCount": 80,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "large-23pg",
+      "bucket": "large",
+      "pages": 23,
+      "condition": "on",
+      "runIdx": 2,
+      "wallMs": 69740,
+      "detectionCount": 78,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "large-23pg",
+      "bucket": "large",
+      "pages": 23,
+      "condition": "on",
+      "runIdx": 3,
+      "wallMs": 68248,
+      "detectionCount": 79,
+      "canonicalPdfSource": "libreoffice"
+    },
+    {
+      "fixture": "large-23pg",
+      "bucket": "large",
+      "pages": 23,
+      "condition": "on",
+      "runIdx": 4,
+      "wallMs": 68754,
+      "detectionCount": 79,
+      "canonicalPdfSource": "libreoffice"
+    }
+  ]
+}
