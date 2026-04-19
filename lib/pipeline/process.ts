@@ -269,11 +269,30 @@ export async function processDocument(docId: string): Promise<void> {
     // ------------------------------------------------------------------
     // 4. Extract text
     // ------------------------------------------------------------------
-    log.info("Extracting text", { docId, fileType: doc.fileType });
+    // Phase 2 (April 2026): when a canonical PDF was persisted earlier
+    // in this run (section 2.7), route extraction through DI against
+    // the canonical PDF rather than against the original bytes. That
+    // gives every supported format (DOCX / XLSX / EML / MSG / …) the
+    // word-level polygon data needed for Phase 1's per-occurrence
+    // bbox dedup. When no canonical was built (unsupported type),
+    // fall back to the original buffer + native extractor (mammoth
+    // for DOCX etc.).
+    //
+    // NOTE: `buffer` stays the original; it's still handed to
+    // `convertToReviewFormat` further down the pipeline, which calls
+    // mammoth for DOCX structure — that step needs the DOCX, not a PDF.
+    const extractionBuffer = canonicalPdfResult?.pdfBuffer ?? buffer;
+    const extractionFileType = canonicalPdfResult ? "PDF" : doc.fileType;
+    log.info("Extracting text", {
+      docId,
+      fileType: doc.fileType,
+      extractionFileType,
+      usingCanonical: !!canonicalPdfResult,
+    });
     const extractionStart = Date.now();
     let extraction;
     try {
-      extraction = await extractText(buffer, doc.fileType);
+      extraction = await extractText(extractionBuffer, extractionFileType);
     } catch (extractError) {
       if (extractError instanceof OCRUnavailableError) {
         // OCR service circuit is open -- mark document as error and bail out
