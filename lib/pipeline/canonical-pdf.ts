@@ -38,6 +38,17 @@ export interface CanonicalPdfDocument {
 
 const EMAIL_EXTENSIONS = new Set(["eml", "msg"]);
 
+/**
+ * Fast check for whether a fileType is in the canonical-PDF supported set,
+ * without attempting to build. Callers (process.ts, admin rebuild endpoint,
+ * backfill script) use this to skip gracefully for images, audio, video —
+ * types that have no viewer rework story and keep legacy pipeline behaviour.
+ */
+export function isCanonicalPdfSupported(fileType: string): boolean {
+  const ext = fileType.toLowerCase();
+  return ext === "pdf" || EMAIL_EXTENSIONS.has(ext) || LIBREOFFICE_CONVERTIBLE.has(ext);
+}
+
 export async function buildCanonicalPdf(
   doc: CanonicalPdfDocument,
   originalBuffer: Buffer,

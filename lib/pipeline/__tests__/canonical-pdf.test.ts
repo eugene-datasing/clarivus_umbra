@@ -17,7 +17,7 @@ vi.mock("../email-to-pdf", () => ({
   renderEmailAsPdf: vi.fn(),
 }));
 
-import { buildCanonicalPdf } from "../canonical-pdf";
+import { buildCanonicalPdf, isCanonicalPdfSupported } from "../canonical-pdf";
 import { convertToPdfWithLibreOffice } from "../redact-pdf";
 import { renderEmailAsPdf } from "../email-to-pdf";
 
@@ -115,6 +115,21 @@ describe("buildCanonicalPdf", () => {
     expect(typeof result.durationMs).toBe("number");
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
     expect(Number.isFinite(result.durationMs)).toBe(true);
+  });
+
+  it("isCanonicalPdfSupported returns true for every supported type and false otherwise", () => {
+    expect(isCanonicalPdfSupported("pdf")).toBe(true);
+    expect(isCanonicalPdfSupported("PDF")).toBe(true);
+    expect(isCanonicalPdfSupported("docx")).toBe(true);
+    expect(isCanonicalPdfSupported("xlsx")).toBe(true);
+    expect(isCanonicalPdfSupported("pptx")).toBe(true);
+    expect(isCanonicalPdfSupported("eml")).toBe(true);
+    expect(isCanonicalPdfSupported("msg")).toBe(true);
+    expect(isCanonicalPdfSupported("png")).toBe(false);
+    expect(isCanonicalPdfSupported("jpg")).toBe(false);
+    expect(isCanonicalPdfSupported("mp3")).toBe(false);
+    expect(isCanonicalPdfSupported("mp4")).toBe(false);
+    expect(isCanonicalPdfSupported("xyz")).toBe(false);
   });
 
   it("fileType matching is case-insensitive", async () => {
