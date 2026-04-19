@@ -288,3 +288,107 @@ describe.skipIf(!RUN)("Phase 2 DOCX detection coverage", () => {
     120_000,
   );
 });
+
+describe.skipIf(!RUN)("Phase 2 detection-coverage follow-up", () => {
+  // Regression coverage for the two gaps surfaced in live Phase 2 testing:
+  //   1. NZ driver licence "HM847219" — was missed entirely (no regex for
+  //      DL + AI didn't flag). Fixed by a new driver-licence pattern with a
+  //      context-word guard ("licence" | "license" | "driver" | "DL").
+  //   2. Dates of birth in month-name form — AI was not instructed to flag
+  //      them. Fixed by updating the personal-name prompt + adding a worked
+  //      example for "22 September 1986".
+  //
+  // AI variance is real on this fixture — assertions are deliberately loose:
+  // substring/type-only, no total counts, no posY.
+  let prisma: PrismaClient;
+  const createdDocIds: string[] = [];
+
+  beforeAll(() => {
+    const connectionString =
+      process.env.DATABASE_URL || "postgresql://veil:veil_dev@localhost:5434/veil";
+    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+  });
+
+  afterAll(async () => {
+    for (const id of createdDocIds) {
+      await prisma.detection.deleteMany({ where: { documentId: id } }).catch(() => {});
+      await prisma.documentPage.deleteMany({ where: { documentId: id } }).catch(() => {});
+      await prisma.document.delete({ where: { id } }).catch(() => {});
+    }
+    await prisma.$disconnect();
+  });
+
+  async function processB2(): Promise<string> {
+    const { processDocument } = await import("../process");
+    const { getStorage } = await import("../../storage");
+
+    const fixturePath = "test-fixtures/dummy-lgoima-pack/B2_Witness_Statement_Torres.pdf";
+    const absolute = path.resolve(fixturePath);
+    expect(fs.existsSync(absolute), `fixture missing: ${absolute}`).toBe(true);
+    const originalBuffer = fs.readFileSync(absolute);
+
+    const doc = await prisma.document.create({
+      data: {
+        caseId: CASE_ID,
+        name: `detection-coverage-${Date.now()}.pdf`,
+        fileType: "PDF",
+        mimeType: "application/pdf",
+        sizeBytes: originalBuffer.length,
+        status: "queued",
+      },
+    });
+    createdDocIds.push(doc.id);
+
+    const storage = getStorage();
+    const key = `${CASE_ID}/${doc.id}/original.pdf`;
+    await storage.upload(key, originalBuffer, "application/pdf");
+    await prisma.document.update({
+      where: { id: doc.id },
+      data: { originalPath: key },
+    });
+
+    await processDocument(doc.id);
+    return doc.id;
+  }
+
+  it(
+    "populates driver-licence detection with HM847219 present in context",
+    async () => {
+      const docId = await processB2();
+      const dets = await prisma.detection.findMany({ where: { documentId: docId } });
+
+      const dlHits = dets.filter(
+        (d) => d.type === "driver-licence" && d.text.includes("HM847219"),
+      );
+      expect(
+        dlHits.length,
+        `expected >=1 driver-licence detection containing "HM847219"; got types=${JSON.stringify(dets.map((d) => d.type))} texts=${JSON.stringify(dets.map((d) => d.text))}`,
+      ).toBeGreaterThanOrEqual(1);
+    },
+    180_000,
+  );
+
+  it(
+    "populates personal-name DOB detection for '22 September 1986'",
+    async () => {
+      const docId = await processB2();
+      const dets = await prisma.detection.findMany({ where: { documentId: docId } });
+
+      const dobHits = dets.filter(
+        (d) =>
+          d.type === "personal-name" &&
+          (d.text.includes("22 September 1986") || d.text.includes("September 1986")) &&
+          /dob/i.test(d.aiExplanation ?? ""),
+      );
+      expect(
+        dobHits.length,
+        `expected >=1 personal-name DOB detection containing "September 1986" with "DOB" in aiExplanation; got ${JSON.stringify(
+          dets
+            .filter((d) => d.text.toLowerCase().includes("september"))
+            .map((d) => ({ type: d.type, text: d.text, ai: d.aiExplanation })),
+        )}`,
+      ).toBeGreaterThanOrEqual(1);
+    },
+    180_000,
+  );
+});
