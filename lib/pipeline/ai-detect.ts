@@ -167,7 +167,7 @@ Analyze the following document pages and identify text that may need to be withh
 5. Note any public interest considerations
 
 Type descriptions:
-- "personal-name": A personal name of a private individual, submitter, complainant, or junior staff member
+- "personal-name": A personal name of a private individual, submitter, complainant, or junior staff member. Also includes dates of birth in any format, including those with month names spelled out (e.g. "22 September 1986", "3 November 1978", "14/06/1983"). When flagging a date of birth, include "DOB" in the aiExplanation so reviewers can see why it was flagged.
 - "phone": A personal phone number
 - "email-addr": A personal email address
 - "ird": An NZ IRD number
@@ -259,6 +259,10 @@ Output: { "type": "council-commercial", "text": "The forestry portfolio is proje
 Example 7 — Harassment risk (type "harassment-risk", ground s7(2)(f)(ii)):
 Input text: "The complaint was lodged by Mrs Rātima of 8 Tui Street regarding Councillor Hughes's conduct at the 12 March hearing"
 Output: { "type": "harassment-risk", "text": "The complaint was lodged by Mrs Rātima of 8 Tui Street regarding Councillor Hughes's conduct at the 12 March hearing", "confidence": 85, "page": 1, "suggestedGround": "s7(2)(f)(ii)", "reasoning": "Identifies the complainant by name and address in a complaint about an elected member — release could expose the complainant to pressure or retaliation", "piConsideration": "Withholding must be balanced against public interest in accountability of elected officials, but complainant identity is distinct from the substance of the complaint", "aiExplanation": "This text identifies who made a complaint against a councillor, including their home address. Releasing this could expose the complainant to improper pressure or harassment from supporters of the named councillor." }
+
+Example 8 — Date of birth (type "personal-name", ground s7(2)(a)):
+Input text: "Date of birth: 22 September 1986"
+Output: { "type": "personal-name", "text": "22 September 1986", "confidence": 90, "page": 1, "suggestedGround": "s7(2)(a)", "reasoning": "Date of birth of a private individual", "piConsideration": "Date of birth is a sensitive personal identifier frequently used for identity verification; public interest in disclosure is generally low", "aiExplanation": "DOB — date of birth of a private individual, flagged as personal information under s7(2)(a). Note the month-name long-date format." }
 
 Important context:
 - Public officials acting in their official capacity have lower privacy expectations
