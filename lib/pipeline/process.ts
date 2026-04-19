@@ -282,6 +282,10 @@ export async function processDocument(docId: string): Promise<void> {
     // `convertToReviewFormat` further down the pipeline, which calls
     // mammoth for DOCX structure — that step needs the DOCX, not a PDF.
     const extractionBuffer = canonicalPdfResult?.pdfBuffer ?? buffer;
+    // Canonical is always a PDF (originals pass through, non-PDFs are
+    // LibreOffice-converted in Phase 1). doc.fileType stays the original
+    // format for downstream convertToReviewFormat which runs mammoth on
+    // DOCX bytes.
     const extractionFileType = canonicalPdfResult ? "PDF" : doc.fileType;
     log.info("Extracting text", {
       docId,

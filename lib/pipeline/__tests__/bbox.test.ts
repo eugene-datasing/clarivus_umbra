@@ -107,6 +107,26 @@ describe("calculateBBoxAll", () => {
     });
   });
 
+  describe("Phase 2 shortcut removal — no phantom (0,0,0,0) rows", () => {
+    it("returns [] when all matched words collapse to zero-area polygons", () => {
+      // Pre-Phase-2 this case returned [{ posX: 0, posY: 0, posW: 0, posH: 0 }]
+      // so non-PDF detections still produced a Detection row. Post-Phase-2
+      // we prefer dropping the detection to persisting a phantom row with
+      // no redactable coordinates (see lib/pipeline/bbox.ts line 70 comment).
+      const degeneratePolygon = [5, 5, 5, 5, 5, 5, 5, 5]; // single point × 4
+      const words = [makeWord("hello", degeneratePolygon)];
+      const result = calculateBBoxAll("hello", words, 1000, 1000);
+      expect(result).toEqual([]);
+    });
+
+    it("returns [] for a multi-word match where every word is zero-area", () => {
+      const zero = [0, 0, 0, 0, 0, 0, 0, 0];
+      const words = [makeWord("John", zero), makeWord("Smith", zero)];
+      const result = calculateBBoxAll("John Smith", words, 1000, 1000);
+      expect(result).toEqual([]);
+    });
+  });
+
   describe("words without polygon data", () => {
     it("returns empty when matched words have no polygons", () => {
       const words = [makeWord("Hello")]; // no polygon

@@ -14,9 +14,11 @@ test.describe("Canonical PDF — build and fetch", () => {
   // (b) /api/files/{caseId}/… auth via authorizeForCase passes for any case.
   test.use({ storageState: "e2e/.auth/admin.json" });
 
-  // DOCX → LibreOffice convert → DI → AI detection can easily exceed the
-  // default 30s Playwright test budget. Bump to 2 minutes.
-  test.setTimeout(120_000);
+  // Phase 2 routes DOCX extraction through DI on the canonical PDF —
+  // LibreOffice convert + DI + AI detection totals ~30s p95 on medium
+  // fixtures. 180s per-test budget leaves headroom for the polling
+  // loop + admin endpoint fetches.
+  test.setTimeout(180_000);
 
   test("DOCX upload → canonical PDF persisted → GET /api/files/{path} returns valid PDF with matching sha256", async ({
     page,
@@ -24,25 +26,31 @@ test.describe("Canonical PDF — build and fetch", () => {
   }) => {
     // 1. Upload via the ingest UI. Capture the POST /api/documents/upload
     //    response to pick up the new Document id without a direct DB hit.
+    //    Use Promise.all to register the response listener synchronously
+    //    with setInputFiles — otherwise on a fresh dev server the setInput
+    //    can fire faster than the listener registers and we miss the
+    //    response.
     await page.goto(`/requests/${CASE_ID}/ingest`);
+    const fileInput = page.locator('input[type="file"][aria-label="Upload documents"]');
+    await fileInput.waitFor({ state: "attached" });
 
-    const uploadResponsePromise = page.waitForResponse(
-      (r) =>
-        r.url().includes("/api/documents/upload") &&
-        r.request().method() === "POST",
-    );
-    await page
-      .locator('input[type="file"][aria-label="Upload documents"]')
-      .setInputFiles(DOCX_FIXTURE);
-    const uploadResponse = await uploadResponsePromise;
+    const [uploadResponse] = await Promise.all([
+      page.waitForResponse(
+        (r) =>
+          r.url().includes("/api/documents/upload") &&
+          r.request().method() === "POST",
+        { timeout: 60_000 },
+      ),
+      fileInput.setInputFiles(DOCX_FIXTURE),
+    ]);
     expect(uploadResponse.status()).toBe(201);
     const uploadBody = (await uploadResponse.json()) as Array<{ id: string; name: string }>;
     expect(uploadBody.length).toBe(1);
     const docId = uploadBody[0].id;
 
     // 2. Poll the admin /canonical endpoint until status=ready and
-    //    canonicalPdfPath is populated. 90s budget — DOCX ingest goes
-    //    through LibreOffice convert + DI + AI detection.
+    //    canonicalPdfPath is populated. 150s budget — DOCX ingest goes
+    //    through LibreOffice convert + DI + AI detection (Phase 2).
     type CanonicalMeta = {
       id: string;
       status: string;
@@ -53,7 +61,7 @@ test.describe("Canonical PDF — build and fetch", () => {
       canonicalPdfBuildMs: number | null;
     };
     let canonical: CanonicalMeta | null = null;
-    const deadline = Date.now() + 90_000;
+    const deadline = Date.now() + 150_000;
     while (Date.now() < deadline) {
       const res = await request.get(`/api/documents/${docId}/canonical`);
       expect(res.status()).toBe(200);
@@ -66,7 +74,7 @@ test.describe("Canonical PDF — build and fetch", () => {
     }
     expect(
       canonical,
-      "Document did not reach status=ready with canonicalPdfPath within 90s",
+      "Document did not reach status=ready with canonicalPdfPath within 150s",
     ).not.toBeNull();
 
     // 3. DB-level invariants on the canonical columns.
@@ -89,5 +97,29 @@ test.describe("Canonical PDF — build and fetch", () => {
     expect(Array.from(header)).toEqual([0x25, 0x50, 0x44, 0x46, 0x2d]); // "%PDF-"
     const actualSha = createHash("sha256").update(body).digest("hex");
     expect(actualSha).toBe(canonical!.canonicalPdfSha256);
+
+    // 6. Phase 2 detection coverage assertion. Pre-Phase-2 this DOCX
+    //    produced ~11 detections (mammoth path, single row per PII
+    //    string regardless of occurrences). Phase 2 routes extraction
+    //    through DI on the canonical PDF, so per-occurrence dedup
+    //    applies and detection count jumps ~5×. Asserting > 20 guards
+    //    against an accidental regression back to the mammoth path.
+    //    Uses the existing /api/documents/[docId]/status endpoint
+    //    (which already exposes detectionCount) to avoid adding
+    //    another admin surface.
+    const statusRes = await request.get(`/api/documents/${docId}/status`);
+    expect(statusRes.status()).toBe(200);
+    const statusBody = (await statusRes.json()) as {
+      id: string;
+      status: string;
+      pageCount: number;
+      detectionCount: number;
+      error: string | null;
+    };
+    expect(statusBody.status).toBe("ready");
+    expect(
+      statusBody.detectionCount,
+      `expected Phase 2 to produce > 20 detections on a 6-page DOCX; got ${statusBody.detectionCount}`,
+    ).toBeGreaterThan(20);
   });
 });

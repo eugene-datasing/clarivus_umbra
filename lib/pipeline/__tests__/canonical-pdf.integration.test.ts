@@ -135,3 +135,156 @@ describe.skipIf(!RUN)("Phase 1 canonical PDF — real pipeline", () => {
     );
   }
 });
+
+describe.skipIf(!RUN)("Phase 2 DOCX detection coverage", () => {
+  let prisma: PrismaClient;
+  const createdDocIds: string[] = [];
+
+  beforeAll(() => {
+    const connectionString =
+      process.env.DATABASE_URL || "postgresql://veil:veil_dev@localhost:5434/veil";
+    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+  });
+
+  afterAll(async () => {
+    for (const id of createdDocIds) {
+      await prisma.detection.deleteMany({ where: { documentId: id } }).catch(() => {});
+      await prisma.documentPage.deleteMany({ where: { documentId: id } }).catch(() => {});
+      await prisma.document.delete({ where: { id } }).catch(() => {});
+    }
+    await prisma.$disconnect();
+  });
+
+  // Helper: process a fixture end-to-end, return the created document id.
+  async function processFixture(fixturePath: string, fileType: string, mimeType: string): Promise<string> {
+    const { processDocument } = await import("../process");
+    const { getStorage } = await import("../../storage");
+
+    const absolute = path.resolve(fixturePath);
+    expect(fs.existsSync(absolute), `fixture missing: ${absolute}`).toBe(true);
+    const originalBuffer = fs.readFileSync(absolute);
+    const ext = path.extname(fixturePath).toLowerCase();
+
+    const doc = await prisma.document.create({
+      data: {
+        caseId: CASE_ID,
+        name: `phase2-integration-${Date.now()}${ext}`,
+        fileType,
+        mimeType,
+        sizeBytes: originalBuffer.length,
+        status: "queued",
+      },
+    });
+    createdDocIds.push(doc.id);
+
+    const storage = getStorage();
+    const key = `${CASE_ID}/${doc.id}/original${ext}`;
+    await storage.upload(key, originalBuffer, mimeType);
+    await prisma.document.update({
+      where: { id: doc.id },
+      data: { originalPath: key },
+    });
+
+    await processDocument(doc.id);
+    return doc.id;
+  }
+
+  it(
+    "produces per-occurrence bboxes for a DOCX with repeated PII",
+    async () => {
+      const docId = await processFixture(
+        "test-fixtures/dummy-lgoima-pack/01_Planning_and_Resource_Consent/04_main_case_file_long.docx",
+        "DOCX",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      );
+
+      const dets = await prisma.detection.findMany({ where: { documentId: docId } });
+      expect(dets.length).toBeGreaterThan(20);
+
+      // Every detection has non-zero bbox (the Phase-2 shortcut-removal
+      // invariant — no phantom (0,0,0,0) rows in Detection output).
+      const zeroRows = dets.filter((d) => d.posW === 0 && d.posH === 0);
+      expect(zeroRows.length).toBe(0);
+
+      // Find a detection text that repeats 3+ times. All its rows must
+      // have distinct posY (the Phase-1 B2 per-occurrence invariant,
+      // now extended to DOCX by Phase 2).
+      const byText = new Map<string, typeof dets>();
+      for (const d of dets) {
+        const key = `${d.page}|${d.type}|${d.text.toLowerCase().trim()}`;
+        if (!byText.has(key)) byText.set(key, []);
+        byText.get(key)!.push(d);
+      }
+      const repeated = Array.from(byText.values()).filter((rows) => rows.length >= 3);
+      expect(
+        repeated.length,
+        "expected at least one (page, type, text) tuple to repeat 3+ times in this DOCX fixture",
+      ).toBeGreaterThan(0);
+
+      for (const rows of repeated) {
+        const posYs = new Set(rows.map((r) => Math.round(r.posY * 10) / 10));
+        expect(
+          posYs.size,
+          `detection "${rows[0].text}" on page ${rows[0].page} repeats ${rows.length}× but has only ${posYs.size} distinct posY`,
+        ).toBeGreaterThanOrEqual(rows.length);
+      }
+    },
+    180_000,
+  );
+
+  it(
+    "bboxes are percentages of canonical PDF dimensions",
+    async () => {
+      const docId = await processFixture(
+        "test-fixtures/dummy-lgoima-pack/01_Planning_and_Resource_Consent/05_internal_briefing_and_recommendation.docx",
+        "DOCX",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      );
+
+      const updated = await prisma.document.findUniqueOrThrow({ where: { id: docId } });
+      expect(updated.canonicalPdfPageCount ?? 0).toBeGreaterThan(0);
+
+      const dets = await prisma.detection.findMany({ where: { documentId: docId } });
+      expect(dets.length).toBeGreaterThan(0);
+
+      for (const d of dets) {
+        expect(d.posX).toBeGreaterThanOrEqual(0);
+        expect(d.posX).toBeLessThanOrEqual(100);
+        expect(d.posY).toBeGreaterThanOrEqual(0);
+        expect(d.posY).toBeLessThanOrEqual(100);
+        expect(d.posW).toBeGreaterThanOrEqual(0);
+        expect(d.posW).toBeLessThanOrEqual(100);
+        expect(d.posH).toBeGreaterThanOrEqual(0);
+        expect(d.posH).toBeLessThanOrEqual(100);
+        expect(d.page).toBeGreaterThan(0);
+        expect(d.page).toBeLessThanOrEqual(updated.canonicalPdfPageCount!);
+      }
+    },
+    180_000,
+  );
+
+  it(
+    "PDF input path remains unchanged (detections present, bboxes populated)",
+    async () => {
+      const docId = await processFixture(
+        "test-fixtures/dummy-lgoima-pack/01_Planning_and_Resource_Consent/07_formal_report.pdf",
+        "PDF",
+        "application/pdf",
+      );
+
+      const updated = await prisma.document.findUniqueOrThrow({ where: { id: docId } });
+      expect(updated.canonicalPdfSource).toBe("original");
+
+      const dets = await prisma.detection.findMany({ where: { documentId: docId } });
+      // PDF fixture historically produces ~60 detections (Phase 1 regression
+      // test saw 61; Step 4 regression saw 63). Assert the order of magnitude
+      // rather than an exact count to absorb AI variance.
+      expect(dets.length).toBeGreaterThan(30);
+      expect(dets.length).toBeLessThan(200);
+
+      const zeroBbox = dets.filter((d) => d.posW === 0 && d.posH === 0);
+      expect(zeroBbox.length).toBe(0);
+    },
+    120_000,
+  );
+});
