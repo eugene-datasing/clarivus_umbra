@@ -42,6 +42,45 @@ interface PatternDef {
   regex: RegExp;
   suggestedGround: string;
   reasoning: string;
+  /**
+   * Optional context-word guard. When set, a regex match is only accepted
+   * if at least one of `words` appears within the `windowChars` characters
+   * immediately before the match start. Used to disambiguate patterns
+   * whose raw shape overlaps with another pattern (e.g. NZ driver licence
+   * vs NZ passport).
+   */
+  requireContext?: {
+    words: string[];
+    windowChars: number;
+  };
+}
+
+/**
+ * Security note: the word list passed in is expected to be code-defined
+ * (from PatternDef.requireContext). If this function is ever called with
+ * dynamic / user-supplied words, each word must be regex-escaped before
+ * interpolation to prevent injection (e.g. a word like "DL|.*" would
+ * silently match everything). Current use is safe.
+ */
+/**
+ * Returns true iff any word in `words` appears, as a whole word, inside
+ * the `windowChars` characters immediately BEFORE `matchStart` in `text`.
+ * Case-insensitive. Uses a fresh per-call RegExp (no shared /g state).
+ */
+export function hasContextWithin(
+  text: string,
+  matchStart: number,
+  words: string[],
+  windowChars: number,
+): boolean {
+  if (words.length === 0 || windowChars <= 0 || matchStart <= 0) return false;
+  const windowStart = Math.max(0, matchStart - windowChars);
+  const windowText = text.slice(windowStart, matchStart);
+  for (const word of words) {
+    const re = new RegExp(`\\b${word}\\b`, "i");
+    if (re.test(windowText)) return true;
+  }
+  return false;
 }
 
 // Patterns are ordered from most specific to least specific so that longer,
@@ -101,6 +140,22 @@ const PATTERNS: PatternDef[] = [
       "Matches a New Zealand street address. Personal residential addresses should be withheld to protect privacy.",
   },
   {
+    // Must precede nz-passport: DL shape (2 letters excluding I/O + 6 digits)
+    // is a proper subset of the passport shape. With the context-word guard,
+    // DL only claims the span when a licence keyword sits just before the
+    // token; otherwise the match is skipped (range not claimed) and
+    // nz-passport gets its normal shot at the same span.
+    type: "driver-licence",
+    regex: /\b[A-HJ-NP-Z]{2}\d{6}\b/g,
+    requireContext: {
+      words: ["licence", "license", "driver", "DL"],
+      windowChars: 40,
+    },
+    suggestedGround: "s7_2a",
+    reasoning:
+      "NZ driver licence number (2 letters + 6 digits, I and O excluded) with required context keyword nearby.",
+  },
+  {
     type: "nz-passport",
     regex: /\b[A-Z]{2}\d{6}\b/g,
     suggestedGround: "s7_2a",
@@ -158,6 +213,21 @@ export function detectPatterns(
 
         const start = m.index ?? 0;
         const end = start + m[0].length;
+
+        // Context-word guard. Checked BEFORE the overlap test so a failed
+        // context check never claims the range — a subsequent pattern with
+        // looser rules (e.g. nz-passport) still gets to fire on the span.
+        if (
+          pattern.requireContext &&
+          !hasContextWithin(
+            page.text,
+            start,
+            pattern.requireContext.words,
+            pattern.requireContext.windowChars,
+          )
+        ) {
+          continue;
+        }
 
         // Skip if this span overlaps with a match from an earlier pattern
         const overlaps = occupied.some(

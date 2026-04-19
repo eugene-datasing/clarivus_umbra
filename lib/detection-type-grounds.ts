@@ -14,6 +14,7 @@ export const DEFAULT_GROUND_FOR_TYPE: Record<string, string> = {
   address: "s7_2a",
   "bank-account": "s7_2a",
   "nz-passport": "s7_2a",
+  "driver-licence": "s7_2a",
   "vehicle-reg": "s7_2a",
   nhi: "s7_2a",
   commercial: "s7_2bii",

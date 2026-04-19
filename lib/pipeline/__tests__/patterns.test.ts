@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { detectPatterns, type PatternMatch } from "../patterns";
+import { detectPatterns, hasContextWithin, type PatternMatch } from "../patterns";
 import type { ExtractedPage } from "../extract";
 
 function makePage(pageNumber: number, text: string): ExtractedPage {
@@ -257,5 +257,68 @@ describe("detectPatterns", () => {
       expect(matches[0].reasoning).toBeTruthy();
       expect(typeof matches[0].reasoning).toBe("string");
     });
+  });
+
+  // -----------------------------------------------------------------------
+  // NZ driver licence — pattern with requireContext guard
+  // -----------------------------------------------------------------------
+  describe("NZ driver licence", () => {
+    it("classifies HM847219 as driver-licence when 'Licence' precedes it in window", () => {
+      const pages = [makePage(1, "NZ Driver Licence HM847219")];
+      const matches = detectPatterns(pages);
+      const types = matchTypes(matches);
+      expect(types).toContain("driver-licence");
+      expect(types).not.toContain("nz-passport");
+    });
+
+    it("classifies LA123456 as nz-passport when no DL context is present", () => {
+      const pages = [makePage(1, "Passport no. LA123456")];
+      const matches = detectPatterns(pages);
+      const types = matchTypes(matches);
+      expect(types).toContain("nz-passport");
+      expect(types).not.toContain("driver-licence");
+    });
+
+    it("falls back to nz-passport on an ID-shaped token without DL context", () => {
+      // No 'licence' / 'driver' / 'DL' within the 40-char window: DL match
+      // fails the context guard, does not claim the range, and nz-passport
+      // fires on the same span.
+      const pages = [makePage(1, "Reference number HM847219 on file.")];
+      const matches = detectPatterns(pages);
+      const types = matchTypes(matches);
+      expect(types).toContain("nz-passport");
+      expect(types).not.toContain("driver-licence");
+    });
+  });
+});
+
+// -----------------------------------------------------------------------
+// hasContextWithin — helper used by PatternDef.requireContext
+// -----------------------------------------------------------------------
+describe("hasContextWithin", () => {
+  it("returns true when a context word sits inside the window before matchStart", () => {
+    const text = "NZ Driver Licence HM847219";
+    const matchStart = text.indexOf("HM847219");
+    expect(hasContextWithin(text, matchStart, ["licence"], 40)).toBe(true);
+  });
+
+  it("returns false when no context word appears in the window", () => {
+    const text = "Reference number HM847219 on file.";
+    const matchStart = text.indexOf("HM847219");
+    expect(hasContextWithin(text, matchStart, ["licence", "driver", "DL"], 40)).toBe(false);
+  });
+
+  it("returns false when the context word sits beyond the window", () => {
+    // 100-char filler pushes 'licence' well past the 20-char window.
+    const filler = "x".repeat(100);
+    const text = `The licence is mentioned far away, then ${filler} HM847219`;
+    const matchStart = text.indexOf("HM847219");
+    expect(hasContextWithin(text, matchStart, ["licence"], 20)).toBe(false);
+  });
+
+  it("matches case-insensitively", () => {
+    const text = "NZ DRIVER LICENCE HM847219";
+    const matchStart = text.indexOf("HM847219");
+    expect(hasContextWithin(text, matchStart, ["licence"], 40)).toBe(true);
   });
 });
