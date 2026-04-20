@@ -889,9 +889,17 @@ This instance (`app-veil-prototype`, PNCC demo) currently holds test and dummy d
 
 - *(Phase 1 not yet started.)*
 
-### Phase 1.5 (stub)
+### Phase 1.5 — 2026-04-20
 
-- *(Phase 1.5 not yet started.)*
+- Investigation complete. Full write-up at `docs/phase-1-5-extraction-findings.md`.
+- **Root cause of the spike's 1-page B1 result: spike-script artefact, not production pipeline behaviour.** The spike runner calls `extractText(buf, "DOCX")` which routes to `lib/pipeline/extract.ts:144–156`'s `extractFromDocx` — mammoth-based, hardcoded to return a single page. Production instead calls `buildCanonicalPdf` first and then `extractText(canonicalBuffer, "PDF")`, routing through DI which respects page breaks. cr17 production logs confirm B1 extracts to 4 canonical pages, 5,596 chars in production.
+- **javaldx warning is cosmetic.** Installing `default-jre` or `default-jre-headless` does not suppress it (LibreOffice-nogui's `javaldx` helper expects Java in a location not matched by Debian's JRE packaging). Conversion exits 0 and produces correct multi-page output regardless.
+- **Other DOCX fixtures tested** (`04_main_case_file_long`, `05_internal_briefing_and_recommendation`, `06_supporting_statements_and_appendices`) all produce 8-page canonical PDFs in the Docker environment. B1 is a short outlier, not evidence of a pipeline-level page collapse.
+- **Phase 4 disposition: proceed as drafted.** Cross-batch premise is valid for DOCX >6 canonical pages. B1 is too short to test it; `B3_Long_Investigation.pdf` (authored in Phase 2) is the correct test fixture — already specified in the plan.
+- **No Dockerfile change applied.** No cr18 deploy.
+- **Follow-up items surfaced** (out of Phase 1.5 scope):
+  - Intermittent "Canonical PDF build failed" errors observed on `app-veil-prototype` (three on 2026-04-20). Likely App Service memory pressure / concurrent-conversion profile locking. Track as a separate ops ticket.
+  - Future spike/bench harnesses testing the production DOCX flow must go through `buildCanonicalPdf` first, not call `extractText` directly with a DOCX buffer.
 
 ---
 
