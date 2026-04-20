@@ -11,7 +11,7 @@
 
 This plan replaces the current split view (HTML reconstruction + optional pdf.js for PDFs only) with a single canonical PDF per document used by reviewer, redactor, approver, and requester alike. Non-PDF formats (DOCX / XLSX / TXT / EML / MSG) gain a persisted canonical PDF derived from LibreOffice conversion (existing) or an HTML-template + LibreOffice path (new, for emails). Azure DI `prebuilt-read` runs against the canonical PDF for every format so detection bboxes live in a single percentage-of-canonical-page coordinate system. pdf.js with an absolutely-positioned overlay layer becomes the primary viewer; QA signoff gains an inline redacted-PDF view and an audit record capturing the SHA-256 of what the approver certified. `Document.contentJson` survives as pipeline-internal AI context only and is removed from every UI render path.
 
-**Total effort:** **29–37 engineer-days** for one engineer working full-time with Claude Code assistance, over ~6–8 calendar weeks. (Revised from 28–35 after adding the DOCX-bbox spike in Phase 2 and a more granular Phase 4 breakdown.)
+**Total effort:** **26–34 engineer-days** for one engineer working full-time with Claude Code assistance, over ~5–7 calendar weeks. (Revised from 29–37 after Phase 3 recon found viewer, overlay, bidirectional selection, and SystemSetting flag machinery all already present in the codebase — Phase 3 is a demolition-plus-thin-feature-layer, not a greenfield build. See Phase 3 §1.)
 
 **Critical path:** Phase 1 (canonical PDF schema + persist) → Phase 2 (Azure DI against canonical + bbox population) → Phase 3 (viewer) → Phase 4 (QA) → Phase 5 (cleanup). Phases 1 and 2 each block everything downstream; Phases 3, 4, 5 can partially overlap after Phase 2 ships.
 
@@ -241,10 +241,14 @@ Revert the single line in `process.ts:216`. Existing non-PDF documents will reve
 ## Phase 3 — viewer rework (pdf.js primary, HTML removed from UI path)
 
 ### 1. Scope and success criteria
-`app/requests/[id]/review/[docId]/` renders the canonical PDF via react-pdf with an absolutely-positioned detection overlay. The HTML reconstruction path is removed from the review UI (but kept in `contentJson` for pipeline use — Phase 5 cleans that up). Reviewers can accept/reject detections by clicking the overlay highlights. Keyboard navigation (A/R shortcuts, arrow keys) continues to work. Success: reviewer workflow is visually faithful to the original document and every detection is click-targeted.
+`app/requests/[id]/review/[docId]/` renders the canonical PDF via react-pdf with an absolutely-positioned detection overlay as the **only** reviewer surface. The HTML reconstruction branch is deleted from the review UI (but `contentJson` remains in the pipeline to feed AI detection — Phase 5 trims that). Reviewers accept/reject detections by clicking overlay highlights or pressing A/R in the sidebar. Keyboard navigation (arrow keys, Escape) continues to work. Manual detection via text selection is re-implemented against the pdf.js text layer. The pdf.js text layer is enabled so reviewers can select, copy, Ctrl-F, and screen readers can read document body. The pdf.js worker is bundled locally, not fetched from a CDN. Success: reviewer workflow is visually faithful to the original document, every detection is click-targeted, and no document reaches a reviewer without a canonical PDF.
+
+**Reality check (2026-04-20 recon — see Implementation log — Phase 3).** Most of Phase 3's "new" infrastructure already exists and is in active use. `components/review/pdf-viewer.tsx` (react-pdf 10.4.1, fit-to-width, zoom, scroll-to-page) and `components/review/pdf-detection-overlay.tsx` (percentage-positioned, status-driven, bidirectional selection with the sidebar) are real and wired into `review-client.tsx` today. SystemSetting flag machinery (`getSetting` / `setSetting` / `SETTING_KEYS` registry in `lib/data/settings.ts`) is already in place. Keyboard shortcuts, optimistic updates, scroll-into-view refs — all built. Phase 3 is a demolition PR (remove the HTML branch, ~500 lines deleted) plus a thin feature layer (flag + mapper field + the scope additions below), not a greenfield build.
+
+**Latent bug surfaced by recon — fileType case mismatch.** `page.tsx:52` compares `doc.type === "pdf"` lowercase; the upload route stores `fileType: "PDF"` uppercase. That means freshly-uploaded PDFs in production today are routed through the HTML reconstruction branch, not the PdfViewer. Seeded demo PDFs use lowercase and hit the correct branch, which is why we haven't noticed. Phase 3's branch-flattening removes the gate entirely, so this is incidentally fixed — but it also means for many documents in production today, Phase 3 is their first contact with the PDF viewer at all, not a migration from one view to another. Call this out in the PR description.
 
 ### 2. Schema changes
-**None.** The feature flag lives as a row in the existing `SystemSetting` key/value table at `prisma/schema.prisma:222–230` — no new columns required.
+**None.** The feature flag lives as a row in the existing `SystemSetting` key/value table at `prisma/schema.prisma:230–238` — no new columns required.
 
 ```
 model SystemSetting {
@@ -257,72 +261,82 @@ model SystemSetting {
 }
 ```
 
-Row shape for the viewer flag: `key = "VIEWER_MODE"`, `value = { mode: "html" | "pdf" }`. The same pattern applies to `QA_REQUIRE_PDF_INSPECT` in Phase 4: `key = "QA_REQUIRE_PDF_INSPECT"`, `value = { enabled: boolean }`. Read via the existing `getSetting()` / `setSetting()` helpers in `lib/data/settings.ts`. Write via admin-only settings UI (out of scope here; admins can set directly via `npx prisma studio` if needed before the UI ships).
+Row shape for the viewer flag: `key = "VIEWER_MODE"`, `value = { mode: "html" | "pdf" }`. Add one entry to `SETTING_KEYS` (`lib/data/settings.ts:9–22`) plus a `DEFAULT_VIEWER_MODE` constant matching the existing `ConfidenceThresholds` shape. Same pattern applies to `QA_REQUIRE_PDF_INSPECT` in Phase 4. Read via the existing `getSetting<T>()` helper. Write via `setSetting()` — admin-only settings UI is out of scope here; admins can set directly via `npx prisma studio` for initial rollout.
+
+The flag exists as a rollback lever only, not as a user-facing preference (see Decision h). It is read once per page render in the server component and passed as a prop to the client.
 
 ### 3. File-level change list
 
 **Modified files:**
-- `app/requests/[id]/review/[docId]/page.tsx` — drop `getDocumentContent(docId)` call (no longer needed for rendering); pass `canonicalPdfPath` to client.
-- `app/requests/[id]/review/[docId]/review-client.tsx` — major rewrite: remove `DocParagraph`-rendering subtree; primary layout is now `<PdfViewerWithOverlay />` + existing detection sidebar. ~200 lines removed, ~150 added.
-- `components/review/pdf-viewer.tsx` — extend to emit rendered page dimensions via a new prop `onPageDimensions: (page, width, height) => void`.
-- `components/review/detection-overlay.tsx` — **new**, renders absolutely-positioned `<button>` elements per detection, keyed to `selectedDetectionId`, accepts keyboard events.
+- `app/requests/[id]/review/[docId]/page.tsx` — drop `getDocumentContent(docId)` from the server Promise.all; remove the `isPdf` lowercase-string gate (line 52); add `getSetting("VIEWER_MODE", DEFAULT_VIEWER_MODE)` read; pass `canonicalPdfPath` and `viewerMode` to client; build `pdfUrl = canonicalPdfPath ? '/api/files/' + canonicalPdfPath : undefined`.
+- `app/requests/[id]/review/[docId]/review-client.tsx` — demolition. Delete `renderOriginalSegments`, `renderRedactedSegments`, `renderOriginalParagraph`, `renderRedactedParagraph` (~360 lines, roughly 985–1343). Delete the HTML split-panels branch (~95 lines, 1666–1761). Remove `documentContent`, `header`, and the paragraph renderers from the `ReviewClientProps` interface. Replace the sort logic that walked `documentContent` with a `(page ASC, posY ASC)` comparator over detections. Replace the HTML-dependent `handleTextSelection` (line 617) with a pdf.js text-layer adaptation (see §5).
+- `lib/data/documents.ts` — add `canonicalPdfPath` to the `getDocument()` Prisma `select` list (one-line addition).
+- `components/review/pdf-detection-overlay.tsx` — promote detection boxes from `<div>` with `onClick` to `<button>` with `aria-label={'{type}: {text}'}`, `role="button"`, and keyboard handlers. Current `<div>` is click-only and not individually focusable; `<button>` gives screen-reader and tab-order parity.
+- `components/review/pdf-viewer.tsx` — flip `renderTextLayer={false}` to `renderTextLayer={true}` (lines 181–182). Add a one-frame defer on overlay render via `onRenderSuccess` to avoid flashing boxes over an unstable layout while the text layer paints.
+- `components/review/pdf-viewer.tsx:11` + `next.config.js` + `public/` — bundle the pdf.js worker locally. Copy `pdfjs-dist/build/pdf.worker.min.mjs` into `public/` via a `postinstall` script or `next.config.js` `webpack()` copy, and replace the unpkg CDN URL with the local path. Removes a hard external dependency and is resilient to Azure egress policy changes.
 
-**Deleted or substantially shrunk:** `components/review/paragraph-renderer.tsx` (or wherever the DocParagraph JSX lives) — removed from the review screen. Kept in the codebase if another screen still uses it; otherwise deleted.
+**Deleted or substantially shrunk:**
+- `components/review/paragraph-renderer.tsx` (or wherever the `DocParagraph` JSX lives, if extracted). Confirm no other page consumes it before deletion; otherwise mark `@deprecated` and delete in Phase 5.
+
+**Net line-delta estimate:** ~500 lines removed, ~180 added (flag plumbing + mapper field + manual-detection rewrite + overlay a11y + text-layer stabilisation + worker bundling).
 
 ### 4. API routes
-**None new.** The `/api/files/[...path]/` route already serves the canonical PDF (Phase 1) and is used by the PDF viewer via `pdfUrl`.
+**None new.** The `/api/files/[...path]/` route already serves the canonical PDF through `authorizeForCase` on the first path segment, and the Phase 1 storage key layout (`{caseId}/{docId}/canonical.pdf`) means any reviewer with case access can fetch the canonical PDF unchanged.
 
 ### 5. Pipeline changes
-**None.** The pipeline still builds `contentJson` for AI detection; only the UI stops consuming it.
+**None server-side.** The pipeline still builds `contentJson` for AI detection; only the UI stops consuming it.
+
+**Client-side manual-detection reimplementation.** The current `handleTextSelection` reads `selection.anchorNode.parentNode.dataset.page` — HTML-specific. In PDF mode, text selection happens over the pdf.js text layer (enabled in §3). The replacement flow:
+
+1. On `mouseup`, check `window.getSelection()` for a non-empty range.
+2. Walk up from `selection.anchorNode` until a DOM node with `data-page-number` (react-pdf's text-layer convention) is found; read the page number from that attribute.
+3. Compute the selection's bounding rectangle with `range.getBoundingClientRect()`, then convert to percentages of the parent page container (already known — react-pdf wraps each page in a sized element).
+4. Open the existing manual-detection popover with the selected text pre-filled and the computed `{page, posX, posY, posW, posH}` ready for submission.
+
+~80 lines of net new code in `review-client.tsx` replacing the ~60 lines of HTML-dependent selection handling. Test coverage: Playwright spec that selects text in a pdf.js text layer and asserts the popover opens with the right coordinates (text-layer selection is scriptable via `page.evaluate` + `window.getSelection`).
 
 ### 6. Coordinate system specification
-See Phase 2 §6. In the overlay component:
-
-```tsx
-// Pseudocode
-<div className="pdf-page-container" style={{ position: "relative" }}>
-  <Page pageNumber={n} onRenderSuccess={({ width, height }) => setDims(width, height)} />
-  {detectionsOnPage.map(det => (
-    <button
-      className="detection-overlay-btn"
-      style={{
-        position: "absolute",
-        left: `${det.posX}%`,
-        top: `${det.posY}%`,
-        width: `${det.posW}%`,
-        height: `${det.posH}%`,
-      }}
-      onClick={() => onSelect(det.id)}
-    />
-  ))}
-</div>
-```
-
-Percentages against the rendered page element let the overlay track zoom automatically — no pixel-level recomputation needed.
+Already correct in the live overlay — see Phase 2 §6. Percentages against the rendered page container (`react-pdf`'s sized `<Page>` wrapper) scale with zoom without imperative recomputation. No changes needed to coordinate maths.
 
 ### 7. Test strategy
 **Unit:**
-- `components/review/__tests__/detection-overlay.test.tsx` — given detections and a fake page size, assert positioning attributes are within tolerance.
-- `components/review/__tests__/pdf-viewer.test.tsx` — onPageDimensions callback fires after render.
+- `components/review/__tests__/pdf-detection-overlay.test.tsx` — extend: assert `<button>` element + ARIA label + keyboard event handlers fire.
+- `components/review/__tests__/pdf-viewer.test.tsx` — assert text layer enabled (`renderTextLayer` prop true), worker URL resolves to local path not `unpkg.com`.
 
 **E2E:**
-- New Playwright spec `e2e/review/pdf-viewer.spec.ts` — upload doc, open review screen, click a detection in the sidebar, assert the overlay rectangle in the PDF has focus. Second test: click the overlay rectangle, assert the sidebar entry becomes selected.
-- Update existing `e2e/review/*.spec.ts` specs that currently assert HTML paragraph content — replace with PDF-viewer assertions.
+- New `e2e/review/pdf-primary-viewer.spec.ts` — upload PDF and DOCX fixtures, assert the PDF viewer renders for both (not the HTML branch); click a detection in the sidebar, assert the overlay `<button>` receives focus; click the overlay button, assert the sidebar row becomes selected. Third test: select text in the pdf.js text layer, assert the manual-detection popover opens with correct `{page, bbox}` values.
+- Update existing `e2e/review/*.spec.ts` specs that assert against HTML paragraph content — replace with PDF-viewer assertions. Estimate: ~30 specs touched, each a mechanical swap from `page.locator('[data-paragraph-id]')` to `page.locator('[data-detection-overlay]')`.
 
 **Manual:**
-- Keyboard navigation pass: A/R accept/reject, arrow keys between detections, Escape dismiss.
-- Accessibility: screen-reader announce detection under cursor, focus ring visible, tab order sane.
-- Zoom test: 50%, 100%, 200% — overlays must stay aligned.
+- Keyboard navigation pass: A/R accept/reject, arrow keys between detections, Escape deselect, Tab through overlay buttons.
+- Accessibility: screen-reader reads document body (text layer on), announces each overlay by ARIA label on focus, focus ring visible, Ctrl-F works across the PDF.
+- Zoom test: 50%, 100%, 200%, fit-width — overlays stay aligned at every zoom.
+- Rich-text selection test on a real DOCX with tables and lists — confirm manual detection captures correct coordinates across a table cell boundary.
 
 ### 8. Rollback plan
-**Feature flag** (Decision (f)): add `SystemSetting` key `VIEWER_MODE` with values `"html"` | `"pdf"`. Review page reads the flag and renders either the old paragraph path or the new PDF path. Roll out `"pdf"` to PNCC first, watch for issues, flip remaining tenants. Revert by flipping the flag, no redeploy needed.
+**Feature flag** (Decision f, refined in Decision h): the `VIEWER_MODE` SystemSetting retains the `"html"` option as a rollback lever only — not a user-facing preference. Flip to `"html"` in `system_settings`, refresh the reviewer's page, done. The HTML code path remains intact in the codebase through Phase 3 and Phase 4 for exactly this reason; Phase 5 deletes it once we're confident.
+
+**Pre-cutover operational step.** Run `scripts/backfill-canonical-pdfs.ts` against each environment before flipping `VIEWER_MODE` to `"pdf"`, and purge or reprocess any document still missing a canonical PDF. Phase 3 does not implement an in-app fallback for `canonicalPdfPath IS NULL` — the working assumption is that this is always populated post-cutover. Acceptable because all current documents in this environment are test/dummy data (Eugene confirmed 2026-04-20); no production reviewer data exists that needs graceful fallback handling.
 
 ### 9. Effort estimate
-**8–10 engineer-days.** The overlay layer is straightforward but gets fiddly around zoom, scroll sync with the sidebar, keyboard nav, and a11y. Existing Playwright coverage of the review flow is extensive (297 tests) and many will need updating.
+**5–7 engineer-days.** Revised down from the earlier 8–10 after recon confirmed the viewer, overlay, selection bridge, and flag machinery all exist. Revised up from the initial post-recon estimate of 4–6 after Eugene confirmed manual-detection reimplementation is mandatory (2026-04-20).
+
+Breakdown:
+
+- **Demolition** — remove HTML branch, delete paragraph renderers, delete `documentContent` prop, replace sort comparator with `(page, posY)`, switch `pdfUrl` to canonical, add `canonicalPdfPath` to mapper, remove lowercase-PDF gate: **1.5 days**.
+- **Manual detection on pdf.js text layer** — new selection → page-number → percentage-bbox pipeline; Playwright coverage: **1.5 days**.
+- **Overlay a11y promotion** — `<div>` → `<button>`, ARIA labels, keyboard focus ring, tab order: **0.5 days**.
+- **Text-layer re-enable + overlay stabilisation** — `renderTextLayer={true}`, `onRenderSuccess` defer for overlay paint, visual regression check across zoom levels: **0.5 days**.
+- **Worker bundling** — copy pdf.js worker into `public/`, wire up in `next.config.js` or `postinstall`, update `pdf-viewer.tsx` URL, Docker build verification: **0.5 days**.
+- **SystemSetting flag plumbing** — add `VIEWER_MODE` + `DEFAULT_VIEWER_MODE` to `SETTING_KEYS`, server-side read in `page.tsx`, prop through to ReviewClient: **0.5 days**.
+- **Tests + Playwright suite migration** — ~30 existing specs updated to assert overlay not paragraphs; two new specs for manual detection and bidirectional selection: **1.5 days**.
+- **Contingency** — pdf.js text-layer selection edge cases (multi-page selection, selection across a table cell, selection into a footer), React 19 × react-pdf 10.4.1 interop: **0.5–1 day**.
+
+Sum: **6–7 days nominal, 5 days if everything lands first try.**
 
 ### 10. Dependencies
-- **Blocks:** Phase 4 (reuses the viewer), Phase 5 (contentJson removal is safe only after no UI consumes it).
-- **Blocked by:** Phase 2 (bboxes must be correct against canonical PDF).
+- **Blocks:** Phase 4 (reuses viewer for redacted preview), Phase 5 (HTML code path removal is safe only after viewer is PDF-only).
+- **Blocked by:** Phase 1 (canonical PDF exists), Phase 2 (bboxes are valid percentages against the canonical PDF).
 
 ---
 
@@ -485,10 +499,17 @@ Revert the commit. The trimmed content-builder falls back to its previous form. 
 **Recommend: absolutely-positioned `<button>` elements over the pdf.js canvas.** Keyboard focus, ARIA labels, click events all work natively. Percentage-based positioning automatically scales with the PDF's rendered size (zoom-aware without recomputation). SVG overlay is a close second and gives crisp edges at extreme zoom, but loses the accessibility boilerplate. pdf.js's annotation-layer API is internal to pdfjs, not exposed cleanly by `react-pdf`, and couples us to its version-specific rendering — upgrading pdfjs would risk breaking the overlay.
 
 ### (f) Feature flag or direct rollout
-**Recommend: feature flag via `SystemSetting` for the Phase 3 UI switch** (`VIEWER_MODE="html"|"pdf"`), and **direct rollout for Phases 1, 2, 4, 5**. Schema changes from Phase 1 are backward-compatible and don't need a flag. Phase 3 is the disruptive UI change and benefits from staged rollout (PNCC opts in, other tenants keep the HTML view until ready). Phase 4's QA hardening can go behind `QA_REQUIRE_PDF_INSPECT`. Phase 5 has no user-visible impact and doesn't need a flag.
+**Recommend: feature flag via `SystemSetting` for the Phase 3 UI switch** (`VIEWER_MODE="html"|"pdf"`) as a rollback lever only, and **direct rollout for Phases 1, 2, 4, 5**. Schema changes from Phase 1 are backward-compatible and don't need a flag. Phase 3 is the disruptive UI change; the flag exists so an admin can flip back to HTML if pdf.js misbehaves in production, not so reviewers can switch views at will. See Decision (h) for the user-facing positioning and the Phase 5 removal schedule. Phase 4's QA hardening can go behind `QA_REQUIRE_PDF_INSPECT`. Phase 5 has no user-visible impact and doesn't need a flag.
 
 ### (g) Rich email fidelity
 **Recommend: simple transcript, plain-text body.** Render emails as `{From, To, Cc, Subject, Date}` block + plain-text body (via `simpleParser`'s `text` field or `htmlToText` of the HTML body) + attachments listed by filename. Preserving inline HTML styling invites three problems: (i) inline images can obscure PII from text-search redaction; (ii) CSS tricks (background images, display:none text) can hide content from detection; (iii) LibreOffice's HTML→PDF fidelity for complex email HTML is mediocre. A clean transcript is auditable, predictable, and gives the AI detection pipeline unambiguous text to scan. If specific customers later want HTML fidelity, that's a second-tier option behind a per-case setting.
+
+### (h) HTML-viewer sunset strategy
+**Recommend: not a user-facing option — rollback lever only, removed in Phase 5.** The `VIEWER_MODE` SystemSetting stays available to admins for the duration of the rollout as a kill-switch if pdf.js misbehaves in production, but is not exposed in any reviewer UI. The HTML reconstruction code path is preserved in the codebase through Phases 3 and 4 purely to make rollback cheap; Phase 5 deletes it.
+
+Accessibility concerns that might otherwise argue for retaining HTML (screen readers, text zoom, low-bandwidth) are addressed **within** the PDF viewer via text-layer re-enablement (Phase 3 §3) and overlay a11y promotion (`<button>` + ARIA labels). If post-Phase-5 accessibility gaps surface, the right response is a dedicated read-only transcript affordance, clearly labelled non-authoritative, with sign-off disabled from it — distinct from the main review surface, not a revived HTML viewer.
+
+**Rationale:** two reviewing surfaces for the same document creates evidentiary ambiguity — "which surface did the reviewer actually inspect?" undermines the whole purpose of canonicalising on a single PDF. Maintenance cost compounds: every detection-rendering, annotation, keyboard-nav, and accessibility change has to be kept in sync across two code paths. The pre-Phase-2 "zero-bbox legacy documents" fallback justification falls away given all current documents are test/dummy data (Eugene, 2026-04-20) and will be reprocessed or purged before cutover.
 
 ---
 
@@ -514,7 +535,7 @@ Revert the commit. The trimmed content-builder falls back to its previous form. 
 
 ### Architectural
 - **Integrity chain migration (Phase 4).** Extending `computeIntegrityHash()` to include `metadata` breaks hash continuity unless we introduce a `hash_version` column. Without it, an Ombudsman-style verification sweep would fail on entries straddling the upgrade. The plan includes `hash_version` — do not skip it.
-- **Two pipelines coexisting.** Between Phase 1 rollout and backfill completion, half the document population will have canonical PDFs and half won't. `redact-pdf.ts` must cleanly handle both paths, and the feature flag in Phase 3 must gate correctly per document. Test `canonicalPdfPath == null` as an explicit branch, not a side-effect.
+- **Two pipelines coexisting (redaction, Phase 1 → backfill window).** `redact-pdf.ts` has two explicit paths — the canonical path and the legacy `redactLegacy` fallback — until every row has a canonical PDF. Test `canonicalPdfPath == null` as an explicit branch, not a side-effect. For the Phase 3 viewer itself, the coexistence window is closed before cutover: the pre-cutover operational step purges or reprocesses any `canonicalPdfPath IS NULL` rows (Eugene confirmed 2026-04-20 that all current documents are test/dummy data), so no runtime null-handling is needed in the reviewer code.
 
 ### Dependency
 - **LibreOffice font / locale for emails — mitigated in Phase 1 scope.** The Dockerfile change mandated in Phase 1 §1 (install `fonts-noto-core` alongside `libreoffice-nogui`) resolves the macron rendering concern for te reo Māori content and any other non-ASCII Latin text. This item is retained here for awareness of the risk class but no further action is required beyond Phase 1 rollout.
@@ -524,7 +545,7 @@ Revert the commit. The trimmed content-builder falls back to its previous form. 
 ### Migration / operational
 - **Storage costs.** Every non-PDF document now has two blobs (original + canonical.pdf). For 10,000 DOCX inputs, that's roughly 2× the storage footprint on the Azure Blob side. Quantify before rollout; consider lifecycle policy (retain canonical indefinitely, demote original to cool tier after N days).
 - **Backfill script contention.** `scripts/backfill-canonical-pdfs.ts` running against production needs rate limiting to avoid exhausting DI quota or LibreOffice CPU. Include a `--max-concurrent 2` flag from day one.
-- **Feature-flag leakage.** If a tenant has `VIEWER_MODE=pdf` but their documents haven't been backfilled, the reviewer sees "No canonical PDF available — reprocess this document" rather than a broken page. Spec that error state explicitly in Phase 3.
+- **Feature-flag leakage.** Flipping `VIEWER_MODE=pdf` without completing the backfill purge would produce reviewer errors, since Phase 3 intentionally does not implement an in-app fallback for `canonicalPdfPath IS NULL` (see Phase 3 §8 — rollback plan). Mitigation is purely operational: the Phase 3 pre-cutover step (`scripts/backfill-canonical-pdfs.ts` + purge/reprocess of any residual nulls) must run before the flag flip. Document this in the Phase 3 rollout runbook when that PR opens.
 - **Phase 2 detection count variance across repeat runs.** Measured 57 vs 103 detections on the same fixture in the Step 3 spike (medium-A, on-path). Driven by GPT-4o AI detection at current temperature. Separable from Phase 2 scope; tracked as a follow-up for post-ship stabilisation work. Candidate fixes: lower GPT-4o temperature, add a validation-pass that de-dupes runs, or require a two-run consensus for high-variance detection types.
 
 ---
@@ -539,6 +560,19 @@ Revert the commit. The trimmed content-builder falls back to its previous form. 
 
 ---
 
+## Implementation log — Phase 3
+
+- **Recon (2026-04-20).** Claude Code recon against the live `review-client.tsx` (2,401 lines) and `components/review/` directory found that `pdf-viewer.tsx` (react-pdf 10.4.1, fit-to-width, zoom, scroll-to-page) and `pdf-detection-overlay.tsx` (percentage-positioned, status-driven colour, selected-state ring, bidirectional sidebar selection via `handleHighlightClick`) are already implemented and wired into the current review UI behind the `isPdf && pdfUrl` gate at line 1655. SystemSetting flag machinery (`getSetting`/`setSetting`, `SETTING_KEYS` well-known key registry) is also already present in `lib/data/settings.ts`. Phase 3 estimate revised from 8–10 engineer-days to 5–7, reclassified as demolition-plus-thin-feature-layer rather than greenfield build.
+- **Latent `fileType` case bug** surfaced during recon. `page.tsx:52` compares `doc.type === "pdf"` lowercase; the upload route stores `fileType: "PDF"` uppercase. Freshly-uploaded PDFs in production are currently routed through the HTML reconstruction branch, not the PdfViewer. Seeded demo PDFs use lowercase which is why this hasn't been noticed. Phase 3's branch-flattening (remove the gate entirely) incidentally fixes this. Flag in Phase 3 PR description so reviewers understand they're seeing the PDF viewer for the first time on many existing documents, not migrating between two views.
+- **pdf.js worker currently loaded from `unpkg.com`** (`pdf-viewer.tsx:11`). Hard external dependency; any CSP tightening or Azure egress policy change breaks the review surface instantly. Phase 3 bundles the worker locally via `postinstall` or `next.config.js` `webpack()` copy. One-file change, no downside.
+- **Overlay is `<div>` with `onClick`, not `<button>`.** Keyboard users today navigate via the sidebar table (which has focusable rows), not via the overlay itself. Phase 3 promotes overlay to `<button role="button">` with ARIA labels for screen-reader and tab-order parity.
+- **Text layer disabled (`renderTextLayer={false}`).** Reviewers can't select, copy, or Ctrl-F text in the PDF, and screen readers can't read body content. Eugene's call (2026-04-20): enable it in Phase 3. Accept the small cost of a one-frame paint flicker, handle via `onRenderSuccess`-gated overlay render.
+- **Manual detection reimplementation required.** Current `handleTextSelection` reads `dataset.page` from paragraph nodes — HTML-specific. Eugene's call (2026-04-20): reimplement against the pdf.js text layer, don't disable. ~80 lines of net new selection → page → percentage-bbox code in `review-client.tsx`.
+- **Legacy / null-`canonicalPdfPath` handling out of scope.** Eugene's call (2026-04-20): all current documents are test/dummy data. Phase 3 assumes `canonicalPdfPath` is never null at reviewer-render time. Pre-cutover operational step: run `scripts/backfill-canonical-pdfs.ts`, purge or reprocess any residual nulls. No in-app fallback branch.
+- **Sort comparator** — existing `sortedDetections` walks `documentContent` (line 457). When `documentContent` goes away, Phase 3 replaces with a `(page ASC, posY ASC)` comparator over detections. Trivial, but must not be missed or keyboard arrow-down navigation will feel random.
+
+---
+
 ## Open questions for reviewer
 
 1. **Acceptable processing-time regression.** DOCX uploads today skip DI (content extracted by mammoth). Phase 2 adds LibreOffice conversion + DI on top. Expect DOCX processing latency to roughly double (5s → 10–12s for typical files) on the DI-on-canonical path. The Phase 2 §1 spike will measure this against a mammoth-synthesised-polygons alternative; the decision criterion is p95 ≤ 8 s. Is that 8 s ceiling correct, or do you want a different threshold?
@@ -547,4 +581,4 @@ Revert the commit. The trimmed content-builder falls back to its previous form. 
 
 3. **pdf.js upgrade appetite.** If Phase 3 exposes `react-pdf@10.4.1` + React 19 bugs that are fixed in react-pdf v11+, is it OK to bump within the scope of this work, or do we treat it as a separate tracked upgrade?
 
-4. **Per-user view preference.** Should reviewers be able to switch back to an HTML view during the transition (for accessibility reasons), or is the PDF view mandatory once the feature flag is on for their tenant?
+4. ~~**Per-user view preference.**~~ **Resolved (2026-04-20).** PDF view is mandatory once the flag is flipped; HTML is not offered as a user-facing toggle. The `VIEWER_MODE` flag exists as an admin-only rollback lever only. Accessibility is addressed within the PDF viewer via text-layer re-enablement and overlay ARIA. See Decision (h).
