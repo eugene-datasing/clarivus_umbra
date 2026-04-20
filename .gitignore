@@ -47,3 +47,7 @@ test-fixtures/phase2-spike/*
 !test-fixtures/dummy-lgoima-pack/
 test-fixtures/dummy-lgoima-pack/*
 !test-fixtures/dummy-lgoima-pack/B2_Witness_Statement_Torres.pdf
+
+# model-choice spike: commit the runner outputs and comparison but not the
+# cached DI extraction (2k+ lines, regenerates on demand from the runner)
+docs/spike-model-comparison-2026-04-20/b1-extracted-pages.json

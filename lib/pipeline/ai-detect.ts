@@ -318,7 +318,7 @@ function buildClassificationContext(classification?: DocumentClassification): st
  * The "confidential" type is always included as a catch-all.
  * Optionally prepends document classification context.
  */
-function buildSystemPrompt(enabledTypes?: Set<string>, classification?: DocumentClassification): string {
+export function buildSystemPrompt(enabledTypes?: Set<string>, classification?: DocumentClassification): string {
   const types = enabledTypes
     ? ALL_AI_TYPES.filter((t) => t === "confidential" || enabledTypes.has(t))
     : ALL_AI_TYPES;
@@ -420,7 +420,7 @@ function splitLargePage(
  * smaller chunks at paragraph boundaries.  Each chunk retains the original
  * page number so detections map back correctly.
  */
-function preparePages(pages: ExtractedPage[]): ExtractedPage[] {
+export function preparePages(pages: ExtractedPage[]): ExtractedPage[] {
   const MAX_PAGE_CHARS = 12_000;
   const result: ExtractedPage[] = [];
   for (const page of pages) {
