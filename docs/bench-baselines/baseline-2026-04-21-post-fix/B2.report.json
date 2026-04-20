@@ -1,0 +1,144 @@
+{
+  "score": {
+    "fixture": "B2",
+    "overall": {
+      "precision": 0.7058823529411765,
+      "recall": 0.6,
+      "f1": 0.6486486486486486,
+      "tp": 12,
+      "fp": 5,
+      "fn": 8
+    },
+    "byPathway": {
+      "personal": {
+        "precision": 0.8333333333333334,
+        "recall": 0.6666666666666666,
+        "f1": 0.7407407407407408,
+        "tp": 10,
+        "fp": 2,
+        "fn": 5
+      },
+      "commercial": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "governance": {
+        "precision": 0.5,
+        "recall": 0.25,
+        "f1": 0.3333333333333333,
+        "tp": 1,
+        "fp": 1,
+        "fn": 3
+      },
+      "enforcement": {
+        "precision": 0.3333333333333333,
+        "recall": 1,
+        "f1": 0.5,
+        "tp": 1,
+        "fp": 2,
+        "fn": 0
+      }
+    },
+    "missing": [
+      {
+        "text": "27 Kowhai Street, Awatere 4310",
+        "type": "address",
+        "mustMatch": "substring",
+        "page": 1,
+        "pathway": "personal",
+        "rationale": "Declarant's home address; appears in header table and in Declaration paragraph."
+      },
+      {
+        "text": "Sarah Mitchell",
+        "type": "personal-name",
+        "mustMatch": "substring",
+        "page": 1,
+        "pathway": "personal",
+        "rationale": "HR Manager / Interviewer — third-party council staff in grievance context. Per v3.1 Phase 3 reworded carve-out, investigator-in-grievance-context IS flaggable."
+      },
+      {
+        "text": "HR-INV-2026-018",
+        "type": "confidential",
+        "mustMatch": "exact",
+        "page": 1,
+        "pathway": "governance",
+        "rationale": "Investigation file reference; s7(2)(a) protects the case identifier linking to HR records."
+      },
+      {
+        "text": "Priya Sharma",
+        "type": "personal-name",
+        "mustMatch": "substring",
+        "page": 1,
+        "pathway": "personal",
+        "rationale": "Declarant's manager; named in Background prose — third-party council staff in grievance context."
+      },
+      {
+        "text": "Ms Ferguson",
+        "type": "personal-name",
+        "mustMatch": "substring",
+        "pathway": "personal",
+        "rationale": "Honorific form appears multiple times across both pages; Phase 4 entity-propagation candidate."
+      },
+      {
+        "text": "Mr Kellogg",
+        "type": "personal-name",
+        "mustMatch": "substring",
+        "pathway": "personal",
+        "rationale": "Honorific form appears multiple times; Phase 4 entity-propagation candidate."
+      },
+      {
+        "text": "Jonathan Briggs",
+        "type": "harassment-risk",
+        "mustMatch": "substring",
+        "page": 1,
+        "pathway": "governance",
+        "rationale": "Third-party junior planner witness named in an incident account; harassment-risk per Phase 3 Example 11 (witness identity in grievance context, s7(2)(f)(ii))."
+      },
+      {
+        "text": "Mr Kellogg's conduct towards Ms Ferguson has, in my observation, been different in tone from his conduct towards male colleagues",
+        "type": "free-frank",
+        "mustMatch": "substring",
+        "page": 2,
+        "pathway": "governance",
+        "rationale": "Candid observation on the respondent's pattern of behaviour from the Broader Context paragraph; free-frank s7(2)(f)(i)."
+      }
+    ],
+    "unexpected": [
+      {
+        "text": "27 Kowhai Street",
+        "type": "address",
+        "page": 1,
+        "confidence": 95
+      },
+      {
+        "text": "Incident - 17 November 2025 team meeting",
+        "type": "law-enforcement",
+        "page": 1,
+        "confidence": 85
+      },
+      {
+        "text": "Incident - 11 February 2026",
+        "type": "law-enforcement",
+        "page": 1,
+        "confidence": 85
+      },
+      {
+        "text": "I am also mindful that if this statement were released under LGOIMA it should be withheld under s7(2)(a) as it contains my personal information and that of junior staff who are not parties to the complaint.",
+        "type": "harassment-risk",
+        "page": 2,
+        "confidence": 85
+      },
+      {
+        "text": "Jonathan Briggs",
+        "type": "personal-name",
+        "page": 1,
+        "confidence": 85
+      }
+    ]
+  },
+  "baselineDelta": null
+}

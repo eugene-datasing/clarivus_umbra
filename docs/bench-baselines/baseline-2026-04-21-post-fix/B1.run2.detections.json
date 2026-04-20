@@ -1,0 +1,153 @@
+{
+  "detections": [
+    {
+      "text": "Holroyd Partners (Ben Mahuika, Partner) - subject to legal professional privilege",
+      "type": "legal-privilege",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "Helen Margaret Ferguson",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "14 June 1983",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "108-412-889",
+      "type": "ird",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "JKA1234",
+      "type": "nhi",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "EA123456",
+      "type": "driver-licence",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "42 Whiteman Street",
+      "type": "address",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "hferg1983@gmail.com",
+      "type": "email-addr",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "027 412 6789",
+      "type": "phone",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "helen.ferguson@awateredc.govt.nz",
+      "type": "email-addr",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "12-3456-7890123-00",
+      "type": "bank-account",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "David Michael Kellogg",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "049-091-850",
+      "type": "ird",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "MNE9087",
+      "type": "nhi",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "LA429183",
+      "type": "nz-passport",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "8b Marlin Grove, Awatere 4318",
+      "type": "address",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "022 337 8812",
+      "type": "phone",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "david.kellogg@awateredc.govt.nz",
+      "type": "email-addr",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "s.liang@awateremedical.co.nz",
+      "type": "email-addr",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "(06) 759 2217)",
+      "type": "phone",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "021 887 3021",
+      "type": "phone",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "j.briggs@awateredc.go",
+      "type": "email-addr",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "027 129 4480",
+      "type": "phone",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "This section is provided for the Chief Executive only and is not part of the formal findings. It would materially chill future investigator candour if it were released (s7(2)(f)): In my assessment Mr Kellogg's conduct crosses the line of what is acceptable, but this is not a clear-cut case. Both parties have credibility issues. Ms Ferguson has a reputation among her peers for being abrasive and for escalating minor disagreements. Two witnesses (not named in the formal findings to avoid retaliation) described her management style as 'exhausting'. That does not excuse the conduct complained of, but it is relevant context for any remedy. My honest read is that this matter is better resolved by a facilitated conversation and a formal written warning, rather than by dismissal. A dismissal would almost certainly result in a personal grievance and, given the mixed evidence, Council would be exposed to a significant settlement risk. Ben Mahuika's initial estimate (covered in his separate privileged advice) is that our settlement range in the event of a PG is $55,000 - $110,000 plus costs.",
+      "type": "free-frank",
+      "page": 3,
+      "confidence": 90
+    }
+  ],
+  "wallMs": 20411,
+  "documentStatus": "ready",
+  "canonicalPdfSource": "libreoffice",
+  "canonicalPdfPageCount": 3,
+  "error": null
+}

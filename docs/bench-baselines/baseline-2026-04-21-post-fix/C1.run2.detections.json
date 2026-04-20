@@ -1,0 +1,63 @@
+{
+  "detections": [
+    {
+      "text": "Kaitiaki have provided this pricing on condition of confidentiality, and specifically requested that the margin structure not be disclosed to other bidders in the event of a re-tender.",
+      "type": "commercial",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "Pacific intend to rely on council's existing emergency contract. Their commercial terms were provided in writing under a confidentiality undertaking dated 28 February 2026.",
+      "type": "commercial",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "SIG's pricing includes a proprietary acoustic leak-detection methodology which they have flagged as a trade secret and have requested we not share technical specifics with competitor bidders or publish in any disclosure response.",
+      "type": "commercial",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "Kaitiaki's proposal included a novel dual-stage pipeline inspection process - combining ground-penetrating radar with low-frequency acoustic monitoring - which their technical appendix identifies as proprietary and developed in-house over four years.",
+      "type": "commercial",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "SIG's acoustic leak-detection methodology relies on a proprietary signal-processing pipeline with vendor-specific calibration thresholds. SIG have disclosed the methodology exists but withheld technical operating parameters under trade-secret protection.",
+      "type": "commercial",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "Council's preferred bidder rank is Kaitiaki Engineering, contingent on successful referee checks and commercial terms. Our fallback position in negotiation is to move to Pacific Flowline at the $3.78M price point; we have budgetary authority to $4.1M and should not disclose this ceiling during negotiations.",
+      "type": "council-commercial",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "The panel's BATNA assessment: if no preferred supplier emerges from referee checks, council's next-best alternative is to extend the existing interim maintenance arrangement with the in-house Assets team for a further twelve months at an estimated internal cost of $1.1M per year. This should not be signalled externally as it would weaken our negotiating hand with the commercial bidders.",
+      "type": "negotiation",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "The trunkmain corridor traverses land adjacent to known wahi tapu identified by Ngāti Awatere in their cultural impact assessment dated November 2022.",
+      "type": "cultural-sensitivity",
+      "page": 2,
+      "confidence": 90
+    },
+    {
+      "text": "The successful bidder will be required to engage with iwi liaison prior to groundworks, and the koiwi tangata protocol attached as Appendix D must be observed for any excavation within the protected zone.",
+      "type": "cultural-sensitivity",
+      "page": 2,
+      "confidence": 85
+    }
+  ],
+  "wallMs": 20390,
+  "documentStatus": "ready",
+  "canonicalPdfSource": "libreoffice",
+  "canonicalPdfPageCount": 2,
+  "error": null
+}

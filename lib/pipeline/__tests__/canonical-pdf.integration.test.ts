@@ -201,10 +201,19 @@ describe.skipIf(!RUN)("Phase 2 DOCX detection coverage", () => {
       const dets = await prisma.detection.findMany({ where: { documentId: docId } });
       expect(dets.length).toBeGreaterThan(20);
 
-      // Every detection has non-zero bbox (the Phase-2 shortcut-removal
-      // invariant — no phantom (0,0,0,0) rows in Detection output).
-      const zeroRows = dets.filter((d) => d.posW === 0 && d.posH === 0);
-      expect(zeroRows.length).toBe(0);
+      // Short-text detections (≤80 chars) must have non-zero bbox — the
+      // Phase-2 phantom-drop invariant for word-level-searchable text.
+      // Long-narrative detections (>80 chars) skip coordinate search by
+      // design (see process.ts LONG_NARRATIVE_THRESHOLD) and are allowed
+      // zero bbox; the overlay UI and Tier-1 redaction already guard on
+      // posW/posH so they are handled correctly downstream.
+      const zeroRowsShort = dets.filter(
+        (d) => d.posW === 0 && d.posH === 0 && d.text.length <= 80,
+      );
+      expect(
+        zeroRowsShort.length,
+        "no zero-bbox rows for text ≤80 chars (phantom-drop invariant)",
+      ).toBe(0);
 
       // Find a detection text that repeats 3+ times. All its rows must
       // have distinct posY (the Phase-1 B2 per-occurrence invariant,
@@ -282,8 +291,12 @@ describe.skipIf(!RUN)("Phase 2 DOCX detection coverage", () => {
       expect(dets.length).toBeGreaterThan(30);
       expect(dets.length).toBeLessThan(200);
 
-      const zeroBbox = dets.filter((d) => d.posW === 0 && d.posH === 0);
-      expect(zeroBbox.length).toBe(0);
+      // Same invariant as above: phantom (0,0,0,0) drop only for text ≤80 chars.
+      // Long-narrative detections (>80 chars) intentionally carry zero bbox.
+      const zeroBboxShort = dets.filter(
+        (d) => d.posW === 0 && d.posH === 0 && d.text.length <= 80,
+      );
+      expect(zeroBboxShort.length).toBe(0);
     },
     120_000,
   );
