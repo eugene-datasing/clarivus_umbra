@@ -1,0 +1,237 @@
+{
+  "condition": "o4-mini",
+  "run": 3,
+  "deployment": "o4-mini-detection-spike",
+  "wallMs": 61649,
+  "batchCount": 1,
+  "errors": [],
+  "summary": {
+    "total": 21,
+    "byType": {
+      "personal-name": 6,
+      "ird": 2,
+      "address": 2,
+      "email-addr": 2,
+      "phone": 5,
+      "bank-account": 1,
+      "nz-passport": 1,
+      "legal-privilege": 1,
+      "free-frank": 1
+    },
+    "byPage": {
+      "1": 21
+    }
+  },
+  "detections": [
+    {
+      "type": "personal-name",
+      "text": "Helen Margaret Ferguson",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the full name of a private individual (the complainant) and is personal information under LGOIMA.",
+      "piConsideration": "Disclosure of the complainant's identity may deter individuals from raising concerns; public interest in transparency is outweighed by privacy interests.",
+      "aiExplanation": "Full name of a private complainant should be withheld to protect personal privacy."
+    },
+    {
+      "type": "personal-name",
+      "text": "14 June 1983",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the date of birth (DOB) of a private individual, which is highly sensitive personal information.",
+      "piConsideration": "DOB is a critical identifier with low public interest in release; privacy interest predominates.",
+      "aiExplanation": "DOB — date of birth of the complainant, flagged as personal information under s7(2)(a)."
+    },
+    {
+      "type": "ird",
+      "text": "108-412-889",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the complainant’s Inland Revenue Department (IRD) number, which is sensitive personal information.",
+      "piConsideration": "IRD numbers are highly sensitive; public interest does not justify release.",
+      "aiExplanation": "IRD number of a private individual, withheld under s7(2)(a)."
+    },
+    {
+      "type": "address",
+      "text": "42 Whiteman Street, Awatere 4310",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the home address of a private individual, which is personal information under LGOIMA.",
+      "piConsideration": "Release of the home address carries a privacy and safety risk; public interest is minimal.",
+      "aiExplanation": "Home address of the complainant should be withheld to protect personal privacy."
+    },
+    {
+      "type": "email-addr",
+      "text": "hferg1983@gmail.com",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the complainant’s personal email address, which is personal information.",
+      "piConsideration": "No public interest outweighs privacy interest in withholding personal email.",
+      "aiExplanation": "Personal email address of a private individual, withheld under s7(2)(a)."
+    },
+    {
+      "type": "phone",
+      "text": "027 412 6789",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the complainant’s personal mobile number, which is sensitive personal information.",
+      "piConsideration": "Release could lead to unsolicited contact or harassment; privacy interest predominates.",
+      "aiExplanation": "Personal mobile number of the complainant should be withheld under s7(2)(a)."
+    },
+    {
+      "type": "bank-account",
+      "text": "12-3456-7890123-00",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the complainant’s bank account number for payroll, which is highly sensitive personal financial information.",
+      "piConsideration": "No public interest in disclosure; strong privacy interest in withholding.",
+      "aiExplanation": "Bank account details of a private individual, withheld under s7(2)(a)."
+    },
+    {
+      "type": "personal-name",
+      "text": "David Michael Kellogg",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the full name of a private individual (the respondent) and is personal information.",
+      "piConsideration": "Protecting the privacy of the respondent; public interest in naming is limited in this context.",
+      "aiExplanation": "Full name of a private respondent should be withheld under s7(2)(a)."
+    },
+    {
+      "type": "personal-name",
+      "text": "3 November 1978",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the date of birth (DOB) of the respondent, which is highly sensitive personal information.",
+      "piConsideration": "DOB is a critical identifier; public interest does not justify release.",
+      "aiExplanation": "DOB of the respondent, flagged as personal information under s7(2)(a)."
+    },
+    {
+      "type": "ird",
+      "text": "049-091-850",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the respondent’s Inland Revenue Department number, which is sensitive personal information.",
+      "piConsideration": "No public interest in IRD numbers; privacy interest predominates.",
+      "aiExplanation": "IRD number of the respondent, withheld under s7(2)(a)."
+    },
+    {
+      "type": "nz-passport",
+      "text": "LA429183",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the respondent’s New Zealand passport number, which is highly sensitive personal information.",
+      "piConsideration": "Passport numbers are critical identifiers; public interest does not outweigh privacy.",
+      "aiExplanation": "Passport number of a private individual, withheld under s7(2)(a)."
+    },
+    {
+      "type": "address",
+      "text": "8b Marlin Grove, Awatere 4318",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the home address of the respondent, which is personal information.",
+      "piConsideration": "Disclosure could enable intrusion or harassment; privacy interest predominates.",
+      "aiExplanation": "Home address of the respondent should be withheld under s7(2)(a)."
+    },
+    {
+      "type": "phone",
+      "text": "022 337 8812",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the respondent’s personal mobile number, which is sensitive personal information.",
+      "piConsideration": "No public interest in personal mobile number; privacy interest predominates.",
+      "aiExplanation": "Personal mobile number of the respondent, withheld under s7(2)(a)."
+    },
+    {
+      "type": "personal-name",
+      "text": "Ben Mahuika",
+      "confidence": 85,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the full name of a private third-party adviser (partner at Holroyd Partners), which is personal information.",
+      "piConsideration": "Limited public interest in naming external private advisers; privacy interest predominates.",
+      "aiExplanation": "Name of an external private adviser withheld under s7(2)(a)."
+    },
+    {
+      "type": "legal-privilege",
+      "text": "Holroyd Partners (Ben Mahuika, Partner) — subject to legal professional privilege",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(g)",
+      "reasoning": "The text expressly denotes that the adviser’s work product is subject to legal professional privilege.",
+      "piConsideration": "Legal privilege is a key public interest in preserving confidentiality of solicitor-client communications.",
+      "aiExplanation": "This line indicates privileged legal advice and must be withheld under s7(2)(g)."
+    },
+    {
+      "type": "personal-name",
+      "text": "Dr Sarah Liang",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the full name of a private medical practitioner (GP), which is personal information.",
+      "piConsideration": "No public interest in naming a private GP; privacy interest predominates.",
+      "aiExplanation": "Name of a private medical provider should be withheld under s7(2)(a)."
+    },
+    {
+      "type": "email-addr",
+      "text": "s.liang@awateremedical.co.nz",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the personal/professional email address of the GP, which is personal information.",
+      "piConsideration": "No public interest in private medical contact details; privacy interest predominates.",
+      "aiExplanation": "Email address of a private medical practitioner withheld under s7(2)(a)."
+    },
+    {
+      "type": "phone",
+      "text": "(06) 759 2217",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the telephone number of a private medical practitioner, which is personal information.",
+      "piConsideration": "No public interest in release; privacy interest predominates.",
+      "aiExplanation": "Phone number of the GP should be withheld under s7(2)(a)."
+    },
+    {
+      "type": "phone",
+      "text": "021 887 3021",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is a personal mobile number for a witness, which is sensitive personal information.",
+      "piConsideration": "Release could lead to unsolicited contact or harassment; privacy interest predominates.",
+      "aiExplanation": "Witness’s personal mobile number should be withheld under s7(2)(a)."
+    },
+    {
+      "type": "phone",
+      "text": "027 129 4480",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is a personal mobile number for another witness, which is sensitive personal information.",
+      "piConsideration": "No public interest in personal witness contact; privacy interest predominates.",
+      "aiExplanation": "Witness’s personal mobile number should be withheld under s7(2)(a)."
+    },
+    {
+      "type": "free-frank",
+      "text": "This section is provided for the Chief Executive only and is not part of the formal findings. It would materially chill future investigator candour if it were released (s7(2)(f)):\n\nIn my assessment Mr Kellogg's conduct crosses the line of what is acceptable, but this is not a clear-cut case. Both parties have credibility issues. Ms Ferguson has a reputation among her peers for being abrasive and for escalating minor disagreements. Two witnesses (not named in the formal findings to avoid retaliation) described her management style as \"exhausting\". That does not excuse the conduct complained of, but it is relevant context for any remedy.\n\nMy honest read is that this matter is better resolved by a facilitated conversation and a formal written warning, rather than by dismissal. A dismissal would almost certainly result in a personal grievance and, given the mixed evidence, Council would be exposed to a significant settlement risk. Ben Mahuika's initial estimate (covered in his separate privileged advice) is that our settlement range in the event of a PG is $55,000 — $110,000 plus costs.",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(f)(i)",
+      "reasoning": "This is candid internal commentary by the investigator intended solely for the Chief Executive; release would chill free and frank advice.",
+      "piConsideration": "Preserving the candour of internal investigations must be weighed against transparency; the need for frank advice is critical to proper HR investigations.",
+      "aiExplanation": "Internal, candid opinions of the investigator protected under s7(2)(f)(i) should be withheld to avoid chilling future staff discretion."
+    }
+  ]
+}

@@ -1,0 +1,248 @@
+{
+  "condition": "gpt-4o-baseline",
+  "run": 1,
+  "deployment": "gpt-4o",
+  "wallMs": 14555,
+  "batchCount": 1,
+  "errors": [],
+  "summary": {
+    "total": 22,
+    "byType": {
+      "personal-name": 4,
+      "ird": 2,
+      "address": 2,
+      "email-addr": 4,
+      "phone": 5,
+      "bank-account": 1,
+      "nz-passport": 1,
+      "free-frank": 1,
+      "legal-privilege": 1,
+      "health-safety": 1
+    },
+    "byPage": {
+      "1": 22
+    }
+  },
+  "detections": [
+    {
+      "type": "personal-name",
+      "text": "Helen Margaret Ferguson",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "The name identifies the complainant in a workplace bullying investigation, which is sensitive personal information.",
+      "piConsideration": "The public interest in protecting the privacy of the complainant outweighs the interest in disclosure.",
+      "aiExplanation": "This is the full name of the complainant in a workplace bullying investigation, which is sensitive personal information protected under s7(2)(a)."
+    },
+    {
+      "type": "personal-name",
+      "text": "David Michael Kellogg",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "The name identifies the respondent in a workplace bullying investigation, which is sensitive personal information.",
+      "piConsideration": "The public interest in protecting the privacy of the respondent outweighs the interest in disclosure.",
+      "aiExplanation": "This is the full name of the respondent in a workplace bullying investigation, which is sensitive personal information protected under s7(2)(a)."
+    },
+    {
+      "type": "personal-name",
+      "text": "14 June 1983",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the date of birth of the complainant, which is sensitive personal information.",
+      "piConsideration": "Date of birth is a sensitive personal identifier frequently used for identity verification; public interest in disclosure is generally low.",
+      "aiExplanation": "DOB — date of birth of a private individual, flagged as personal information under s7(2)(a). Note the day-month-year format."
+    },
+    {
+      "type": "ird",
+      "text": "108-412-889",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the IRD number of the complainant, which is sensitive personal information.",
+      "piConsideration": "IRD numbers are sensitive personal identifiers used for tax purposes; public interest in disclosure is generally low.",
+      "aiExplanation": "This is the IRD number of the complainant, which is protected under s7(2)(a) as it is sensitive personal information."
+    },
+    {
+      "type": "address",
+      "text": "42 Whiteman Street, Awatere 4310",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the home address of the complainant, which is sensitive personal information.",
+      "piConsideration": "The public interest in protecting the privacy of the complainant outweighs the interest in disclosure.",
+      "aiExplanation": "This is the residential address of the complainant, which is sensitive personal information protected under s7(2)(a)."
+    },
+    {
+      "type": "email-addr",
+      "text": "hferg1983@gmail.com",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the personal email address of the complainant, which is sensitive personal information.",
+      "piConsideration": "The public interest in protecting the privacy of the complainant outweighs the interest in disclosure.",
+      "aiExplanation": "This is the personal email address of the complainant, which is protected under s7(2)(a) as it is sensitive personal information."
+    },
+    {
+      "type": "phone",
+      "text": "027 412 6789",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the personal mobile phone number of the complainant, which is sensitive personal information.",
+      "piConsideration": "The public interest in protecting the privacy of the complainant outweighs the interest in disclosure.",
+      "aiExplanation": "This is the personal mobile phone number of the complainant, which is protected under s7(2)(a) as it is sensitive personal information."
+    },
+    {
+      "type": "bank-account",
+      "text": "12-3456-7890123-00",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the bank account number of the complainant, which is sensitive personal information.",
+      "piConsideration": "Bank account numbers are sensitive personal identifiers; public interest in disclosure is generally low.",
+      "aiExplanation": "This is the bank account number of the complainant, which is protected under s7(2)(a) as it is sensitive personal information."
+    },
+    {
+      "type": "personal-name",
+      "text": "3 November 1978",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the date of birth of the respondent, which is sensitive personal information.",
+      "piConsideration": "Date of birth is a sensitive personal identifier frequently used for identity verification; public interest in disclosure is generally low.",
+      "aiExplanation": "DOB — date of birth of a private individual, flagged as personal information under s7(2)(a). Note the day-month-year format."
+    },
+    {
+      "type": "ird",
+      "text": "049-091-850",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the IRD number of the respondent, which is sensitive personal information.",
+      "piConsideration": "IRD numbers are sensitive personal identifiers used for tax purposes; public interest in disclosure is generally low.",
+      "aiExplanation": "This is the IRD number of the respondent, which is protected under s7(2)(a) as it is sensitive personal information."
+    },
+    {
+      "type": "nz-passport",
+      "text": "LA429183",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the NZ passport number of the respondent, which is sensitive personal information.",
+      "piConsideration": "Passport numbers are sensitive personal identifiers; public interest in disclosure is generally low.",
+      "aiExplanation": "This is the NZ passport number of the respondent, which is protected under s7(2)(a) as it is sensitive personal information."
+    },
+    {
+      "type": "address",
+      "text": "8b Marlin Grove, Awatere 4318",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the home address of the respondent, which is sensitive personal information.",
+      "piConsideration": "The public interest in protecting the privacy of the respondent outweighs the interest in disclosure.",
+      "aiExplanation": "This is the residential address of the respondent, which is sensitive personal information protected under s7(2)(a)."
+    },
+    {
+      "type": "phone",
+      "text": "022 337 8812",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the personal mobile phone number of the respondent, which is sensitive personal information.",
+      "piConsideration": "The public interest in protecting the privacy of the respondent outweighs the interest in disclosure.",
+      "aiExplanation": "This is the personal mobile phone number of the respondent, which is protected under s7(2)(a) as it is sensitive personal information."
+    },
+    {
+      "type": "free-frank",
+      "text": "This section is provided for the Chief Executive only and is not part of the formal findings. It would materially chill future investigator candour if it were released (s7(2)(f)): In my assessment Mr Kellogg's conduct crosses the line of what is acceptable, but this is not a clear-cut case. Both parties have credibility issues. Ms Ferguson has a reputation among her peers for being abrasive and for escalating minor disagreements. Two witnesses (not named in the formal findings to avoid retaliation) described her management style as 'exhausting'. That does not excuse the conduct complained of, but it is relevant context for any remedy. My honest read is that this matter is better resolved by a facilitated conversation and a formal written warning, rather than by dismissal. A dismissal would almost certainly result in a personal grievance and, given the mixed evidence, Council would be exposed to a significant settlement risk. Ben Mahuika's initial estimate (covered in his separate privileged advice) is that our settlement range in the event of a PG is $55,000 — $110,000 plus costs.",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(f)(i)",
+      "reasoning": "This section contains free and frank opinions and assessments by the investigator, which are intended for internal use only and not for public disclosure.",
+      "piConsideration": "Withholding must be balanced against the public interest in transparency of council decision-making, but disclosure would likely inhibit future free and frank advice.",
+      "aiExplanation": "This section contains candid internal commentary by the investigator, which is protected under s7(2)(f)(i) to ensure future free and frank advice is not inhibited."
+    },
+    {
+      "type": "legal-privilege",
+      "text": "Holroyd Partners (Ben Mahuika, Partner) — subject to legal professional privilege",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(g)",
+      "reasoning": "This text references legal advice provided by an external adviser, which is protected by legal professional privilege.",
+      "piConsideration": "Withholding must be balanced against public interest in transparency, but legal privilege is a strong ground for withholding.",
+      "aiExplanation": "This text references legal advice from an external adviser, which is protected under s7(2)(g) as it is subject to legal professional privilege."
+    },
+    {
+      "type": "health-safety",
+      "text": "adjustment disorder with mixed anxiety and depressed mood (ICD-10 F43.23)",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(d)",
+      "reasoning": "This is sensitive medical information about the complainant's mental health condition.",
+      "piConsideration": "The public interest in protecting the complainant's health information outweighs the interest in disclosure.",
+      "aiExplanation": "This text reveals the complainant's mental health diagnosis, which is sensitive health information protected under s7(2)(d)."
+    },
+    {
+      "type": "email-addr",
+      "text": "s.liang@awateremedical.co.nz",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the personal email address of the complainant's general practitioner, which is sensitive personal information.",
+      "piConsideration": "The public interest in protecting the privacy of the GP outweighs the interest in disclosure.",
+      "aiExplanation": "This is the email address of the complainant's GP, which is sensitive personal information protected under s7(2)(a)."
+    },
+    {
+      "type": "phone",
+      "text": "(06) 759 2217",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the personal phone number of the complainant's general practitioner, which is sensitive personal information.",
+      "piConsideration": "The public interest in protecting the privacy of the GP outweighs the interest in disclosure.",
+      "aiExplanation": "This is the phone number of the complainant's GP, which is sensitive personal information protected under s7(2)(a)."
+    },
+    {
+      "type": "email-addr",
+      "text": "angela.torres@awateredc.govt.nz",
+      "confidence": 85,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the work email address of a junior staff member, which is sensitive personal information.",
+      "piConsideration": "The public interest in protecting the privacy of junior staff outweighs the interest in disclosure.",
+      "aiExplanation": "This is the work email address of a junior staff member, which is protected under s7(2)(a) as sensitive personal information."
+    },
+    {
+      "type": "phone",
+      "text": "021 887 3021",
+      "confidence": 85,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the personal mobile phone number of a junior staff member, which is sensitive personal information.",
+      "piConsideration": "The public interest in protecting the privacy of junior staff outweighs the interest in disclosure.",
+      "aiExplanation": "This is the personal mobile phone number of a junior staff member, which is protected under s7(2)(a) as sensitive personal information."
+    },
+    {
+      "type": "email-addr",
+      "text": "j.briggs@awateredc.govt.nz",
+      "confidence": 85,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the work email address of a junior staff member, which is sensitive personal information.",
+      "piConsideration": "The public interest in protecting the privacy of junior staff outweighs the interest in disclosure.",
+      "aiExplanation": "This is the work email address of a junior staff member, which is protected under s7(2)(a) as sensitive personal information."
+    },
+    {
+      "type": "phone",
+      "text": "027 129 4480",
+      "confidence": 85,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "This is the personal mobile phone number of a junior staff member, which is sensitive personal information.",
+      "piConsideration": "The public interest in protecting the privacy of junior staff outweighs the interest in disclosure.",
+      "aiExplanation": "This is the personal mobile phone number of a junior staff member, which is protected under s7(2)(a) as sensitive personal information."
+    }
+  ]
+}

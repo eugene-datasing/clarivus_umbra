@@ -1,0 +1,206 @@
+{
+  "condition": "o4-mini",
+  "run": 2,
+  "deployment": "o4-mini-detection-spike",
+  "wallMs": 52061,
+  "batchCount": 1,
+  "errors": [],
+  "summary": {
+    "total": 18,
+    "byType": {
+      "personal-name": 4,
+      "ird": 2,
+      "address": 2,
+      "email-addr": 2,
+      "phone": 5,
+      "bank-account": 1,
+      "nz-passport": 1,
+      "legal-privilege": 1
+    },
+    "byPage": {
+      "1": 18
+    }
+  },
+  "detections": [
+    {
+      "type": "personal-name",
+      "text": "Helen Margaret Ferguson",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "Full name of the complainant, a private individual and council staff member not acting in an elected or senior public-facing capacity",
+      "piConsideration": "Releasing the complainant’s name intrudes on her privacy; public interest in transparency of complaints processes must be balanced against her privacy rights",
+      "aiExplanation": "Name of a private individual (complainant) – personal information under s7(2)(a)"
+    },
+    {
+      "type": "personal-name",
+      "text": "14 June 1983",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "Date of birth of a private individual (complainant) – highly sensitive personal identifier",
+      "piConsideration": "Strong privacy interest in keeping birth date confidential; little public interest in releasing DOB",
+      "aiExplanation": "DOB – date of birth of a private individual, flagged under personal information"
+    },
+    {
+      "type": "ird",
+      "text": "108-412-889",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "IRD number of a private individual, a unique tax identifier",
+      "piConsideration": "High privacy sensitivity; public interest in disclosure is minimal",
+      "aiExplanation": "New Zealand IRD number of a private individual"
+    },
+    {
+      "type": "address",
+      "text": "42 Whiteman Street, Awatere 4310",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "Home address of a private individual (complainant)",
+      "piConsideration": "Privacy interest outweighs any public interest in disclosure of personal residential address",
+      "aiExplanation": "Personal home address – identifies private individual’s residence"
+    },
+    {
+      "type": "email-addr",
+      "text": "hferg1983@gmail.com",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "Personal email address of the complainant",
+      "piConsideration": "Releasing personal email address risks unwanted contact; public interest is low",
+      "aiExplanation": "Personal email address of a private individual"
+    },
+    {
+      "type": "phone",
+      "text": "027 412 6789",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "Personal mobile number of the complainant",
+      "piConsideration": "Privacy intrusion and risk of unsolicited contact; minimal public benefit",
+      "aiExplanation": "Personal mobile phone number of a private individual"
+    },
+    {
+      "type": "bank-account",
+      "text": "12-3456-7890123-00",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "Bank account details for payroll of a private individual",
+      "piConsideration": "Highly sensitive financial information; no countervailing public interest",
+      "aiExplanation": "Bank account number under s7(2)(a)"
+    },
+    {
+      "type": "personal-name",
+      "text": "David Michael Kellogg",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "Full name of the respondent, a private individual and council staff member not in an elected role",
+      "piConsideration": "His privacy interest must be balanced against any public interest in the identity of the accused party",
+      "aiExplanation": "Name of a private individual (respondent) – personal information"
+    },
+    {
+      "type": "personal-name",
+      "text": "3 November 1978",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "Date of birth of a private individual (respondent)",
+      "piConsideration": "DOB is sensitive personal data; little legitimate public interest in disclosure",
+      "aiExplanation": "DOB – date of birth of a private individual"
+    },
+    {
+      "type": "ird",
+      "text": "049-091-850",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "IRD number of the respondent – unique tax identifier",
+      "piConsideration": "High privacy risk; minimal public interest",
+      "aiExplanation": "New Zealand IRD number of a private individual"
+    },
+    {
+      "type": "address",
+      "text": "8b Marlin Grove, Awatere 4318",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "Home address of the respondent",
+      "piConsideration": "Residential address is sensitive personal data; no clear public interest in disclosure",
+      "aiExplanation": "Personal home address under s7(2)(a)"
+    },
+    {
+      "type": "phone",
+      "text": "022 337 8812",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "Personal mobile number of the respondent",
+      "piConsideration": "Privacy concerns and potential for nuisance contact; public interest is minimal",
+      "aiExplanation": "Personal mobile phone number"
+    },
+    {
+      "type": "nz-passport",
+      "text": "LA429183",
+      "confidence": 95,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "Passport number of a private individual",
+      "piConsideration": "Highly sensitive identifier; no compelling public interest",
+      "aiExplanation": "New Zealand passport number of a private individual"
+    },
+    {
+      "type": "legal-privilege",
+      "text": "Holroyd Partners (Ben Mahuika, Partner) — subject to legal professional privilege",
+      "confidence": 85,
+      "page": 1,
+      "suggestedGround": "s7(2)(g)",
+      "reasoning": "Marks the involvement of external legal advisers and asserts privilege over their advice",
+      "piConsideration": "Legal professional privilege is a conclusive withholding ground; public interest cannot override",
+      "aiExplanation": "This text asserts that the external adviser’s advice is legally privileged"
+    },
+    {
+      "type": "email-addr",
+      "text": "s.liang@awateremedical.co.nz",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "Personal/professional email address of Ms Ferguson’s GP",
+      "piConsideration": "Disclosure could lead to unsolicited contact; limited public interest",
+      "aiExplanation": "Email address of a private individual (GP)"
+    },
+    {
+      "type": "phone",
+      "text": "(06) 759 2217",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "Phone number for Ms Ferguson’s GP practice",
+      "piConsideration": "Risk of intrusion; public interest does not outweigh privacy",
+      "aiExplanation": "Telephone number of a private individual (GP)"
+    },
+    {
+      "type": "phone",
+      "text": "021 887 3021",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "Personal/mobile number of witness Angela Torres",
+      "piConsideration": "Personal contact details of a private individual; public interest is minimal",
+      "aiExplanation": "Mobile number of a private individual"
+    },
+    {
+      "type": "phone",
+      "text": "027 129 4480",
+      "confidence": 90,
+      "page": 1,
+      "suggestedGround": "s7(2)(a)",
+      "reasoning": "Personal/mobile number of witness Jonathan Briggs",
+      "piConsideration": "Personal contact details; low public interest in disclosure",
+      "aiExplanation": "Mobile number of a private individual"
+    }
+  ]
+}
