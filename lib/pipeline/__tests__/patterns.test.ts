@@ -106,6 +106,87 @@ describe("detectPatterns", () => {
       const matches = detectPatterns(pages);
       expect(matches.some((m) => m.type === "phone")).toBe(true);
     });
+
+    // -------------------------------------------------------------------
+    // Parenthesised area codes — Phase 1 item 1 fix (Hypothesis A).
+    // Before: /(?<![0-9-])(?:\+?64|0)[\s-]?(?:\d[\s-]?){7,9}(?![0-9-])/g
+    //   failed on (06) 759 2217 because ")" wasn't in the separator class.
+    // After: parens allowed as separators, and optionally wrapping prefix.
+    // -------------------------------------------------------------------
+
+    it("matches (06) 759 2217 — parenthesised area code, space separators", () => {
+      const pages = [makePage(1, "GP: Dr Sarah Liang (06) 759 2217")];
+      const matches = detectPatterns(pages).filter((m) => m.type === "phone");
+      expect(matches.length).toBe(1);
+    });
+
+    it("matches (04) 123 4567 — Wellington public-service style", () => {
+      const pages = [makePage(1, "Helpline (04) 123 4567 weekdays")];
+      const matches = detectPatterns(pages).filter((m) => m.type === "phone");
+      expect(matches.length).toBe(1);
+    });
+
+    it("matches +64 (6) 759 2217 — international with parens around area code", () => {
+      const pages = [makePage(1, "International: +64 (6) 759 2217")];
+      const matches = detectPatterns(pages).filter((m) => m.type === "phone");
+      expect(matches.length).toBe(1);
+    });
+
+    it("matches 06 759 2217 — regression guard, space-separated no parens", () => {
+      const pages = [makePage(1, "Phone: 06 759 2217")];
+      const matches = detectPatterns(pages).filter((m) => m.type === "phone");
+      expect(matches.length).toBe(1);
+    });
+
+    it("matches 06-759-2217 — regression guard, hyphenated", () => {
+      const pages = [makePage(1, "Phone: 06-759-2217")];
+      const matches = detectPatterns(pages).filter((m) => m.type === "phone");
+      expect(matches.length).toBe(1);
+    });
+
+    it("matches +64 6 759 2217 — regression guard, international with spaces", () => {
+      const pages = [makePage(1, "Phone: +64 6 759 2217")];
+      const matches = detectPatterns(pages).filter((m) => m.type === "phone");
+      expect(matches.length).toBe(1);
+    });
+
+    it("matches 027 123 4567 — regression guard, mobile 027", () => {
+      const pages = [makePage(1, "Mobile: 027 123 4567")];
+      const matches = detectPatterns(pages).filter((m) => m.type === "phone");
+      expect(matches.length).toBe(1);
+    });
+
+    it("matches 021 123 4567 — regression guard, mobile 021", () => {
+      const pages = [makePage(1, "Mobile: 021 123 4567")];
+      const matches = detectPatterns(pages).filter((m) => m.type === "phone");
+      expect(matches.length).toBe(1);
+    });
+
+    it("does NOT match raw 10 digits 1234567890 — no NZ prefix or separators", () => {
+      const pages = [makePage(1, "Reference 1234567890 on file.")];
+      const matches = detectPatterns(pages).filter((m) => m.type === "phone");
+      expect(matches.length).toBe(0);
+    });
+
+    it("does NOT match 12-345-678 as a phone — IRD shape, disambiguation", () => {
+      const pages = [makePage(1, "IRD: 12-345-678")];
+      const matches = detectPatterns(pages).filter((m) => m.type === "phone");
+      expect(matches.length).toBe(0);
+    });
+
+    it("matches the full landline in prose — 'contactable on (06) 759 2217 between 9am and 5pm'", () => {
+      const pages = [
+        makePage(1, "contactable on (06) 759 2217 between 9am and 5pm"),
+      ];
+      const matches = detectPatterns(pages).filter((m) => m.type === "phone");
+      expect(matches.length).toBe(1);
+      // The captured text should contain the area-code digits and the
+      // seven-digit subscriber block so the downstream redactor covers
+      // the whole phone number, not just a suffix.
+      expect(matches[0].text).toContain("06");
+      expect(matches[0].text).toContain("759");
+      expect(matches[0].text).toContain("2217");
+    });
   });
 
   // -----------------------------------------------------------------------

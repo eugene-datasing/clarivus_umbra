@@ -112,7 +112,10 @@ const PATTERNS: PatternDef[] = [
     // Negative lookbehind rejects matches preceded by a digit or hyphen,
     // preventing partial matches inside bank account numbers or other
     // numeric identifiers (e.g. "0789123-00" inside "12-3056-0789123-00").
-    regex: /(?<![0-9-])(?:\+?64|0)[\s-]?(?:\d[\s-]?){7,9}(?![0-9-])/g,
+    // Parentheses around the area code (e.g. "(06) 759 2217") are allowed
+    // as separators inside the digit group and optionally wrapping the
+    // prefix. Phase 1 item 1 of docs/detection-coverage-plan-2026-04.md.
+    regex: /(?<![0-9-])\(?(?:\+?64|0)\)?[\s)(-]*(?:\d[\s)(-]*){7,9}(?![0-9-])/g,
     suggestedGround: "s7_2a",
     reasoning:
       "Matches a New Zealand phone number pattern. Personal phone numbers should generally be withheld to protect privacy unless they are published contact details for a public official acting in their official capacity.",
