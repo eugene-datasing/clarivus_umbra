@@ -657,13 +657,34 @@ export async function processDocument(docId: string): Promise<void> {
     ];
 
     // Enrich with coordinates BEFORE deduplication to allow multiple instances on the same page
+    //
+    // Long-narrative short-circuit: detection text > TEXT_SEARCH_MAX_LENGTH
+    // (80 chars) skips coordinate search entirely and lands in storage with
+    // a zero-bbox placeholder. The threshold matches the length cap in
+    // redact-pdf.ts (TEXT_SEARCH_MAX_LENGTH). The placeholder stays at
+    // (0, 0, 0, 0) rather than a page-level rectangle so that every
+    // downstream consumer's existing `posW > 0 && posH > 0` guard
+    // (redact-pdf.ts:98, pdf-detection-overlay.tsx:50) naturally skips
+    // coordinate redaction and overlay rendering for these rows — they
+    // reach the review-UI sidebar list and the Detection table, but no
+    // position is implied.
+    //
+    // Pre-fix, bbox.ts:24 returned an empty array on the same condition
+    // and the detection was silently dropped before storage. See
+    // docs/phase-1-75-ai-detection-stripping-findings.md.
     const enrichedDetections: (UnifiedDetection & { posX: number; posY: number; posW: number; posH: number })[] = [];
+    const LONG_NARRATIVE_THRESHOLD = 80;
     for (const det of allDetections) {
       const layout = pageLayouts.get(det.page);
-      const bboxes = layout
-        ? calculateBBoxAll(det.text, layout.words, layout.width, layout.height)
-        : [{ posX: 0, posY: 0, posW: 0, posH: 0 }];
-        
+      let bboxes;
+      if (!layout) {
+        bboxes = [{ posX: 0, posY: 0, posW: 0, posH: 0 }];
+      } else if (det.text.length > LONG_NARRATIVE_THRESHOLD) {
+        bboxes = [{ posX: 0, posY: 0, posW: 0, posH: 0 }];
+      } else {
+        bboxes = calculateBBoxAll(det.text, layout.words, layout.width, layout.height);
+      }
+
       for (const bbox of bboxes) {
         enrichedDetections.push({ ...det, ...bbox });
       }

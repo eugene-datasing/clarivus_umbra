@@ -1,0 +1,57 @@
+{
+  "detections": [
+    {
+      "text": "The former officer has asked that their identity not be disclosed due to professional retaliation concerns; their written account is held in the HR investigation file HR-INV-2025-042.",
+      "type": "confidential",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "Counsel's advice further canvasses the settlement range should the matter reach costs negotiation: $25,000 to $55,000 inclusive of legal costs is defensible on current authorities.",
+      "type": "legal-privilege",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "A former Animal Management officer has provided a written account on condition of anonymity, indicating that enforcement practices in the Kowhai Precinct between 2022 and 2024 systematically favoured specific property owners known to the previous Area Manager.",
+      "type": "confidential",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "Our considered view, expressed candidly: the current 100-metre leash-on requirement across the Kowhai Precinct is unenforceable in practice.",
+      "type": "free-frank",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "Elected members have been told by officers that 'enforcement is robust', and that characterisation is at best generous.",
+      "type": "free-frank",
+      "page": 1,
+      "confidence": 85
+    },
+    {
+      "text": "Ms McAllister's advice, which is attached as Appendix B and which remains subject to solicitor-client privilege, is that the 100-metre leash provision is likely to be found disproportionate in any judicial review and that officers should not defend the provision in formal proceedings without revised instructions.",
+      "type": "legal-privilege",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "jpatterson.kowhai@example.nz",
+      "type": "email-addr",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "027 445 1982)",
+      "type": "phone",
+      "page": 1,
+      "confidence": 95
+    }
+  ],
+  "wallMs": 17543,
+  "documentStatus": "ready",
+  "canonicalPdfSource": "libreoffice",
+  "canonicalPdfPageCount": 2,
+  "error": null
+}
