@@ -181,7 +181,6 @@ async function runOne(
     }
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const response = await (client.chat.completions.create as any)(
         requestBody,
       );
