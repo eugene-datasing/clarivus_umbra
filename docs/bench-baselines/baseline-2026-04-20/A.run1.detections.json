@@ -1,0 +1,21 @@
+{
+  "detections": [
+    {
+      "text": "027 445 1982)",
+      "type": "phone",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "jpatterson.kowhai@example.nz",
+      "type": "email-addr",
+      "page": 1,
+      "confidence": 95
+    }
+  ],
+  "wallMs": 14318,
+  "documentStatus": "ready",
+  "canonicalPdfSource": "libreoffice",
+  "canonicalPdfPageCount": 2,
+  "error": null
+}

@@ -121,14 +121,66 @@ When a prompt or pattern change intentionally moves the numbers (e.g. Phase 3 pr
 
 Do NOT update a baseline silently after observing a regression — the whole point of committing baselines is to surface regressions. If a regression is genuinely a new intended floor (a deliberate trade-off), document it in the PR body.
 
+## Running the live suite (tranche 2b)
+
+`npm run bench:suite` invokes the real `processDocument` against each named fixture N times, unions detections across the N runs to absorb AI non-determinism, scores against the committed `.expected.json`, and writes a set of artefacts under `--output-dir`.
+
+```bash
+# Default: all four current fixtures × 3 runs, output folder named for today's date.
+npm run bench:suite
+
+# Explicit:
+npm run bench:suite -- \
+  --fixtures B1,B2,A,C1 \
+  --runs 3 \
+  --output-dir docs/bench-baselines/baseline-2026-04-20
+
+# One-fixture smoke (shake out wiring before a full suite run):
+npm run bench:suite -- --fixtures B2 --runs 3 \
+  --output-dir docs/bench-baselines/smoke-$(date +%F)
+
+# Validate arguments without calling Azure:
+npm run bench:suite -- --dry-run
+```
+
+Per fixture, the runner writes:
+
+| Artefact | Purpose |
+|---|---|
+| `<name>.baseline.json` | Committable `FixtureScore` from the unioned detections — the regression floor consumed by tranche 3's CI gate. |
+| `<name>.report.md` | Human-readable overall + per-pathway metrics + missing / unexpected lists. |
+| `<name>.report.json` | Machine-readable twin of the report. |
+| `<name>.union.detections.json` | The unioned detection set actually scored. |
+| `<name>.run1.detections.json` … `<name>.runN.detections.json` | Per-run raw detections, wall time, canonical-PDF source, error (if any). |
+
+Plus a top-level `suite-summary.md` with a per-fixture table, per-pathway aggregates across all fixtures, and suite totals (overall P/R/F1, total wall time, commit SHA, start timestamp).
+
+### Requirements for a live run
+
+- Local Postgres (`docker compose up -d`) and migrations applied (`npx prisma migrate dev`).
+- `DATABASE_URL` pointing at the dev DB (defaults to `postgresql://veil:veil_dev@localhost:5434/veil` in the invoker).
+- `AZURE_OPENAI_*` and `AZURE_DI_*` env vars set — the run makes real Azure calls.
+- LibreOffice on PATH (headless DOCX → PDF), and the Python3 / PyMuPDF toolchain for redaction are NOT required at bench time because redaction is a downstream pipeline concern; the bench exercises detection only.
+
+Each invocation seeds a dedicated `Case` (reference `BENCH-<runLabel>`) so the bench never pollutes prod seed data. Cleanup runs in a finally block: `Detection`, `DocumentPage`, `Document`, `Case`, and both storage blobs (original + canonical) are removed after scoring. Per-step errors are swallowed so a partial failure never orphans rows.
+
+### Expected cost / timing
+
+At the time of first run (2026-04-20) each fixture-run costs approximately:
+- ~1 page (A, C1, B2) × 3 runs × 1 batch → ~$0.02–0.04 per fixture.
+- B1 is the HR pack (~5 pages canonical) × 3 runs × 2 batches → ~$0.15–0.25.
+- Full suite (all 4 × 3 runs) → roughly $0.30–0.60 and 6–12 minutes wall time, dominated by Azure latency.
+
+The runner prints per-run detection counts and wall times as it goes, so you can tell whether a fixture is stuck on a slow call vs making steady progress.
+
 ## CI regression guard (tranche 3)
 
 Tranche 3 wires `npm run bench:detection -- --baseline <path>` into a GitHub Actions workflow that runs on every PR touching `lib/pipeline/**`. Default threshold is 0.05 F1 (overall) — a regression beyond that makes the bench step exit non-zero, failing CI.
 
 The per-pathway F1 is not currently a gate but is reported for human inspection. Tranche 3 may promote per-pathway thresholds to gates for specific pathways where a silent drop is particularly bad (governance, for example).
 
-## Not in tranche 1
+## Not in tranche 2b
 
-- No live-Azure invocation. The runner scores pre-computed actual-detection JSON only. Tranche 2 adds a `--from-pipeline` (or equivalent) wrapper that runs `processDocument` against a bench fixture.
 - No CI workflow. Tranche 3 adds `.github/workflows/bench-detection.yml`.
-- No Azure credentials secrets, no per-fixture quick-mode, no multi-run averaging. Those arrive with tranches 2 and 3.
+- No B3 fixture (long multi-batch document). Authored as its own tranche — tracked separately.
+- No per-fixture `--quick-mode` flag. The runner always does N real runs; "quick" is just `--runs 1 --fixtures <one>`.

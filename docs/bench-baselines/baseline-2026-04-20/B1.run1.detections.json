@@ -1,0 +1,147 @@
+{
+  "detections": [
+    {
+      "text": "Helen Margaret Ferguson",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "14 June 1983",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "108-412-889",
+      "type": "ird",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "JKA1234",
+      "type": "nhi",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "EA123456",
+      "type": "driver-licence",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "42 Whiteman Street",
+      "type": "address",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "hferg1983@gmail.com",
+      "type": "email-addr",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "027 412 6789",
+      "type": "phone",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "helen.ferguson@awateredc.govt.nz",
+      "type": "email-addr",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "12-3456-7890123-00",
+      "type": "bank-account",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "David Michael Kellogg",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "3 November 1978",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "049-091-850",
+      "type": "ird",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "MNE9087",
+      "type": "nhi",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "LA429183",
+      "type": "nz-passport",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "8b Marlin Grove, Awatere 4318",
+      "type": "address",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "022 337 8812",
+      "type": "phone",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "david.kellogg@awateredc.govt.nz",
+      "type": "email-addr",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "s.liang@awateremedical.co.nz",
+      "type": "email-addr",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "(06) 759 2217)",
+      "type": "phone",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "021 887 3021",
+      "type": "phone",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "j.briggs@awateredc.go",
+      "type": "email-addr",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "027 129 4480",
+      "type": "phone",
+      "page": 2,
+      "confidence": 95
+    }
+  ],
+  "wallMs": 22209,
+  "documentStatus": "ready",
+  "canonicalPdfSource": "libreoffice",
+  "canonicalPdfPageCount": 3,
+  "error": null
+}

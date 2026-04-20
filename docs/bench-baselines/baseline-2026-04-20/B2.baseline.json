@@ -1,0 +1,151 @@
+{
+  "fixture": "B2",
+  "overall": {
+    "precision": 0.7142857142857143,
+    "recall": 0.5,
+    "f1": 0.588235294117647,
+    "tp": 10,
+    "fp": 4,
+    "fn": 10
+  },
+  "byPathway": {
+    "personal": {
+      "precision": 0.8888888888888888,
+      "recall": 0.5333333333333333,
+      "f1": 0.6666666666666667,
+      "tp": 8,
+      "fp": 1,
+      "fn": 7
+    },
+    "commercial": {
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 0
+    },
+    "governance": {
+      "precision": 0.25,
+      "recall": 0.25,
+      "f1": 0.25,
+      "tp": 1,
+      "fp": 3,
+      "fn": 3
+    },
+    "enforcement": {
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "tp": 1,
+      "fp": 0,
+      "fn": 0
+    }
+  },
+  "missing": [
+    {
+      "text": "27 Kowhai Street, Awatere 4310",
+      "type": "address",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Declarant's home address; appears in header table and in Declaration paragraph."
+    },
+    {
+      "text": "Sarah Mitchell",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "HR Manager / Interviewer — third-party council staff in grievance context. Per v3.1 Phase 3 reworded carve-out, investigator-in-grievance-context IS flaggable."
+    },
+    {
+      "text": "HR-INV-2026-018",
+      "type": "confidential",
+      "mustMatch": "exact",
+      "page": 1,
+      "pathway": "governance",
+      "rationale": "Investigation file reference; s7(2)(a) protects the case identifier linking to HR records."
+    },
+    {
+      "text": "Priya Sharma",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Declarant's manager; named in Background prose — third-party council staff in grievance context."
+    },
+    {
+      "text": "Helen Ferguson",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Complainant's full name — appears in Background prose. Substring match handles subsequent 'Ms Ferguson' references on pages 1 and 2."
+    },
+    {
+      "text": "Ms Ferguson",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "pathway": "personal",
+      "rationale": "Honorific form appears multiple times across both pages; Phase 4 entity-propagation candidate."
+    },
+    {
+      "text": "David Kellogg",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Respondent's full name — appears in Background prose."
+    },
+    {
+      "text": "Mr Kellogg",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "pathway": "personal",
+      "rationale": "Honorific form appears multiple times; Phase 4 entity-propagation candidate."
+    },
+    {
+      "text": "Mr Kellogg's conduct towards Ms Ferguson has, in my observation, been different in tone from his conduct towards male colleagues",
+      "type": "free-frank",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "governance",
+      "rationale": "Candid observation on the respondent's pattern of behaviour from the Broader Context paragraph; free-frank s7(2)(f)(i)."
+    },
+    {
+      "text": "I would be concerned about retaliation",
+      "type": "harassment-risk",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "governance",
+      "rationale": "Declarant's own retaliation concern; s7(2)(f)(ii) applies to protect the witness from harm."
+    }
+  ],
+  "unexpected": [
+    {
+      "text": "27 Kowhai Street",
+      "type": "address",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "CONFIDENTIAL - HR INVESTIGATION FILE",
+      "type": "confidential",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "Helen Ferguson",
+      "type": "harassment-risk",
+      "page": 1,
+      "confidence": 85
+    },
+    {
+      "text": "David Kellogg",
+      "type": "harassment-risk",
+      "page": 1,
+      "confidence": 85
+    }
+  ]
+}
