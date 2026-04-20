@@ -1,0 +1,93 @@
+{
+  "detections": [
+    {
+      "text": "Witness Statement in the matter of Ferguson v Kellogg",
+      "type": "law-enforcement",
+      "page": 1,
+      "confidence": 85
+    },
+    {
+      "text": "Angela Michelle Torres",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "22 September 1986",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "HM847219",
+      "type": "driver-licence",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "84-567-123",
+      "type": "ird",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "27 Kowhai Street",
+      "type": "address",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "021 456 7890",
+      "type": "phone",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "angela.torres86@outlook.com",
+      "type": "email-addr",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "27 Kowhai Street",
+      "type": "address",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "Angela Michelle Torres",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "Junior planner Jonathan Briggs",
+      "type": "harassment-risk",
+      "page": 1,
+      "confidence": 85
+    },
+    {
+      "text": "(06) 759\n3428)",
+      "type": "phone",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "sarah.mitchell@awateredc.govt.nz",
+      "type": "email-addr",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "(06) 759\n3428)",
+      "type": "phone",
+      "page": 2,
+      "confidence": 95
+    }
+  ],
+  "wallMs": 12719,
+  "documentStatus": "ready",
+  "canonicalPdfSource": "original",
+  "canonicalPdfPageCount": 2,
+  "error": null
+}

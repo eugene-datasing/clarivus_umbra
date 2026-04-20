@@ -1,0 +1,203 @@
+{
+  "score": {
+    "fixture": "C1",
+    "overall": {
+      "precision": 1,
+      "recall": 0,
+      "f1": 0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 19
+    },
+    "byPathway": {
+      "personal": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "commercial": {
+        "precision": 1,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 17
+      },
+      "governance": {
+        "precision": 1,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 2
+      },
+      "enforcement": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      }
+    },
+    "missing": [
+      {
+        "text": "Kaitiaki have provided this pricing on condition of confidentiality",
+        "type": "commercial",
+        "mustMatch": "substring",
+        "page": 1,
+        "pathway": "commercial",
+        "rationale": "Third-party bid pricing under explicit confidentiality; Phase 3 Example 16 pattern, s7(2)(b)(ii)."
+      },
+      {
+        "text": "$3.42M over four years, includes $180k contingency for emergency response and a 12% margin on installation",
+        "type": "commercial",
+        "mustMatch": "substring",
+        "page": 1,
+        "pathway": "commercial",
+        "rationale": "Bidder A's price, contingency, and margin structure — third-party competitive position; s7(2)(b)(ii)."
+      },
+      {
+        "text": "margin structure not be disclosed to other bidders",
+        "type": "commercial",
+        "mustMatch": "substring",
+        "page": 1,
+        "pathway": "commercial",
+        "rationale": "Explicit confidentiality undertaking on margin disclosure; reinforces the s7(2)(b)(ii) basis for withholding."
+      },
+      {
+        "text": "$3.78M over four years, lean margin (8%), no contingency",
+        "type": "commercial",
+        "mustMatch": "substring",
+        "page": 1,
+        "pathway": "commercial",
+        "rationale": "Bidder B's commercial terms under confidentiality undertaking; s7(2)(b)(ii)."
+      },
+      {
+        "text": "confidentiality undertaking dated 28 February 2026",
+        "type": "commercial",
+        "mustMatch": "substring",
+        "page": 1,
+        "pathway": "commercial",
+        "rationale": "Reference to the explicit confidentiality mechanism protecting Bidder B's terms."
+      },
+      {
+        "text": "$4.15M over four years, bundled with optional upgrades",
+        "type": "commercial",
+        "mustMatch": "substring",
+        "page": 1,
+        "pathway": "commercial",
+        "rationale": "Bidder C's price; third-party competitive position s7(2)(b)(ii)."
+      },
+      {
+        "text": "proprietary acoustic leak-detection methodology",
+        "type": "commercial",
+        "mustMatch": "substring",
+        "page": 1,
+        "pathway": "commercial",
+        "rationale": "Bidder C trade-secret content; Phase 3 Example 16 + structural-heuristics 'trade secret' trigger, s7(2)(b)(i)."
+      },
+      {
+        "text": "novel dual-stage pipeline inspection process — combining ground-penetrating radar with low-frequency acoustic monitoring",
+        "type": "commercial",
+        "mustMatch": "substring",
+        "page": 1,
+        "pathway": "commercial",
+        "rationale": "Kaitiaki's proprietary method description — trade secret under their commercial-in-confidence submission; s7(2)(b)(i)."
+      },
+      {
+        "text": "represented as trade secrets under their commercial-in-confidence submission",
+        "type": "commercial",
+        "mustMatch": "substring",
+        "page": 1,
+        "pathway": "commercial",
+        "rationale": "Explicit 'trade secret' language; v3.1 structural-heuristics commercial trigger."
+      },
+      {
+        "text": "SIG's acoustic leak-detection methodology relies on a proprietary signal-processing pipeline",
+        "type": "commercial",
+        "mustMatch": "substring",
+        "page": 1,
+        "pathway": "commercial",
+        "rationale": "Bidder C's second trade-secret-adjacent disclosure; s7(2)(b)(i)."
+      },
+      {
+        "text": "Council's preferred bidder rank is Kaitiaki Engineering, contingent on successful referee checks and commercial terms",
+        "type": "council-commercial",
+        "mustMatch": "substring",
+        "page": 1,
+        "pathway": "commercial",
+        "rationale": "Council's own commercial strategic position on preferred bidder pre-referee-check; s7(2)(h)."
+      },
+      {
+        "text": "fallback position in negotiation is to move to Pacific Flowline at the $3.78M price point",
+        "type": "negotiation",
+        "mustMatch": "substring",
+        "page": 1,
+        "pathway": "commercial",
+        "rationale": "Council's fallback bidder if preferred supplier doesn't clear referee checks; s7(2)(i) negotiation position."
+      },
+      {
+        "text": "budgetary authority to $4.1M and should not disclose this ceiling during negotiations",
+        "type": "negotiation",
+        "mustMatch": "substring",
+        "page": 1,
+        "pathway": "commercial",
+        "rationale": "Explicit non-disclosure of budget ceiling — core negotiation-position protection; s7(2)(i)."
+      },
+      {
+        "text": "well-placed to negotiate Pacific down from their listed price given their stated margin position",
+        "type": "negotiation",
+        "mustMatch": "substring",
+        "page": 2,
+        "pathway": "commercial",
+        "rationale": "Council's strategy for exploiting Bidder B's commercial position; s7(2)(i)."
+      },
+      {
+        "text": "BATNA assessment",
+        "type": "negotiation",
+        "mustMatch": "substring",
+        "page": 2,
+        "pathway": "commercial",
+        "rationale": "Best-alternative-to-negotiated-agreement language is a strong signal for negotiation-strategy content."
+      },
+      {
+        "text": "extend the existing interim maintenance arrangement with the in-house Assets team for a further twelve months at an estimated internal cost of $1.1M per year",
+        "type": "council-commercial",
+        "mustMatch": "substring",
+        "page": 2,
+        "pathway": "commercial",
+        "rationale": "Council's internal-cost fallback position; council-commercial s7(2)(h)."
+      },
+      {
+        "text": "This should not be signalled externally as it would weaken our negotiating hand",
+        "type": "negotiation",
+        "mustMatch": "substring",
+        "page": 2,
+        "pathway": "commercial",
+        "rationale": "Explicit non-disclosure directive tied to negotiating position; s7(2)(i)."
+      },
+      {
+        "text": "wāhi tapu identified by Ngāti Awatere",
+        "type": "cultural-sensitivity",
+        "mustMatch": "substring",
+        "page": 2,
+        "pathway": "governance",
+        "rationale": "Wāhi tapu is a v3.1 structural-heuristics strong trigger; s7(2)(ba)."
+      },
+      {
+        "text": "kōiwi tangata protocol",
+        "type": "cultural-sensitivity",
+        "mustMatch": "substring",
+        "page": 2,
+        "pathway": "governance",
+        "rationale": "Kōiwi tangata is a v3.1 structural-heuristics strong trigger; s7(2)(ba) protects the specific protocol reference alongside the wāhi tapu location."
+      }
+    ],
+    "unexpected": []
+  },
+  "baselineDelta": null
+}
