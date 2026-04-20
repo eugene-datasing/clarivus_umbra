@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { ExtractedPage } from "../extract";
 
 // ---------------------------------------------------------------------------
@@ -290,5 +290,63 @@ describe("classifyDocument", () => {
     expect(result.containsPersonnelInfo).toBe(false);
     expect(result.containsCommercialInfo).toBe(false);
     expect(result.containsCulturalContent).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 1 item 3 — env-var split for classification deployment.
+// ---------------------------------------------------------------------------
+
+describe("classifyDocument — deployment env-var resolution", () => {
+  const originalClassification = process.env.AZURE_OPENAI_DEPLOYMENT_CLASSIFICATION;
+  const originalShared = process.env.AZURE_OPENAI_DEPLOYMENT;
+
+  beforeEach(() => {
+    mockCreate.mockReset();
+  });
+
+  afterEach(() => {
+    if (originalClassification === undefined) {
+      delete process.env.AZURE_OPENAI_DEPLOYMENT_CLASSIFICATION;
+    } else {
+      process.env.AZURE_OPENAI_DEPLOYMENT_CLASSIFICATION = originalClassification;
+    }
+    if (originalShared === undefined) {
+      delete process.env.AZURE_OPENAI_DEPLOYMENT;
+    } else {
+      process.env.AZURE_OPENAI_DEPLOYMENT = originalShared;
+    }
+  });
+
+  it("AZURE_OPENAI_DEPLOYMENT_CLASSIFICATION overrides the shared AZURE_OPENAI_DEPLOYMENT", async () => {
+    process.env.AZURE_OPENAI_DEPLOYMENT = "gpt-4o";
+    process.env.AZURE_OPENAI_DEPLOYMENT_CLASSIFICATION =
+      "gpt-4o-classification-override";
+
+    mockCreate.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              documentType: "other",
+              likelyGrounds: [],
+              contextNotes: "",
+              containsLegalAdvice: false,
+              containsPersonnelInfo: false,
+              containsCommercialInfo: false,
+              containsCulturalContent: false,
+              containsEnforcementInfo: false,
+            }),
+          },
+        },
+      ],
+    });
+
+    const pages = makePages(1, 600);
+    await classifyDocument(pages);
+
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    const requestBody = mockCreate.mock.calls[0][0] as { model: string };
+    expect(requestBody.model).toBe("gpt-4o-classification-override");
   });
 });

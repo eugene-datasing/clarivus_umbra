@@ -47,6 +47,24 @@ const specs: EnvVarSpec[] = [
     productionOnly: true,
     description: "Azure OpenAI deployment name (e.g. gpt-4o)",
   },
+  {
+    name: "AZURE_OPENAI_DEPLOYMENT_DETECTION",
+    required: false,
+    description:
+      "Optional override: deployment used by ai-detect; falls back to AZURE_OPENAI_DEPLOYMENT",
+  },
+  {
+    name: "AZURE_OPENAI_DEPLOYMENT_CLASSIFICATION",
+    required: false,
+    description:
+      "Optional override: deployment used by doc-classify; falls back to AZURE_OPENAI_DEPLOYMENT",
+  },
+  {
+    name: "AI_DETECT_SINGLE_BATCH_MAX_PAGES",
+    required: false,
+    description:
+      "Max prepared-pages count at which ai-detect uses a single chat completion call (default 6). Larger docs fall back to BATCH_SIZE=3.",
+  },
 
   // --- OCR (required in production, warn in dev) ---
   {
@@ -152,6 +170,9 @@ export const env = {
   get AZURE_OPENAI_ENDPOINT() { return getOptional("AZURE_OPENAI_ENDPOINT"); },
   get AZURE_OPENAI_KEY() { return getOptional("AZURE_OPENAI_KEY"); },
   get AZURE_OPENAI_DEPLOYMENT() { return getOptional("AZURE_OPENAI_DEPLOYMENT"); },
+  get AZURE_OPENAI_DEPLOYMENT_DETECTION() { return getOptional("AZURE_OPENAI_DEPLOYMENT_DETECTION"); },
+  get AZURE_OPENAI_DEPLOYMENT_CLASSIFICATION() { return getOptional("AZURE_OPENAI_DEPLOYMENT_CLASSIFICATION"); },
+  get AI_DETECT_SINGLE_BATCH_MAX_PAGES() { return getOptional("AI_DETECT_SINGLE_BATCH_MAX_PAGES"); },
 
   // OCR
   get AZURE_DI_ENDPOINT() { return getOptional("AZURE_DI_ENDPOINT"); },

@@ -40,16 +40,30 @@ export interface AIDetection {
 
 let _client: AzureOpenAI | null = null;
 
-function getClient(): AzureOpenAI {
+/**
+ * Resolve the Azure OpenAI deployment name for detection calls.
+ * AZURE_OPENAI_DEPLOYMENT_DETECTION wins when set, falling back to the
+ * shared AZURE_OPENAI_DEPLOYMENT, then to a hard-coded "gpt-4o" literal.
+ * Split from classification so a future model experiment can swap one
+ * without coupling the other.
+ */
+function resolveDetectionDeployment(): string {
+  return (
+    process.env.AZURE_OPENAI_DEPLOYMENT_DETECTION ||
+    process.env.AZURE_OPENAI_DEPLOYMENT ||
+    "gpt-4o"
+  );
+}
+
+function getClient(deployment: string): AzureOpenAI {
   if (_client) return _client;
 
   const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
   const apiKey = process.env.AZURE_OPENAI_KEY;
-  const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
 
   if (!endpoint || !apiKey || !deployment) {
     throw new Error(
-      "Azure OpenAI credentials missing. Set AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_KEY, and AZURE_OPENAI_DEPLOYMENT.",
+      "Azure OpenAI credentials missing. Set AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_KEY, and AZURE_OPENAI_DEPLOYMENT (or AZURE_OPENAI_DEPLOYMENT_DETECTION).",
     );
   }
 
@@ -455,14 +469,25 @@ export async function detectWithAI(
   enabledTypes?: Set<string>,
   classification?: DocumentClassification,
 ): Promise<AIDetection[]> {
-  const client = getClient();
+  const detectionDeployment = resolveDetectionDeployment();
+  const client = getClient(detectionDeployment);
   const allDetections: AIDetection[] = [];
 
   // Pre-process: split oversized pages (e.g. large DOCX single-page docs)
   const preparedPages = preparePages(pages);
 
-  // Process pages in batches of 3 to stay within token limits
-  const BATCH_SIZE = 3;
+  // Batch size: for small documents (<= AI_DETECT_SINGLE_BATCH_MAX_PAGES,
+  // default 6), send all prepared pages in one chat completion call so the
+  // model sees the full document context in a single shot (entity
+  // continuity across pages). Larger documents fall back to the original
+  // BATCH_SIZE=3 to stay within token limits. Phase 1 item 4 of
+  // docs/detection-coverage-plan-2026-04.md.
+  const maxSingleBatchPages = parseInt(
+    process.env.AI_DETECT_SINGLE_BATCH_MAX_PAGES ?? "6",
+    10,
+  );
+  const BATCH_SIZE =
+    preparedPages.length <= maxSingleBatchPages ? preparedPages.length : 3;
 
   for (let i = 0; i < preparedPages.length; i += BATCH_SIZE) {
     const batch = preparedPages.slice(i, i + BATCH_SIZE);
@@ -488,7 +513,7 @@ export async function detectWithAI(
 
       const response = await resilientOpenAICall(() =>
         client.chat.completions.create({
-          model: process.env.AZURE_OPENAI_DEPLOYMENT || "gpt-4o",
+          model: detectionDeployment,
           messages: [
             { role: "system", content: systemContent },
             { role: "user", content: userContent },

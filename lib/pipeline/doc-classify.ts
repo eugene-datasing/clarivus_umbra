@@ -85,16 +85,30 @@ Given excerpts from a document, classify it and return a JSON object with:
 
 let _client: AzureOpenAI | null = null;
 
-function getClient(): AzureOpenAI {
+/**
+ * Resolve the Azure OpenAI deployment name for classification calls.
+ * AZURE_OPENAI_DEPLOYMENT_CLASSIFICATION wins when set, falling back to
+ * the shared AZURE_OPENAI_DEPLOYMENT, then to a hard-coded "gpt-4o"
+ * literal. Split from detection so the two paths can run on different
+ * deployments.
+ */
+function resolveClassificationDeployment(): string {
+  return (
+    process.env.AZURE_OPENAI_DEPLOYMENT_CLASSIFICATION ||
+    process.env.AZURE_OPENAI_DEPLOYMENT ||
+    "gpt-4o"
+  );
+}
+
+function getClient(deployment: string): AzureOpenAI {
   if (_client) return _client;
 
   const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
   const apiKey = process.env.AZURE_OPENAI_KEY;
-  const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
 
   if (!endpoint || !apiKey || !deployment) {
     throw new Error(
-      "Azure OpenAI credentials missing. Set AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_KEY, and AZURE_OPENAI_DEPLOYMENT.",
+      "Azure OpenAI credentials missing. Set AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_KEY, and AZURE_OPENAI_DEPLOYMENT (or AZURE_OPENAI_DEPLOYMENT_CLASSIFICATION).",
     );
   }
 
@@ -198,11 +212,12 @@ export async function classifyDocument(
   if (summary.trim().length < 20) return { ...DEFAULT_CLASSIFICATION };
 
   try {
-    const client = getClient();
+    const classificationDeployment = resolveClassificationDeployment();
+    const client = getClient(classificationDeployment);
 
     const response = await resilientOpenAICall(() =>
       client.chat.completions.create({
-        model: process.env.AZURE_OPENAI_DEPLOYMENT || "gpt-4o",
+        model: classificationDeployment,
         messages: [
           { role: "system", content: CLASSIFY_SYSTEM_PROMPT },
           { role: "user", content: summary },
