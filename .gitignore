@@ -47,6 +47,15 @@ test-fixtures/phase2-spike/*
 !test-fixtures/dummy-lgoima-pack/
 test-fixtures/dummy-lgoima-pack/*
 !test-fixtures/dummy-lgoima-pack/B2_Witness_Statement_Torres.pdf
+!test-fixtures/bench/
+test-fixtures/bench/*
+!test-fixtures/bench/A_Council_Memo_Candid_Advice.docx
+!test-fixtures/bench/A.expected.json
+!test-fixtures/bench/B1.expected.json
+!test-fixtures/bench/B2_Witness_Statement_Torres.pdf
+!test-fixtures/bench/B2.expected.json
+!test-fixtures/bench/C1_Tender_Evaluation_Commercial.docx
+!test-fixtures/bench/C1.expected.json
 
 # model-choice spike: commit the runner outputs and comparison but not the
 # cached DI extraction (2k+ lines, regenerates on demand from the runner)

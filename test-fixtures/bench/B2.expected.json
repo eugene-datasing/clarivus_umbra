@@ -1,0 +1,174 @@
+{
+  "fixtureSha256": "45f91de4df301f1328ea47eedcd566ca29109ba75ad7cc7da5ef5865d5661087",
+  "documentType": "Witness statement (Awatere District Council, Ferguson v Kellogg HR investigation)",
+  "fixtureSource": "test-fixtures/bench/B2_Witness_Statement_Torres.pdf (copy of test-fixtures/dummy-lgoima-pack/B2_Witness_Statement_Torres.pdf)",
+  "canonicalPageCount": 2,
+  "canonicalCharCount": "~3400 (per prior production extraction)",
+  "authorshipNote": "Drafted by Claude Code (bench tranche 2a-i) against the existing B2 fixture; Eugene reviews before commit. Type assignments mirror B1.expected.json patterns where applicable (witnesses in grievance context → harassment-risk per Phase 3 Example 11; organisation-internal identifiers → confidential).",
+  "notes": [
+    "B2 is the witness statement that drove the 2026-04-20 detection-coverage investigation and PR #4's driver-licence work. Every identifier in the page-1 header table is explicit PII and should be flagged.",
+    "Torres is the complainant-side witness (declarant). Her own identity is protected under s7(2)(a) personal-name; her retaliation concern in the 'Broader context' paragraph is the harassment-risk trigger.",
+    "Jonathan Briggs appears as an incidentally-named third-party witness — harassment-risk per the B1 pattern.",
+    "Helen Ferguson and David Kellogg appear both as full names and as Ms/Mr + surname forms; substring match handles the variants."
+  ],
+  "expectedDetections": [
+    {
+      "text": "Witness Statement in the matter of Ferguson v Kellogg",
+      "type": "law-enforcement",
+      "mustMatch": "exact",
+      "page": 1,
+      "pathway": "enforcement",
+      "rationale": "Title line identifies the document as evidence in a formal grievance/investigation; s6(c) conclusive ground applies in enforcement contexts."
+    },
+    {
+      "text": "Angela Michelle Torres",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Witness declarant's full name; appears in the header table and the Declaration paragraph."
+    },
+    {
+      "text": "22 September 1986",
+      "type": "personal-name",
+      "mustMatch": "exact",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Declarant's date of birth — labelled row; Phase 1 personal-name DOB pattern per v3.1 prompt example 12."
+    },
+    {
+      "text": "HM847219",
+      "type": "driver-licence",
+      "mustMatch": "exact",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "NZ driver licence number; regex + context-guard catches this deterministically post-PR #4."
+    },
+    {
+      "text": "84-567-123",
+      "type": "ird",
+      "mustMatch": "exact",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "IRD number; regex detection."
+    },
+    {
+      "text": "27 Kowhai Street, Awatere 4310",
+      "type": "address",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Declarant's home address; appears in header table and in Declaration paragraph."
+    },
+    {
+      "text": "021 456 7890",
+      "type": "phone",
+      "mustMatch": "exact",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Declarant's personal mobile; regex detection."
+    },
+    {
+      "text": "angela.torres86@outlook.com",
+      "type": "email-addr",
+      "mustMatch": "exact",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Declarant's personal email; regex detection."
+    },
+    {
+      "text": "Sarah Mitchell",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "HR Manager / Interviewer — third-party council staff in grievance context. Per v3.1 Phase 3 reworded carve-out, investigator-in-grievance-context IS flaggable."
+    },
+    {
+      "text": "HR-INV-2026-018",
+      "type": "confidential",
+      "mustMatch": "exact",
+      "page": 1,
+      "pathway": "governance",
+      "rationale": "Investigation file reference; s7(2)(a) protects the case identifier linking to HR records."
+    },
+    {
+      "text": "Priya Sharma",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Declarant's manager; named in Background prose — third-party council staff in grievance context."
+    },
+    {
+      "text": "Helen Ferguson",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Complainant's full name — appears in Background prose. Substring match handles subsequent 'Ms Ferguson' references on pages 1 and 2."
+    },
+    {
+      "text": "Ms Ferguson",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "pathway": "personal",
+      "rationale": "Honorific form appears multiple times across both pages; Phase 4 entity-propagation candidate."
+    },
+    {
+      "text": "David Kellogg",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Respondent's full name — appears in Background prose."
+    },
+    {
+      "text": "Mr Kellogg",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "pathway": "personal",
+      "rationale": "Honorific form appears multiple times; Phase 4 entity-propagation candidate."
+    },
+    {
+      "text": "Jonathan Briggs",
+      "type": "harassment-risk",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "governance",
+      "rationale": "Third-party junior planner witness named in an incident account; harassment-risk per Phase 3 Example 11 (witness identity in grievance context, s7(2)(f)(ii))."
+    },
+    {
+      "text": "Mr Kellogg's conduct towards Ms Ferguson has, in my observation, been different in tone from his conduct towards male colleagues",
+      "type": "free-frank",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "governance",
+      "rationale": "Candid observation on the respondent's pattern of behaviour from the Broader Context paragraph; free-frank s7(2)(f)(i)."
+    },
+    {
+      "text": "I would be concerned about retaliation",
+      "type": "harassment-risk",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "governance",
+      "rationale": "Declarant's own retaliation concern; s7(2)(f)(ii) applies to protect the witness from harm."
+    },
+    {
+      "text": "sarah.mitchell@awateredc.govt.nz",
+      "type": "email-addr",
+      "mustMatch": "exact",
+      "page": 2,
+      "pathway": "personal",
+      "rationale": "Investigator's work email in the sign-off block; may or may not flag depending on 'council contact info is public' judgement but defensible as PII."
+    },
+    {
+      "text": "(06) 759 3428",
+      "type": "phone",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "personal",
+      "rationale": "Investigator's DDI landline — parenthesised area code; post-cr16 regex catches this. Substring allows 'DDI (06) 759 3428' in actual text."
+    }
+  ]
+}
