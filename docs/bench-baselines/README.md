@@ -200,13 +200,15 @@ It can also be triggered manually via the Actions tab (workflow_dispatch).
 
 | scope | default | behaviour |
 |---|---|---|
-| per-fixture F1 regression | 0.080 (8pp) | fails CI |
+| per-fixture F1 regression | 0.120 (12pp) | fails CI |
 | suite aggregate F1 regression | 0.050 (5pp) | fails CI |
 | per-pathway F1 | — | reported only, not a gate |
 
 Thresholds are flag-configurable on `compare-baseline.ts` (`--threshold-fixture`, `--threshold-suite`). If you want to tighten or loosen, edit the workflow's `Compare against canonical baseline` step.
 
-Rationale for 8pp: observed AI non-determinism on identical code between two runs on the same day showed per-fixture F1 variance of roughly 5–8pp. The threshold absorbs that noise without letting real regressions through. Aggregate F1 is tighter (5pp) because noise cancels across 5 fixtures.
+Rationale for 12pp per-fixture: observed AI non-determinism on **identical pipeline code** across day-over-day re-runs has reached 9.7pp (B2 on 2026-04-21, 0.722 → 0.625) and 8.2pp (C1 on 2026-04-20, 0.000 → 0.082 via AI-variance wobble) on single-fixture F1. An initial 8pp threshold left only ~0.3pp headroom and fired a false-positive on the first CI run. 12pp gives ~2pp absorption margin over the observed maximum without meaningfully loosening the gate for real regressions — a 12pp F1 drop on a 20-entry fixture means losing ≥3 TPs, which is a large real signal rather than noise.
+
+Suite aggregate stays tight at 5pp because per-fixture noise averages out across the 5 fixtures — same code tends to produce similar total-TP / total-FP / total-FN across runs even when individual fixtures swing.
 
 ### Interpreting the PR comment
 

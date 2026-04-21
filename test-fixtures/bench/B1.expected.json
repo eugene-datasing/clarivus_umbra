@@ -1,7 +1,7 @@
 {
-  "fixtureSha256": "TODO — compute on commit via `shasum -a 256 test-fixtures/bench/B1_HR_Investigation_Report_Kellogg_Ferguson.docx`",
+  "fixtureSha256": "5ffbce061da3c93ea0c79f31be1338b8c6544587a04d2a0bb109e38913628f5f",
   "documentType": "HR investigation report (Awatere District Council, Ferguson v Kellogg bullying complaint)",
-  "fixtureSource": "test-fixtures/dummy-lgoima-pack/B1_HR_Investigation_Report_Kellogg_Ferguson.docx — copy to test-fixtures/bench/ as B1_HR_Investigation_Report_Kellogg_Ferguson.docx before running the bench",
+  "fixtureSource": "test-fixtures/bench/B1_HR_Investigation_Report_Kellogg_Ferguson.docx",
   "canonicalPageCount": 4,
   "canonicalCharCount": "~5596 (per Phase 1.5 findings, production canonical-PDF extraction)",
   "authorshipNote": "Authored by Eugene (per plan Decision (d), B1 is the incident anchor and owns Eugene's judgement). Drafted with Cowork assistance 2026-04-20.",

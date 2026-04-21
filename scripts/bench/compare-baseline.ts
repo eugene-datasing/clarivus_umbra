@@ -68,7 +68,7 @@ Required:
 
 Options:
   --output <path>              Write markdown comment to a file (default: stdout).
-  --threshold-fixture <n>      Per-fixture F1 regression limit. Default 0.08.
+  --threshold-fixture <n>      Per-fixture F1 regression limit. Default 0.12.
   --threshold-suite <n>        Suite aggregate F1 regression limit. Default 0.05.
   --marker <html-comment>      HTML comment marker for PR upsert. Default:
                                ${DEFAULT_MARKER}
@@ -85,7 +85,11 @@ function parseArgs(argv: string[]): Args {
   const args: Args = {
     canonicalDir: "",
     newDir: "",
-    thresholdFixture: 0.08,
+    // 0.12 per-fixture absorbs observed same-pipeline AI non-determinism
+    // (B2 9.7pp on 2026-04-21 re-run, C1 8.2pp on 2026-04-20 re-run) with
+    // ~2pp headroom over the observed max. Suite aggregate stays tight at
+    // 5pp because run-to-run noise averages out across fixtures.
+    thresholdFixture: 0.12,
     thresholdSuite: 0.05,
     marker: DEFAULT_MARKER,
     help: false,

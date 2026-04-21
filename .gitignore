@@ -51,6 +51,7 @@ test-fixtures/dummy-lgoima-pack/*
 test-fixtures/bench/*
 !test-fixtures/bench/A_Council_Memo_Candid_Advice.docx
 !test-fixtures/bench/A.expected.json
+!test-fixtures/bench/B1_HR_Investigation_Report_Kellogg_Ferguson.docx
 !test-fixtures/bench/B1.expected.json
 !test-fixtures/bench/B2_Witness_Statement_Torres.pdf
 !test-fixtures/bench/B2.expected.json
