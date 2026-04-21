@@ -56,6 +56,8 @@ test-fixtures/bench/*
 !test-fixtures/bench/B2.expected.json
 !test-fixtures/bench/C1_Tender_Evaluation_Commercial.docx
 !test-fixtures/bench/C1.expected.json
+!test-fixtures/bench/B3_Long_Investigation.pdf
+!test-fixtures/bench/B3.expected.json
 
 # model-choice spike: commit the runner outputs and comparison but not the
 # cached DI extraction (2k+ lines, regenerates on demand from the runner)

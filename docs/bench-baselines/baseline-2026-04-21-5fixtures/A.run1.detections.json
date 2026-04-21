@@ -1,0 +1,45 @@
+{
+  "detections": [
+    {
+      "text": "Council officers are asked to provide a frank assessment of the current bylaw's workability before committee is briefed. Our considered view, expressed candidly: the current 100-metre leash-on requirement across the Kowhai Precinct is unenforceable in practice. Animal Management have issued four infringement notices in the past eighteen months; none have been sustained on review. Elected members have been told by officers that \"enforcement is robust\", and that characterisation is at best generous. The reality on the ground is that Animal Management lacks the staffing and the legal teeth to pursue off-leash infringements in a residential precinct. We recommend the committee be briefed on the enforcement reality rather than the bylaw's aspirational text, and that members be invited to consider whether maintaining an unenforceable rule damages council's credibility more than a principled relaxation would. Officers further note, frankly, that several elected members have publicly defended the 100-metre rule for reasons that appear political rather than operational. A quiet walk-back is preferable to a public debate that forces officers to contradict the elected record.",
+      "type": "free-frank",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "We have obtained privileged legal opinion from Jennifer McAllister of Rata Legal regarding council's exposure if the bylaw is challenged under the Bill of Rights Act. Ms McAllister's advice, which is attached as Appendix B and which remains subject to solicitor-client privilege, is that the 100-metre leash provision is likely to be found disproportionate in any judicial review and that officers should not defend the provision in formal proceedings without revised instructions. Counsel's advice further canvasses the settlement range should the matter reach costs negotiation: $25,000 to $55,000 inclusive of legal costs is defensible on current authorities. Ms McAllister recommends an early without-prejudice approach to the petitioners' counsel if litigation looks likely.",
+      "type": "legal-privilege",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "A former Animal Management officer has provided a written account on condition of anonymity, indicating that enforcement practices in the Kowhai Precinct between 2022 and 2024 systematically favoured specific property owners known to the previous Area Manager. The account alleges selective non-enforcement of off-leash complaints where the offending dog's owner was a member of the local residents' association. The former officer has asked that their identity not be disclosed due to professional retaliation concerns; their written account is held in the HR investigation file HR-INV-2025-042.",
+      "type": "confidential",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "Mrs Judith Patterson",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "027 445 1982)",
+      "type": "phone",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "jpatterson.kowhai@example.nz",
+      "type": "email-addr",
+      "page": 1,
+      "confidence": 95
+    }
+  ],
+  "wallMs": 16412,
+  "documentStatus": "ready",
+  "canonicalPdfSource": "libreoffice",
+  "canonicalPdfPageCount": 2,
+  "error": null
+}
