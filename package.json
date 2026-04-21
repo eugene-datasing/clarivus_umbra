@@ -17,6 +17,7 @@
     "test:integration:canonical": "RUN_INTEGRATION_TESTS=1 vitest run canonical-pdf.integration",
     "bench:detection": "tsx scripts/bench/bench-detection.ts",
     "bench:suite": "tsx scripts/bench/bench-suite.ts",
+    "bench:compare": "tsx scripts/bench/compare-baseline.ts",
     "test:e2e:seed": "tsx e2e/seed-test-users.ts",
     "test:e2e": "npm run test:e2e:seed && playwright test",
     "test:e2e:ui": "playwright test --ui",

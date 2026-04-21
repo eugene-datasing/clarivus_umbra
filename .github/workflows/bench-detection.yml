@@ -1,0 +1,195 @@
+name: Detection Bench
+
+# Phase 2 tranche 3 — regression guard for the detection pipeline.
+#
+# Runs the 5-fixture bench suite against live Azure OpenAI + Document
+# Intelligence on PRs that touch the pipeline, fixtures, or baselines.
+# Compares the run against the canonical baseline named in
+# docs/bench-baselines/CANONICAL, posts a per-fixture / per-pathway
+# delta table as a PR comment, and fails CI if any fixture or the
+# suite aggregate regresses beyond threshold.
+#
+# Cost: ~$0.50 NZD per run (Azure OpenAI + DI). Wall time ~7-8 min.
+# Required secrets: AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_KEY,
+# AZURE_OPENAI_DEPLOYMENT, AZURE_DI_ENDPOINT, AZURE_DI_KEY.
+# Optional: AZURE_OPENAI_DEPLOYMENT_DETECTION,
+# AZURE_OPENAI_DEPLOYMENT_CLASSIFICATION (fall back to _DEPLOYMENT).
+#
+# Security note: the workflow does NOT accept arbitrary user input to
+# its bench runner. The fixture list is hardcoded and the canonical
+# baseline name is read from a committed file. No PR / issue / commit
+# text reaches any `run:` step.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "lib/pipeline/**"
+      - "test-fixtures/bench/**"
+      - "docs/bench-baselines/**"
+      - ".github/workflows/bench-detection.yml"
+      - "scripts/bench/**"
+      - "lib/bench/**"
+  workflow_dispatch: {}
+
+concurrency:
+  group: bench-detection-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bench:
+    name: Detection bench
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: veil_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/veil_test
+      AUTH_SECRET: test-secret-for-ci-only
+      FIXTURES: "B1,B2,A,C1,B3"
+    steps:
+      - name: Check required Azure secrets
+        env:
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_KEY: ${{ secrets.AZURE_OPENAI_KEY }}
+          AZURE_OPENAI_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
+          AZURE_DI_ENDPOINT: ${{ secrets.AZURE_DI_ENDPOINT }}
+          AZURE_DI_KEY: ${{ secrets.AZURE_DI_KEY }}
+        run: |
+          missing=()
+          [ -z "$AZURE_OPENAI_ENDPOINT" ] && missing+=(AZURE_OPENAI_ENDPOINT)
+          [ -z "$AZURE_OPENAI_KEY" ] && missing+=(AZURE_OPENAI_KEY)
+          [ -z "$AZURE_OPENAI_DEPLOYMENT" ] && missing+=(AZURE_OPENAI_DEPLOYMENT)
+          [ -z "$AZURE_DI_ENDPOINT" ] && missing+=(AZURE_DI_ENDPOINT)
+          [ -z "$AZURE_DI_KEY" ] && missing+=(AZURE_DI_KEY)
+          if [ ${#missing[@]} -gt 0 ]; then
+            printf '::error::Required secret not set: %s\n' "${missing[@]}"
+            echo ""
+            echo "Add these via repo Settings -> Secrets and variables -> Actions -> New repository secret."
+            echo "See docs/bench-baselines/README.md -> CI operation for the full list and rationale."
+            exit 1
+          fi
+          echo "All required Azure secrets are set."
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install apt packages (LibreOffice + Noto fonts)
+        # Matches Dockerfile's `apt-get install libreoffice-nogui fonts-noto-core`.
+        # LibreOffice is required by the canonical-PDF builder for
+        # DOCX/XLSX fixtures; Noto fonts keep macron characters rendering
+        # correctly so DI OCR hits the word-level polygons we score.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libreoffice-nogui fonts-noto-core
+          libreoffice --version
+
+      - run: npm ci
+
+      - run: npx prisma generate
+
+      - name: Run database migrations
+        run: npx prisma migrate deploy
+
+      - name: Resolve canonical baseline
+        id: canonical
+        run: |
+          if [ ! -f docs/bench-baselines/CANONICAL ]; then
+            echo "::error::docs/bench-baselines/CANONICAL is missing. It must name the directory (e.g. 'baseline-2026-04-21-5fixtures') this workflow should compare against."
+            exit 1
+          fi
+          canonical=$(tr -d '[:space:]' < docs/bench-baselines/CANONICAL)
+          canonical_dir="docs/bench-baselines/${canonical}"
+          if [ ! -d "${canonical_dir}" ]; then
+            echo "::error::Canonical baseline directory not found: ${canonical_dir}"
+            exit 1
+          fi
+          echo "canonical_dir=${canonical_dir}" >> "$GITHUB_OUTPUT"
+          echo "Canonical baseline: ${canonical_dir}"
+
+      - name: Run bench suite
+        id: bench
+        env:
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_KEY: ${{ secrets.AZURE_OPENAI_KEY }}
+          AZURE_OPENAI_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
+          AZURE_OPENAI_DEPLOYMENT_DETECTION: ${{ secrets.AZURE_OPENAI_DEPLOYMENT_DETECTION }}
+          AZURE_OPENAI_DEPLOYMENT_CLASSIFICATION: ${{ secrets.AZURE_OPENAI_DEPLOYMENT_CLASSIFICATION }}
+          AZURE_DI_ENDPOINT: ${{ secrets.AZURE_DI_ENDPOINT }}
+          AZURE_DI_KEY: ${{ secrets.AZURE_DI_KEY }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          out_dir="docs/bench-baselines/ci-run-${RUN_ID}"
+          echo "out_dir=${out_dir}" >> "$GITHUB_OUTPUT"
+          npm run bench:suite -- \
+            --fixtures "${FIXTURES}" \
+            --runs 3 \
+            --output-dir "${out_dir}"
+
+      - name: Compare against canonical baseline
+        id: compare
+        # continue-on-error so the PR comment still gets posted even when
+        # the comparator exits 1; the final "Fail on regression" step
+        # enforces the gate after the comment is up.
+        continue-on-error: true
+        env:
+          CANONICAL_DIR: ${{ steps.canonical.outputs.canonical_dir }}
+          NEW_DIR: ${{ steps.bench.outputs.out_dir }}
+        run: |
+          mkdir -p /tmp/bench
+          set +e
+          npx tsx scripts/bench/compare-baseline.ts \
+            --canonical-dir "${CANONICAL_DIR}" \
+            --new-dir "${NEW_DIR}" \
+            --output /tmp/bench/comment.md
+          echo "compare_exit=$?" >> "$GITHUB_OUTPUT"
+          set -e
+
+      - name: Find existing bench comment
+        id: find-comment
+        if: github.event_name == 'pull_request'
+        uses: peter-evans/find-comment@v3
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body-includes: "<!-- bench-detection-comment -->"
+
+      - name: Upsert PR comment
+        if: github.event_name == 'pull_request'
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body-path: /tmp/bench/comment.md
+          edit-mode: replace
+
+      - name: Upload bench artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-run-${{ github.run_id }}
+          path: ${{ steps.bench.outputs.out_dir }}
+          retention-days: 14
+
+      - name: Fail on regression
+        if: steps.compare.outputs.compare_exit != '0'
+        run: |
+          echo "::error::Bench suite detected a regression beyond threshold. See the PR comment or the uploaded artefact for per-fixture detail."
+          exit 1

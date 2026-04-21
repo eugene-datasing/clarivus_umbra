@@ -173,14 +173,90 @@ At the time of first run (2026-04-20) each fixture-run costs approximately:
 
 The runner prints per-run detection counts and wall times as it goes, so you can tell whether a fixture is stuck on a slow call vs making steady progress.
 
-## CI regression guard (tranche 3)
+## CI operation (tranche 3)
 
-Tranche 3 wires `npm run bench:detection -- --baseline <path>` into a GitHub Actions workflow that runs on every PR touching `lib/pipeline/**`. Default threshold is 0.05 F1 (overall) — a regression beyond that makes the bench step exit non-zero, failing CI.
+`.github/workflows/bench-detection.yml` runs the 5-fixture bench suite against live Azure OpenAI + Document Intelligence on every PR that touches:
 
-The per-pathway F1 is not currently a gate but is reported for human inspection. Tranche 3 may promote per-pathway thresholds to gates for specific pathways where a silent drop is particularly bad (governance, for example).
+- `lib/pipeline/**`
+- `test-fixtures/bench/**`
+- `docs/bench-baselines/**`
+- `scripts/bench/**`
+- `lib/bench/**`
+- `.github/workflows/bench-detection.yml`
 
-## Not in tranche 2b
+It can also be triggered manually via the Actions tab (workflow_dispatch).
 
-- No CI workflow. Tranche 3 adds `.github/workflows/bench-detection.yml`.
-- No B3 fixture (long multi-batch document). Authored as its own tranche — tracked separately.
-- No per-fixture `--quick-mode` flag. The runner always does N real runs; "quick" is just `--runs 1 --fixtures <one>`.
+### What it does
+
+1. Spins up a Postgres 16 service container, installs LibreOffice + Noto fonts, runs Prisma migrations against the ephemeral DB.
+2. Reads `docs/bench-baselines/CANONICAL` to resolve the canonical baseline directory.
+3. Runs `npm run bench:suite -- --fixtures B1,B2,A,C1,B3 --runs 3 --output-dir docs/bench-baselines/ci-run-<run-id>`.
+4. Calls `npm run bench:compare` to diff the fresh run against the canonical baseline.
+5. Upserts a PR comment (marker `<!-- bench-detection-comment -->`) with a per-fixture and per-pathway delta table.
+6. Uploads the full CI run folder as an artefact (`bench-run-<run-id>`, 14-day retention).
+7. Fails CI if the comparator flagged a regression.
+
+### Thresholds
+
+| scope | default | behaviour |
+|---|---|---|
+| per-fixture F1 regression | 0.080 (8pp) | fails CI |
+| suite aggregate F1 regression | 0.050 (5pp) | fails CI |
+| per-pathway F1 | — | reported only, not a gate |
+
+Thresholds are flag-configurable on `compare-baseline.ts` (`--threshold-fixture`, `--threshold-suite`). If you want to tighten or loosen, edit the workflow's `Compare against canonical baseline` step.
+
+Rationale for 8pp: observed AI non-determinism on identical code between two runs on the same day showed per-fixture F1 variance of roughly 5–8pp. The threshold absorbs that noise without letting real regressions through. Aggregate F1 is tighter (5pp) because noise cancels across 5 fixtures.
+
+### Interpreting the PR comment
+
+- :white_check_mark: / :x: at the top tells you whether CI passed the gate.
+- The "Per fixture" table marks regressing fixtures with :x: (beyond threshold) or :warning: (negative but within threshold).
+- The "Suite aggregate" row is the total-TP / total-FP / total-FN recomputed across all fixtures; it's the headline number CI gates on alongside per-fixture.
+- The "Per pathway" block is report-only — use it to spot pathway-specific drift (e.g. governance crashing while personal stays flat).
+- If regressions are listed, the footer explains how to fix OR re-baseline.
+
+### Updating the canonical baseline
+
+When a prompt / pattern / pipeline change intentionally moves the numbers (e.g. Phase 3's prompt rework lifting governance-pathway F1), re-baselining is a deliberate two-step act:
+
+1. Run the bench suite locally to capture the new numbers:
+   ```bash
+   npm run bench:suite -- --output-dir docs/bench-baselines/baseline-<YYYY-MM-DD>-<short-description>
+   ```
+2. Edit `docs/bench-baselines/CANONICAL` to contain the new directory name (the file is one line of text, no trailing commentary).
+3. Commit both the new baseline folder and the `CANONICAL` update in the same PR as the code change that produced the lift. Reviewers see the intended floor-shift alongside the change itself.
+
+Do NOT update `CANONICAL` silently in an unrelated PR to mask a regression. The whole point of committing baselines is to surface them.
+
+### Required GitHub repo secrets
+
+Add these via Settings -> Secrets and variables -> Actions -> New repository secret:
+
+| secret name | used for |
+|---|---|
+| `AZURE_OPENAI_ENDPOINT` | OpenAI API root URL |
+| `AZURE_OPENAI_KEY` | OpenAI API key |
+| `AZURE_OPENAI_DEPLOYMENT` | Shared deployment name (detection + classification fall back to this if the more specific secrets are absent) |
+| `AZURE_OPENAI_DEPLOYMENT_DETECTION` | Optional — deployment used by `detectWithAI` only |
+| `AZURE_OPENAI_DEPLOYMENT_CLASSIFICATION` | Optional — deployment used by `classifyDocument` only |
+| `AZURE_DI_ENDPOINT` | Document Intelligence root URL |
+| `AZURE_DI_KEY` | Document Intelligence key |
+
+The workflow's first step fails fast with a clear message if any of the five required secrets is unset.
+
+### Cost / timing
+
+- Wall time per run: ~7–8 min (bench itself ~5–6 min, plus ~1–2 min for apt install + migrations + npm ci).
+- Cost per run: ~$0.50 NZD (Azure OpenAI + DI, dominated by B3's 10-page × 3-run × 4-batch load).
+- At ~20 pipeline-touching PRs/month, budget ~$10 NZD/month.
+
+### Artefacts
+
+Every run uploads its `ci-run-<run-id>` folder as a 14-day artefact. When diagnosing a regression post-hoc, download the artefact and open `suite-summary.md` for the quick read, or any of the per-fixture `report.md` files for missing/unexpected detail.
+
+## Not in tranche 3
+
+- No per-pathway gate. Only per-fixture and suite F1 are CI-gated.
+- No slack / email notification. Regressions surface via the PR comment + check status.
+- No incremental bench (running only fixtures affected by a diff). The suite runs all 5 every time.
