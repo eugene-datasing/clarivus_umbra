@@ -1,0 +1,322 @@
+{
+  "detections": [
+    {
+      "text": "Helen Margaret Ashworth",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "helen.ashworth@ashworthlaw.co.nz",
+      "type": "email-addr",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "021 908 4433",
+      "type": "phone",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "PO Box 2184, Wellington 6011",
+      "type": "address",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "Dr Tenisha Marama Aalbers",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "092-415-881",
+      "type": "ird",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "t.aalbers@aalbers-hydro.nz",
+      "type": "email-addr",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "027 552 9140",
+      "type": "phone",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "47 Pohutukawa Terrace",
+      "type": "address",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "Gareth Alexander Thornton",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "021 744 6221",
+      "type": "phone",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "g.thornton@personalmail.example.nz",
+      "type": "email-addr",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "12 Miro Street",
+      "type": "address",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "Ms Rua Maia Henderson",
+      "type": "personal-name",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "r.henderson@pacificflowline.example.co.nz",
+      "type": "email-addr",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "022 803 4416",
+      "type": "phone",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "188 Vivian Street",
+      "type": "address",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "Mr Ieremia Hemi Valeafou",
+      "type": "personal-name",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "115-328-904",
+      "type": "ird",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "ivaleafou@example.nz",
+      "type": "email-addr",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "027 220 9915",
+      "type": "phone",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "9 Rimu Place",
+      "type": "address",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "The contamination response plan activation threshold of 4.5 mg/L (for the inverse event - over-chlorination) had been tabletopped in 2024 but the under-dosing threshold had not been rehearsed since 2019.",
+      "type": "health-safety",
+      "page": 4,
+      "confidence": 85
+    },
+    {
+      "text": "Dr Aalbers",
+      "type": "personal-name",
+      "page": 4,
+      "confidence": 90
+    },
+    {
+      "text": "Ms Henderson",
+      "type": "personal-name",
+      "page": 4,
+      "confidence": 90
+    },
+    {
+      "text": "Dr Aalbers' view, offered in candid form and recorded with her permission: 'The 2024 audit was not a clean audit. It was an audit with one material adverse finding and the adverse finding was the one that materialised fourteen months later.'",
+      "type": "law-enforcement",
+      "page": 5,
+      "confidence": 90
+    },
+    {
+      "text": "Mr Thornton's employment with Council ended on 12 December 2025 by mutual agreement. The Inquiry was not asked to opine on the terms of that agreement and does not do so.",
+      "type": "law-enforcement",
+      "page": 6,
+      "confidence": 85
+    },
+    {
+      "text": "Mr Thornton",
+      "type": "personal-name",
+      "page": 6,
+      "confidence": 90
+    },
+    {
+      "text": "Pacific Flowline's contract includes a variation clause for emergency call-out. The variation fee claimed by Pacific Flowline for the 14-16 November diaphragm replacement was $18,400, of which $6,200 covered parts (at cost) and $12,200 covered labour (at the contract's standard emergency rate).",
+      "type": "commercial",
+      "page": 7,
+      "confidence": 85
+    },
+    {
+      "text": "The maintenance contract dated 3 April 2024 includes a commercial-in-confidence schedule detailing proprietary chlorine-dosing calibration procedures and a trade-secret schedule of Pacific Flowline's preferred parts suppliers.",
+      "type": "commercial",
+      "page": 7,
+      "confidence": 90
+    },
+    {
+      "text": "Pacific Flowline also tendered for a subsequent variation, raised by Ms Henderson at the Inquiry, covering redesign of the automated alerting thresholds. That variation was quoted at $41,500 and included a proprietary signal-processing methodology which Pacific Flowline represents as a trade secret under their commercial-in-confidence submission.",
+      "type": "commercial",
+      "page": 8,
+      "confidence": 90
+    },
+    {
+      "text": "The Inquiry has been provided with privileged advice from Farrow & Slate Lawyers on Council's exposure under the Health Act 1956 and the Local Government Act 2002. That advice, which is attached as Appendix D and which remains subject to solicitor-client privilege, is that Council's exposure is limited but non-trivial.",
+      "type": "legal-privilege",
+      "page": 8,
+      "confidence": 95
+    },
+    {
+      "text": "Finding 1: In candid retrospect, staff concerns raised in the 2024 risk register were not actioned with appropriate urgency. The Priority 1 entry on concurrent chlorine-dosing failure was visible to three successive Group Managers and was not acted on until the event it predicted had occurred.",
+      "type": "free-frank",
+      "page": 9,
+      "confidence": 85
+    },
+    {
+      "text": "Finding 2: The Inquiry finds, frankly, that the prior Group Manager's public framing of the 2024 audit as 'clean' was inconsistent with the audit's actual findings. The audit was not clean. It contained one material adverse finding, and that finding was the proximate cause of the November 2025 event.",
+      "type": "free-frank",
+      "page": 9,
+      "confidence": 85
+    },
+    {
+      "text": "Finding 3: The organisational tolerance for maintenance deferral has, in the Inquiry's view, drifted materially from safe practice. Officers routinely deferred six-monthly replacements to nine- or twelve-month cycles on the implicit assumption that redundancy would absorb the risk.",
+      "type": "free-frank",
+      "page": 9,
+      "confidence": 85
+    },
+    {
+      "text": "Certain operational details in these measures are withheld from public release under s7(2)(d) because disclosure would reveal specific vulnerabilities that an adversary could exploit to trigger a contamination event.",
+      "type": "health-safety",
+      "page": 10,
+      "confidence": 95
+    },
+    {
+      "text": "Appendix E contains operational information whose disclosure could endanger public safety if exploited and must not be released under LGOIMA.",
+      "type": "health-safety",
+      "page": 10,
+      "confidence": 90
+    },
+    {
+      "text": "The protective-measure specification includes the dispatch sequencing and alternate dosing-source coordinates for the backup supply, both of which are withheld from public release on the same s7(2)(d) basis.",
+      "type": "health-safety",
+      "page": 10,
+      "confidence": 90
+    },
+    {
+      "text": "Tenisha Marama Aalbers",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "Rua Maia Henderson",
+      "type": "personal-name",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "Ieremia Hemi Valeafou",
+      "type": "personal-name",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "The 2024 risk register had recorded 'concurrent failure of primary and backup chlorine dosing' as a high-likelihood / high-consequence risk, rated Priority 1 for mitigation.",
+      "type": "law-enforcement",
+      "page": 5,
+      "confidence": 90
+    },
+    {
+      "text": "Ms Henderson's 11 November warning",
+      "type": "harassment-risk",
+      "page": 5,
+      "confidence": 85
+    },
+    {
+      "text": "Mr Thornton's explanation, as he put it: 'I was in the final week of the draft budget cycle and I will be candid - I prioritised the budget submission over a maintenance escalation that, on the face of the email, did not read to me as same-day urgent.'",
+      "type": "harassment-risk",
+      "page": 6,
+      "confidence": 85
+    },
+    {
+      "text": "Ms Henderson",
+      "type": "personal-name",
+      "page": 7,
+      "confidence": 90
+    },
+    {
+      "text": "Mr Valeafou",
+      "type": "personal-name",
+      "page": 7,
+      "confidence": 90
+    },
+    {
+      "text": "The Inquiry has been provided with privileged advice from Farrow & Slate Lawyers on Council's exposure under the Health Act 1956 and the Local Government Act 2002.",
+      "type": "legal-privilege",
+      "page": 8,
+      "confidence": 95
+    },
+    {
+      "text": "The maintenance contract dated 3 April 2024, which includes a commercial-in-confidence schedule detailing proprietary chlorine-dosing calibration procedures and a trade-secret schedule of Pacific Flowline's preferred parts suppliers.",
+      "type": "commercial",
+      "page": 8,
+      "confidence": 90
+    },
+    {
+      "text": "The variation was quoted at $41,500 and included a proprietary signal-processing methodology which Pacific Flowline represents as a trade secret under their commercial-in-confidence submission.",
+      "type": "commercial",
+      "page": 8,
+      "confidence": 90
+    },
+    {
+      "text": "Finding 1: In candid retrospect, staff concerns raised in the 2024 risk register were not actioned with appropriate urgency.",
+      "type": "free-frank",
+      "page": 9,
+      "confidence": 85
+    },
+    {
+      "text": "Finding 2: The Inquiry finds, frankly, that the prior Group Manager's public framing of the 2024 audit as 'clean' was inconsistent with the audit's actual findings.",
+      "type": "free-frank",
+      "page": 9,
+      "confidence": 85
+    },
+    {
+      "text": "Mr Thornton's employment with Council ended on 12 December 2025 by mutual agreement.",
+      "type": "harassment-risk",
+      "page": 6,
+      "confidence": 85
+    },
+    {
+      "text": "Finding 3: The organisational tolerance for maintenance deferral has, in the Inquiry's view, drifted materially from safe practice.",
+      "type": "free-frank",
+      "page": 9,
+      "confidence": 85
+    }
+  ]
+}

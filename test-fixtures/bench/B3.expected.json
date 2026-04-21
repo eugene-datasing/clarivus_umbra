@@ -1,0 +1,346 @@
+{
+  "fixtureSha256": "a1b47eaa2894505b72c78ef417201c3400227b4cc7a2b293071f99f0d13316d0",
+  "documentType": "Inquiry report — infrastructure-failure investigation (Awatere District Council, Rangitoto Reservoir contamination event, synthetic long-investigation fixture)",
+  "fixtureSource": "test-fixtures/bench/B3_Long_Investigation.pdf",
+  "canonicalPageCount": 10,
+  "canonicalCharCount": "~20,900 extracted chars across 10 pages (pdf-lib-rendered A4 with Helvetica body)",
+  "authorshipNote": "Synthetic content drafted by Claude Code (bench tranche 2a-ii) as a 10-page Awatere District Council inquiry report. Rendered directly via pdf-lib (not DOCX→PDF) for stable page count. Exercises Phase 4 cross-batch entity propagation (5 named individuals across pages 1-10 in full, honorific, and bare-surname forms) and Phase 3 Example 17 health-safety protective-measures coverage. Closes issue #17. Eugene reviews before commit.",
+  "notes": [
+    "Five named individuals in the parties table (p1-p2): Helen Margaret Ashworth (Commissioner), Dr Tenisha Marama Aalbers (external technical advisor), Gareth Alexander Thornton (former Group Manager — subject of inquiry), Ms Rua Maia Henderson (contractor), Mr Ieremia Hemi Valeafou (council technician witness). Four of the five (all except Ashworth) recur across pages 3-9 in Dr/Mr/Ms + surname AND bare-surname forms — Phase 4 entity propagation targets.",
+    "Thornton is a COUNCIL officer but is the subject of an inquiry into his own conduct. Per v3.1 Phase 3 reworded carve-out, officers-in-accountability-context ARE flaggable. Aalbers and Henderson are external third-party professionals — explicitly flaggable per Example 15. Valeafou is a council staff witness and flaggable on the same grounds as other witness-in-investigation patterns.",
+    "Health-safety entries use type=health-safety (ground s7(2)(d)): the vulnerability assessment protocol and the emergency backup chlorination procedure. Disclosure of operational details would reveal a vulnerability an adversary could exploit to trigger a contamination event — the Phase 3 Example 17 narrow-reading test.",
+    "Free-and-frank uses type=free-frank (ground s7(2)(f)(i)): Inquiry's candid findings on organisational culture and the prior GM's misrepresentation of the 2024 audit.",
+    "Legal-privilege uses type=legal-privilege (ground s7(2)(g)): Farrow & Slate's privileged advice on statutory exposure and counsel's settlement range.",
+    "Commercial uses type=commercial (ground s7(2)(b)(i)/(ii)): Pacific Flowline's trade-secret proprietary methodology and commercial-in-confidence schedule."
+  ],
+  "expectedDetections": [
+    {
+      "text": "Helen Margaret Ashworth",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Commissioner's full name in parties table; third-party professional per v3.1 Phase 3 Example 15 — FLAGGED despite official role."
+    },
+    {
+      "text": "Dr Tenisha Marama Aalbers",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "External technical advisor (hydrogeologist); third-party professional per Example 15."
+    },
+    {
+      "text": "Dr Aalbers",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "pathway": "personal",
+      "rationale": "Honorific form appears multiple times across pages 3-5, 9. Phase 4 entity-propagation candidate."
+    },
+    {
+      "text": "Aalbers",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "pathway": "personal",
+      "rationale": "Bare surname form — appears as 'Aalbers' possessive on page 5. Phase 4 entity-propagation candidate."
+    },
+    {
+      "text": "Gareth Alexander Thornton",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Subject of inquiry into his own conduct — officer-in-accountability-context flaggable per v3.1 carve-out."
+    },
+    {
+      "text": "Mr Thornton",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "pathway": "personal",
+      "rationale": "Honorific form — most-repeated name variant in the document (pages 3, 5, 6, 7). Key Phase 4 propagation target."
+    },
+    {
+      "text": "Thornton",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "pathway": "personal",
+      "rationale": "Bare surname — appears on pages 6, 8 in 'Thornton's conduct' style. Phase 4 target."
+    },
+    {
+      "text": "Rua Maia Henderson",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "personal",
+      "rationale": "External contractor site supervisor; third-party professional per Example 15."
+    },
+    {
+      "text": "Ms Henderson",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "pathway": "personal",
+      "rationale": "Honorific form — appears across pages 3, 4, 5, 7, 8. Phase 4 propagation target."
+    },
+    {
+      "text": "Henderson",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "pathway": "personal",
+      "rationale": "Bare surname — appears on pages 7, 8 ('Henderson asked', 'Henderson immediately'). Phase 4 target."
+    },
+    {
+      "text": "Ieremia Hemi Valeafou",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "personal",
+      "rationale": "Council maintenance technician witness; witness-in-investigation context, flaggable."
+    },
+    {
+      "text": "Mr Valeafou",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "pathway": "personal",
+      "rationale": "Honorific form — appears on pages 3, 6, 7. Phase 4 propagation target."
+    },
+    {
+      "text": "Valeafou",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "pathway": "personal",
+      "rationale": "Bare surname — appears on pages 7, 9 ('Valeafou confirmed', 'Valeafou's conduct'). Phase 4 target."
+    },
+    {
+      "text": "4 August 1971",
+      "type": "personal-name",
+      "mustMatch": "exact",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Ashworth's DOB; Phase 1 personal-name DOB pattern per v3.1 prompt example 12."
+    },
+    {
+      "text": "19 January 1982",
+      "type": "personal-name",
+      "mustMatch": "exact",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Aalbers' DOB."
+    },
+    {
+      "text": "27 November 1968",
+      "type": "personal-name",
+      "mustMatch": "exact",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Thornton's DOB."
+    },
+    {
+      "text": "11 May 1978",
+      "type": "personal-name",
+      "mustMatch": "exact",
+      "page": 2,
+      "pathway": "personal",
+      "rationale": "Henderson's DOB."
+    },
+    {
+      "text": "2 October 1988",
+      "type": "personal-name",
+      "mustMatch": "exact",
+      "page": 2,
+      "pathway": "personal",
+      "rationale": "Valeafou's DOB."
+    },
+    {
+      "text": "092-415-881",
+      "type": "ird",
+      "mustMatch": "exact",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Aalbers' IRD — regex detection."
+    },
+    {
+      "text": "115-328-904",
+      "type": "ird",
+      "mustMatch": "exact",
+      "page": 2,
+      "pathway": "personal",
+      "rationale": "Valeafou's IRD — regex detection."
+    },
+    {
+      "text": "021 908 4433",
+      "type": "phone",
+      "mustMatch": "exact",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Ashworth's mobile — regex detection."
+    },
+    {
+      "text": "027 552 9140",
+      "type": "phone",
+      "mustMatch": "exact",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Aalbers' mobile — regex detection."
+    },
+    {
+      "text": "021 744 6221",
+      "type": "phone",
+      "mustMatch": "exact",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Thornton's mobile — regex detection."
+    },
+    {
+      "text": "022 803 4416",
+      "type": "phone",
+      "mustMatch": "exact",
+      "page": 2,
+      "pathway": "personal",
+      "rationale": "Henderson's mobile — regex detection."
+    },
+    {
+      "text": "027 220 9915",
+      "type": "phone",
+      "mustMatch": "exact",
+      "page": 2,
+      "pathway": "personal",
+      "rationale": "Valeafou's mobile — regex detection."
+    },
+    {
+      "text": "helen.ashworth@ashworthlaw.co.nz",
+      "type": "email-addr",
+      "mustMatch": "exact",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Ashworth's work email — regex detection."
+    },
+    {
+      "text": "t.aalbers@aalbers-hydro.nz",
+      "type": "email-addr",
+      "mustMatch": "exact",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Aalbers' work email — regex detection."
+    },
+    {
+      "text": "g.thornton@personalmail.example.nz",
+      "type": "email-addr",
+      "mustMatch": "exact",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Thornton's personal email (in parties table for contact)."
+    },
+    {
+      "text": "r.henderson@pacificflowline.example.co.nz",
+      "type": "email-addr",
+      "mustMatch": "exact",
+      "page": 2,
+      "pathway": "personal",
+      "rationale": "Henderson's work email — regex detection."
+    },
+    {
+      "text": "ivaleafou@example.nz",
+      "type": "email-addr",
+      "mustMatch": "exact",
+      "page": 2,
+      "pathway": "personal",
+      "rationale": "Valeafou's personal email — regex detection."
+    },
+    {
+      "text": "47 Pohutukawa Terrace, Tauranga 3110",
+      "type": "address",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Aalbers' home address."
+    },
+    {
+      "text": "12 Miro Street, Awatere 4310",
+      "type": "address",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Thornton's home address."
+    },
+    {
+      "text": "9 Rimu Place, Awatere 4310",
+      "type": "address",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "personal",
+      "rationale": "Valeafou's home address."
+    },
+    {
+      "text": "vulnerability assessment protocols for chlorine dosing equipment",
+      "type": "health-safety",
+      "mustMatch": "substring",
+      "page": 10,
+      "pathway": "enforcement",
+      "rationale": "Protective-measure A detail; disclosure could reveal vulnerability adversary could exploit. v3.1 Phase 3 Example 17 pattern, s7(2)(d). Also references page 4 in Dr Aalbers' recommendation; p10 is the formal Protective Measure statement."
+    },
+    {
+      "text": "emergency backup chlorination procedure at the 4.5 mg/L threshold",
+      "type": "health-safety",
+      "mustMatch": "substring",
+      "page": 10,
+      "pathway": "enforcement",
+      "rationale": "Protective-measure B detail; the threshold value and procedure specifics fall within the s7(2)(d) narrow-reading because disclosure would enable targeted manipulation."
+    },
+    {
+      "text": "In candid retrospect, staff concerns raised in the 2024 risk register were not actioned with appropriate urgency",
+      "type": "free-frank",
+      "mustMatch": "substring",
+      "page": 9,
+      "pathway": "governance",
+      "rationale": "Inquiry's Finding 1 — candid assessment of risk-management process failure; s7(2)(f)(i) candour protection."
+    },
+    {
+      "text": "the prior Group Manager's public framing of the 2024 audit as \"clean\" was inconsistent with the audit's actual findings",
+      "type": "free-frank",
+      "mustMatch": "substring",
+      "page": 9,
+      "pathway": "governance",
+      "rationale": "Inquiry's Finding 2 — candid finding on officer misrepresentation to public. s7(2)(f)(i)."
+    },
+    {
+      "text": "privileged advice from Farrow & Slate Lawyers on Council's exposure under the Health Act 1956 and the Local Government Act 2002",
+      "type": "legal-privilege",
+      "mustMatch": "substring",
+      "page": 8,
+      "pathway": "governance",
+      "rationale": "Direct reference to privileged external-counsel advice; Phase 3 Example 10 pattern, s7(2)(g)."
+    },
+    {
+      "text": "settlement range, should any affected party pursue a claim, is $180,000 to $450,000",
+      "type": "legal-privilege",
+      "mustMatch": "substring",
+      "page": 8,
+      "pathway": "governance",
+      "rationale": "Privileged settlement range from external counsel; s7(2)(g) protects solicitor-client content."
+    },
+    {
+      "text": "Farrow & Slate",
+      "type": "confidential",
+      "mustMatch": "substring",
+      "page": 8,
+      "pathway": "governance",
+      "rationale": "External legal firm associated with privileged advice. Mirrors Holroyd Partners pattern (B1) and Rata Legal pattern (A) — protect to preserve privilege context."
+    },
+    {
+      "text": "commercial-in-confidence schedule detailing proprietary chlorine-dosing calibration procedures",
+      "type": "commercial",
+      "mustMatch": "substring",
+      "page": 8,
+      "pathway": "commercial",
+      "rationale": "Pacific Flowline's trade-secret schedule — third-party competitive-prejudice content; s7(2)(b)(i)/(ii). Also appears on page 7; page 8 is the formal Commercial Arrangements section."
+    },
+    {
+      "text": "proprietary signal-processing methodology which Pacific Flowline represents as a trade secret",
+      "type": "commercial",
+      "mustMatch": "substring",
+      "page": 8,
+      "pathway": "commercial",
+      "rationale": "Trade-secret methodology; v3.1 structural-heuristics commercial trigger. s7(2)(b)(i)."
+    }
+  ]
+}
