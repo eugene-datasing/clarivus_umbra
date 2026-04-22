@@ -34,7 +34,8 @@ process.env.AZURE_OPENAI_ENDPOINT = "https://test.openai.azure.com";
 process.env.AZURE_OPENAI_KEY = "test-key";
 process.env.AZURE_OPENAI_DEPLOYMENT = "gpt-4o";
 
-import { detectWithAI } from "../ai-detect";
+import { detectWithAI, buildSystemPrompt } from "../ai-detect";
+import type { DocumentClassification } from "../doc-classify";
 
 function makePage(pageNumber: number, text: string): ExtractedPage {
   return { pageNumber, text, words: [] };
@@ -181,5 +182,42 @@ describe("detectWithAI — single-batch guard", () => {
     );
     await detectWithAI(pages, []);
     expect(mockCreate).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe("buildSystemPrompt — cache-friendly ordering (Phase 3 PR A)", () => {
+  // The stable prefix (type descriptions → grounds → worked examples →
+  // JSON output spec) must come before any per-document classification
+  // block so Azure OpenAI's prompt cache can key on the prefix. See
+  // buildSystemPrompt doc-comment for the rationale.
+
+  const jsonSpecMarker = 'Respond with a JSON object containing a "detections" array';
+  const classificationMarker = "DOCUMENT CONTEXT (from pre-classification):";
+
+  const classification: DocumentClassification = {
+    documentType: "hr-investigation",
+    likelyGrounds: ["s7(2)(a)", "s7(2)(f)(ii)"],
+    contextNotes: "Grievance investigation with witness interviews.",
+    containsLegalAdvice: false,
+    containsPersonnelInfo: true,
+    containsCommercialInfo: false,
+    containsCulturalContent: false,
+    containsEnforcementInfo: false,
+  };
+
+  it("appends the classification block AFTER the JSON output spec when provided", () => {
+    const prompt = buildSystemPrompt(undefined, classification);
+    const specIdx = prompt.indexOf(jsonSpecMarker);
+    const classIdx = prompt.indexOf(classificationMarker);
+    expect(specIdx, "JSON output spec block must be present").toBeGreaterThan(-1);
+    expect(classIdx, "classification block must be present").toBeGreaterThan(-1);
+    expect(classIdx).toBeGreaterThan(specIdx);
+  });
+
+  it("emits no document-context block when no classification is provided", () => {
+    const prompt = buildSystemPrompt(undefined);
+    expect(prompt.indexOf(classificationMarker)).toBe(-1);
+    // Sanity — the stable prefix itself still renders.
+    expect(prompt.indexOf(jsonSpecMarker)).toBeGreaterThan(-1);
   });
 });
