@@ -3,7 +3,31 @@
 **Source request:** Raise detection coverage quality across Veil's three detection sources (regex patterns, AI, document classification) so that investigation-style fixtures like B1 get redacted with substantially better recall.
 **Repo:** `/Users/eugenecash/dev/Agent-teams/veil-product-design/outputs/prototype/veil-prototype/`
 **Drafted:** 2026-04-20 (v3 — after peer review and model-choice spike outcome).
-**Status:** Draft for review. Read-only exercise; no implementation. v3 overwrites v2.
+**Sibling plan in flight:** `docs/viewer-rework-plan-2026-04.md`.
+
+---
+
+## Status as of 2026-04-23
+
+Most of the plan has shipped. What remains is Phase 3 PR B (prompt content rework), then Phases 4/5/6. The executive summary and phase sections below describe the plan as originally drafted; use this status block as the orientation for what's done and where a fresh session should pick up.
+
+**Shipped:**
+
+- **Phase 0 — model-choice spike (o4-mini):** resolved. Stayed on gpt-4o. Spike artefacts at `docs/spike-model-comparison-2026-04-20/`; runner at `scripts/spike-o4-mini.ts`. A `buildCanonicalPdf` guard for future spike / bench harnesses is tracked as issue #14 (low priority).
+- **Phase 1 — hotfixes** (landline regex, toggle defaults, env-var split, single-batch guard): shipped. Deployed as cr16 (landline hotfix) + cr17 (bundle).
+- **Phase 1.5 — extraction-quirk investigation:** resolved. Was a spike-harness artefact (the spike script called `extractText(buf, "DOCX")` which uses the mammoth single-page path, not the production `buildCanonicalPdf` + DI-on-canonical flow). Not a production pipeline bug. Findings at `docs/phase-1-5-extraction-findings.md`.
+- **Phase 1.75 — AI detection bbox-stripping fix:** shipped, deployed as cr18. Long-narrative AI detections (text > 80 chars) were silently dropped before storage by an empty-array return from `calculateBBoxAll`; fix emits a zero-bbox placeholder so detections survive. Downstream follow-up filed as issue #20 — Tier 2 `TEXT_SEARCH_MAX_LENGTH` cap at `redact-pdf.ts:360` still skips long text at auto-redact time, so long-narrative detections currently reach the review UI but rely on the manual-detection flow for redaction. Findings at `docs/phase-1-75-ai-detection-stripping-findings.md`.
+- **Phase 2 — benchmark harness** (scoring library, pipeline invoker, bench-suite CLI, CI regression guard, 5 fixtures B1/B2/A/C1/B3, baselines committed): complete. CI workflow at `.github/workflows/bench-detection.yml` runs on every PR touching `lib/pipeline/**`, `test-fixtures/bench/**`, `docs/bench-baselines/**`, `scripts/bench/**`, or `lib/bench/**`.
+- **Phase 3 PR A — cache-friendly prompt restructure + labelled-values hint** (PR #26): merged. `buildClassificationContext()` output moved to the tail of the system prompt so the ~3000-token stable prefix becomes eligible for Azure OpenAI prompt caching (≥1024-token, 5-minute TTL). Personal-name type description extended with "labelled values in tables" language to prepare for PR B's Example 12.
+- **N=10 canonical rebaseline (issue #27, PR #28, commit `22bb840`):** merged. `docs/bench-baselines/CANONICAL` now points at `baseline-2026-04-23-median-N10`. Per-fixture CI threshold dropped 16pp → 12pp. The N=10 capture replaces a single-run point-estimate anchor sitting at the top of B2's 15.1pp distribution; observed low-side deviation from the new median canonical is now ≤7pp worst-case. Capture script at `scripts/bench/bench-canonical-capture.ts`; variance-stats at `docs/bench-baselines/baseline-2026-04-23-median-N10/variance-stats.md`.
+
+**Governance-pathway target re-anchored.** Under the old single-run canonical the governance-pathway F1 was 0.282, which Phase 3 PR B planned to lift to ≥0.40 — a +11.8pp claim. Under the new median canonical the governance anchor is **0.337**. A lift to ~0.40 now represents **+6.3pp** over the true current median. Every Phase 3 PR B target number should be read against 0.337, not 0.282.
+
+**Next work:** Phase 3 PR B (prompt content rework). See the sharpened Phase 3 §1 below for the enumerated deliverables and success criteria. Phases 4, 5, and 6 remain queued per the plan; no work started.
+
+**Outstanding issues:**
+- Issue #20 — Tier 2 `TEXT_SEARCH_MAX_LENGTH` follow-up. Priority medium. Completes the auto-redaction loop for long-narrative detections that Phase 3 PR B will produce.
+- Issue #14 — `buildCanonicalPdf` guard for spike / bench harnesses. Priority low. Prevents recurrence of the Phase 1.5 spike-harness artefact.
 
 ---
 
@@ -393,13 +417,39 @@ Disable the CI workflow via `.github/workflows/bench-detection.yml.disabled` ren
 
 ## Phase 3 — Prompt rework
 
-### 1. Scope and success criteria
+### PR split status
 
-Layer additive changes across worked examples, structural heuristics, the council-official carve-out, labelled-field wording clarification, and the cache-friendly build-order restructure. Prompt changes live at `lib/pipeline/ai-detect.ts:159–289`. The council-official carve-out rewording is mandatory per spike observation B.
+Phase 3 ships in two PRs:
 
-**Success:** B1 benchmark recall improves measurably on governance-pathway types (free-frank, legal-privilege, confidential, harassment-risk) AND on third-party-professional `personal-name` catches — explicitly Dr Sarah Liang (spike: gpt-4o 0/3, o4-mini 2/3 — target gpt-4o 3/3 post-rework), Ben Mahuika as dedicated `personal-name` (spike: gpt-4o 0/3 — target 2/3+ post-rework), and Sarah Mitchell when she appears as investigator alongside grievance-context detail. Target: +10–25 percentage points recall on the governance pathway without a precision drop of more than 5 percentage points. On C1, target flag counts: ≥1 detection each of type `commercial`, `council-commercial`, `negotiation`, and `cultural-sensitivity` (if tikanga reference included); ≥0 false positives on the procedural preamble.
+- **PR A — cache-friendly prompt restructure + labelled-values hint.** Shipped (PR #26). `buildClassificationContext()` moved to the tail of the system message so the ~3000-token stable prefix is cacheable; personal-name type description extended to explicitly cover labelled values in tables. Zero-intended-behaviour-change.
+- **PR B — prompt content rework.** Remaining scope; this is what "Phase 3 PR B" means in the current handoff and in this status entry. Deliverables enumerated in §1 below.
 
-**Pre-condition:** Phase 0 resolved — we're on GPT-4o. The prompt changes are additive and should work on any model, but gpt-4o is the target.
+### 1. Scope and success criteria — PR B (remaining work)
+
+Layer additive content changes across the council-official carve-out, worked examples, and a new structural-heuristics block, then re-capture the canonical in the same PR. Every change lives in `lib/pipeline/ai-detect.ts` except the expected.json retune and the canonical folder. PR B is self-contained; no pipeline or schema changes.
+
+**Concrete deliverables:**
+
+1. **Carve-out reword at `lib/pipeline/ai-detect.ts:260`.** Distinguish council's-own-officials (still not flagged) from third-party professionals (now flagged as `personal-name`) and investigator-in-grievance-context staff (now flagged as `harassment-risk`). Exact proposed wording is in §3 below under the modified-files block — carry it in verbatim. Mandatory per spike observation B: gpt-4o flagged Dr Sarah Liang 0/3 and Ben Mahuika 0/3 as dedicated `personal-name` purely because of the current rigid carve-out.
+
+2. **11 new worked examples (9–18 from v3.1 + Example 19 from the v3.2 amendment).** Full JSON-output-shape exemplars sitting between "DETECTION GUIDANCE BY GROUND" and "WORKED EXAMPLES of non-PII detections" in the prompt. Examples 9–18 are drafted verbatim in §3 below. Example 19 — added by the v3.2 amendment — covers medical-diagnosis-in-prose as `personal-name` with ground `s7(2)(a)`:
+   > Input text: "Dr Sarah Liang's letter dated 14 March 2026 records a diagnosis of adjustment disorder with mixed anxiety and depressed mood (ICD-10 F43.23) and recommends a graduated return-to-work programme."
+   > Output: `{ "type": "personal-name", "text": "a diagnosis of adjustment disorder with mixed anxiety and depressed mood", "confidence": 90, "page": 3, "suggestedGround": "s7(2)(a)", "aiExplanation": "Medical diagnosis attributed to an individual — private health information under s7(2)(a). Flag the diagnosis text; the doctor's name and the ICD-10 code are separate detections." }`
+
+3. **Structural-heuristics block between "DETECTION GUIDANCE BY GROUND" and "WORKED EXAMPLES".** Section-header-aware triggers for free-and-frank / legal-privilege / in-confidence sections plus commercial / health-safety / tikanga-cultural vocabulary. Full draft in §3 below.
+
+4. **B1.expected.json type-agreement retune.** The reworded carve-out and Example 11 will push the AI to type some B1 entries differently from the current ground truth — specifically, witness names appearing alongside grievance-context detail will be flagged as `harassment-risk` (s7(2)(f)(ii)) rather than `personal-name` (s7(2)(a)). Without retuning, the scorer's type-agreement requirement will mis-read these as simultaneous FN + FP. Scope: re-examine every `personal-name` entry in `test-fixtures/bench/B1.expected.json` whose target name co-occurs with grievance detail; update type to `harassment-risk` where Phase 3 intends that outcome. Document the retune in the PR body so reviewers see the semantic shift rather than a stealth loosening.
+
+5. **Post-PR canonical re-capture, folded into the same commit.** Run `npm run bench:canonical -- --samples 10 --output-dir docs/bench-baselines/baseline-YYYY-MM-DD-post-phase-3-median-N10/` against the PR B branch after the prompt and expected.json changes land. Commit the new directory + update `docs/bench-baselines/CANONICAL` in the same PR. Eugene reviews the variance-stats.md alongside the prompt diff. Rationale: the canonical must reflect the new prompt, or CI's first run after merge will fail with a false-positive "regression".
+
+**Success criteria for PR B merge:**
+
+- **Governance-pathway median F1 on the post-PR canonical beats 0.337** (the current median anchor from `baseline-2026-04-23-median-N10/`). Target is ~0.40+ on the post-capture; anything short of +2pp over 0.337 should trigger a wording-tweak iteration before merge.
+- **No per-fixture F1 drop exceeds 12pp** against the current canonical when CI runs on the PR (the N=10 capture pre-merge is Eugene's visibility into this; CI then validates).
+- **Suite aggregate F1 no worse than −5pp** against the current 0.516 suite median.
+- **Third-party professionals now flag reliably.** Dr Sarah Liang, Ben Mahuika, and Sarah Mitchell (investigator) appear as `personal-name` (or `harassment-risk` for Mitchell) in ≥2 of the 10 sample runs per fixture. Spike baseline was 0/3 for each of these under gpt-4o.
+
+**Pre-condition:** Phase 3 PR A merged and cr18 live (both done). Prompt-content changes are additive; backward-compatible with the cached structure.
 
 ### 2. Schema changes
 
@@ -536,6 +586,8 @@ Cache key is the exact prefix string. With the restructured `buildSystemPrompt()
 
 ## Phase 4 — Entity propagation pass
 
+**Status (2026-04-23):** queued, not started. Blocked by Phase 3 PR B (expected-after-Phase-3 bench numbers inform whether Phase 4 still needs to lift bare-surname recall or whether prompt rework has already closed it on B3).
+
 ### 1. Scope and success criteria
 
 Deterministic post-AI pass that takes each AI-detected personal-name and propagates it across the whole document, catching cross-batch occurrences that the AI missed due to the 3-page batch boundary (Hypothesis C) on documents that exceed `AI_DETECT_SINGLE_BATCH_MAX_PAGES`.
@@ -635,6 +687,8 @@ Feature-flag via a new `SystemSetting` key `ENTITY_PROPAGATION_ENABLED` (default
 
 ## Phase 5 — Label-adjacent detection
 
+**Status (2026-04-23):** queued, not started. Orthogonal to Phases 3 and 4; could run in parallel with them once bench capacity allows.
+
 ### 1. Scope and success criteria
 
 Add a third detection source (alongside `pattern`, `ai`, `custom` rules) that scans extracted page text for `<label>: <value>` patterns and adjacent-cell label/value pairs, and emits detections keyed on the label → type mapping. Catches labelled DOBs, labelled driver licences, labelled employee numbers, labelled GP names, etc. even when the AI misses them.
@@ -705,6 +759,8 @@ Feature flag `LABEL_ADJACENT_DETECTION_ENABLED` (default true).
 ---
 
 ## Phase 6 — Structured outputs migration
+
+**Status (2026-04-23):** queued, not started. Hardening track; can slip without blocking any other phase.
 
 ### 1. Scope and success criteria
 

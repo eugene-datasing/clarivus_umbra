@@ -3,7 +3,27 @@
 **Source request:** Rebuild document viewing architecture for Veil.
 **Repo:** `/Users/eugenecash/dev/Agent-teams/veil-product-design/outputs/prototype/veil-prototype/`
 **Drafted:** 2026-04-19
-**Status:** Draft for review. Read-only exercise; no implementation.
+**Sibling plan in flight:** `docs/detection-coverage-plan-2026-04.md`.
+
+---
+
+## Status as of 2026-04-23
+
+Parked pending completion of **detection-coverage Phase 3 PR B** (prompt content rework). Detection-coverage work has the priority line until that PR lands; this plan resumes afterwards. Phase-by-phase state:
+
+- **Phase 1 — canonical PDF persistence + schema:** **shipped.** Migration applied, `canonical_pdf_*` columns populated on new documents, `buildCanonicalPdf` + `email-to-pdf` modules landed (`lib/pipeline/canonical-pdf.ts`, `lib/pipeline/email-to-pdf.ts`), backfill script committed at `scripts/backfill-canonical-pdfs.ts`. Dockerfile now includes `fonts-noto-core` for macron rendering. Live on veil.datasing.nz via cr17+.
+- **Phase 2 — Azure DI against canonical + bbox population:** **shipped.** DI-on-canonical routing in `process.ts` is production. DOCX / XLSX / EML / MSG uploads now produce word-polygon data and non-empty per-detection bboxes. Phase 1 plus Phase 2 together are what unlocked the Phase-1.75 bbox-stripping bug's visibility — detection-coverage side caught it first.
+- **Phase 3 — viewer rework (pdf.js primary, HTML removed from UI path):** **not started, paused.** Next to resume after detection-coverage Phase 3 PR B. Scope per the plan body below: demolish HTML reconstruction branch, bundle pdf.js worker locally, enable text layer, promote overlay to `<button role="button">` with ARIA, re-implement manual-detection against pdf.js text layer, fix the latent `fileType === "pdf"` lowercase/uppercase bug surfaced in the 2026-04-20 recon (see Implementation log — Phase 3). Estimate 5–7 engineer-days.
+- **Phase 4 — QA signoff hardening:** queued, not started. Depends on Phase 3.
+- **Phase 5 — content-builder cleanup / HTML code path removal:** queued, not started. Depends on Phase 3 + 4 being live long enough to confirm no rollback is needed.
+
+**Priority ordering for a fresh session:** finish detection-coverage Phase 3 PR B first (governance-pathway F1 target beat 0.337 median — see sibling plan), then pick this up at Phase 3. The detection-coverage CI regression guard is active on every PR touching `lib/pipeline/**`, so viewer-rework Phase 3's prompt-adjacent work won't accidentally regress detection quality.
+
+**Operational notes carried forward from Phase 1/2 that still apply to Phase 3:**
+
+- All current documents on veil.datasing.nz are test / dummy data (Eugene confirmed 2026-04-20). Phase 3 assumes `canonicalPdfPath` is never null at reviewer-render time; pre-cutover operational step is `scripts/backfill-canonical-pdfs.ts` + purge/reprocess residual nulls. No in-app fallback branch — this is a deliberate scope call.
+- `VIEWER_MODE` SystemSetting key is already present in `lib/data/settings.ts`. Flipping to `"html"` is the rollback lever only, not a user-facing preference (Decision h, v2).
+- The pdf.js worker is still loaded from `unpkg.com` (`components/review/pdf-viewer.tsx:11`). First item in Phase 3 is bundling locally via `next.config.js` `webpack()` copy or `postinstall`. One-file change.
 
 ---
 
