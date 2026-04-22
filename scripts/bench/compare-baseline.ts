@@ -68,7 +68,7 @@ Required:
 
 Options:
   --output <path>              Write markdown comment to a file (default: stdout).
-  --threshold-fixture <n>      Per-fixture F1 regression limit. Default 0.16.
+  --threshold-fixture <n>      Per-fixture F1 regression limit. Default 0.12.
   --threshold-suite <n>        Suite aggregate F1 regression limit. Default 0.05.
   --marker <html-comment>      HTML comment marker for PR upsert. Default:
                                ${DEFAULT_MARKER}
@@ -85,15 +85,19 @@ function parseArgs(argv: string[]): Args {
   const args: Args = {
     canonicalDir: "",
     newDir: "",
-    // Raised from 12pp after observed B2 single-fixture variance reached
-    // 15.1pp across identical-code runs on 2026-04-22 (see PR #26
-    // discussion and issue #27). 16pp gives ~1pp headroom over the
-    // current observed maximum. Proper fix is issue #27 — rebaseline
-    // canonical from N=5 or N=10 runs with per-fixture medians so the
-    // reference is stable and the threshold can drop back to ~10pp.
+    // 0.12 per-fixture. The canonical is now the median of N=10 sample
+    // runs per fixture (issue #27, baseline-2026-04-23-median-N10).
+    // Observed low-side deviation from median across those samples:
+    // B1 1.2pp, B2 7.0pp (worst), A 5.4pp, C1 3.4pp, B3 4.3pp. 12pp
+    // gives ~5pp headroom over the worst observed noise while still
+    // catching real regressions — a 12pp drop on a median reference
+    // means the fresh run is >1 stddev below median for every fixture.
+    // Previously 16pp (see commit d9b5297) which was forced by the
+    // single-run canonical's top-of-range placement; median canonical
+    // removes that skew.
     // Suite aggregate stays tight at 5pp because run-to-run noise
     // averages out across fixtures.
-    thresholdFixture: 0.16,
+    thresholdFixture: 0.12,
     thresholdSuite: 0.05,
     marker: DEFAULT_MARKER,
     help: false,

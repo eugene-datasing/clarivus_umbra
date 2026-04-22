@@ -200,15 +200,15 @@ It can also be triggered manually via the Actions tab (workflow_dispatch).
 
 | scope | default | behaviour |
 |---|---|---|
-| per-fixture F1 regression | 0.160 (16pp) | fails CI |
+| per-fixture F1 regression | 0.120 (12pp) | fails CI |
 | suite aggregate F1 regression | 0.050 (5pp) | fails CI |
 | per-pathway F1 | — | reported only, not a gate |
 
 Thresholds are flag-configurable on `compare-baseline.ts` (`--threshold-fixture`, `--threshold-suite`). If you want to tighten or loosen, edit the workflow's `Compare against canonical baseline` step.
 
-Rationale for 16pp per-fixture: the canonical at `baseline-2026-04-21-5fixtures/` was captured from a single suite run. Single-run F1 for a given fixture sits somewhere on that fixture's distribution — no guarantee it's near the median. B2 has proven the noisiest: observed F1 on identical or near-identical pipeline code ranges `0.571 – 0.722` (**15.1pp spread**) across 2026-04-21 and 2026-04-22 runs. The canonical sits at the top of that range. An 8pp threshold fired false-positive on the first CI run; 12pp fired on PR #26's two consecutive runs with identical ΔF1 = −0.151 both times. 16pp gives ~1pp headroom over the observed maximum.
+Rationale for 12pp per-fixture: the canonical is now the **median of N=10 sample runs per fixture** (see `baseline-2026-04-23-median-N10/variance-stats.md` for the full distribution). With the canonical anchored at each fixture's median rather than the top of its range, the gate only needs to absorb one-sided downward deviation. Observed low-side deviations from median across the 10 samples: B1 1.2pp, B2 **7.0pp** (worst), A 5.4pp, C1 3.4pp, B3 4.3pp. 12pp gives ~5pp headroom over the worst observed noise — enough to absorb routine AI non-determinism while keeping the gate meaningful for real regressions (a 12pp drop on a 20-entry fixture still implies losing ≥2-3 TPs).
 
-This is a workaround, not a fix. **Issue #27** tracks the proper fix: re-capture the canonical from N=5 or N=10 runs with per-fixture median F1 as the reference. After #27 lands, the per-fixture threshold should drop back toward ~10pp.
+History: the pre-median canonical (`baseline-2026-04-21-5fixtures/`) was a single-run point estimate that happened to sit at the top of B2's 15.1pp distribution. That forced the threshold to 16pp just to avoid false-positives on identical pipeline code — see issue #27 for the full debugging trail. The median-of-N canonical removes the skew.
 
 Suite aggregate stays tight at 5pp because per-fixture noise averages out across the 5 fixtures — same code tends to produce similar total-TP / total-FP / total-FN across runs even when individual fixtures swing.
 
@@ -222,14 +222,24 @@ Suite aggregate stays tight at 5pp because per-fixture noise averages out across
 
 ### Updating the canonical baseline
 
-When a prompt / pattern / pipeline change intentionally moves the numbers (e.g. Phase 3's prompt rework lifting governance-pathway F1), re-baselining is a deliberate two-step act:
+When a prompt / pattern / pipeline change intentionally moves the numbers (e.g. Phase 3's prompt rework lifting governance-pathway F1), re-baselining is a deliberate multi-step act. Use `npm run bench:canonical` — NOT `npm run bench:suite` — because the canonical must be a median-of-N capture, not a single-run snapshot:
 
-1. Run the bench suite locally to capture the new numbers:
+1. Capture N=10 samples against the new build:
    ```bash
-   npm run bench:suite -- --output-dir docs/bench-baselines/baseline-<YYYY-MM-DD>-<short-description>
+   npm run bench:canonical -- --samples 10 \
+     --output-dir docs/bench-baselines/baseline-<YYYY-MM-DD>-<short-description>
    ```
-2. Edit `docs/bench-baselines/CANONICAL` to contain the new directory name (the file is one line of text, no trailing commentary).
-3. Commit both the new baseline folder and the `CANONICAL` update in the same PR as the code change that produced the lift. Reviewers see the intended floor-shift alongside the change itself.
+   Wall time ~50-60 min. Azure spend ~$15 (150 pipeline invocations). The script is idempotent — if it's interrupted mid-capture, re-invoke with the same `--output-dir` and it resumes from where it left off. If you only need to re-aggregate (e.g. after manually removing an erroneous sample), pass `--only-aggregate`.
+
+2. Review `<output-dir>/variance-stats.md` to confirm the distribution looks sensible:
+   - Per-fixture F1 stddev ≤ ~6pp is normal; anything wider suggests a flaky fixture worth investigating.
+   - Max low-side deviation from median is the number the CI threshold must absorb.
+
+3. Edit `docs/bench-baselines/CANONICAL` to contain the new directory name (one line, no trailing commentary).
+
+4. If the observed variance justifies a threshold change, update `compare-baseline.ts`'s `thresholdFixture` default in the same PR. Document the threshold rationale in the commit message.
+
+5. Commit the new baseline folder, the `CANONICAL` update, and any threshold change in a single PR alongside the code change that produced the lift. Reviewers see the intended floor-shift next to the code causing it.
 
 Do NOT update `CANONICAL` silently in an unrelated PR to mask a regression. The whole point of committing baselines is to surface them.
 

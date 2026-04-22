@@ -1,0 +1,290 @@
+{
+  "fixture": "B3",
+  "overall": {
+    "precision": 0.5303030303030303,
+    "recall": 0.8333333333333334,
+    "f1": 0.6481481481481481,
+    "tp": 35,
+    "fp": 31,
+    "fn": 7
+  },
+  "byPathway": {
+    "personal": {
+      "precision": 0.8285714285714286,
+      "recall": 0.8787878787878788,
+      "f1": 0.8529411764705883,
+      "tp": 29,
+      "fp": 6,
+      "fn": 4
+    },
+    "commercial": {
+      "precision": 0.2,
+      "recall": 0.5,
+      "f1": 0.28571428571428575,
+      "tp": 1,
+      "fp": 4,
+      "fn": 1
+    },
+    "governance": {
+      "precision": 0.17647058823529413,
+      "recall": 0.6,
+      "f1": 0.2727272727272727,
+      "tp": 3,
+      "fp": 14,
+      "fn": 2
+    },
+    "enforcement": {
+      "precision": 0.2222222222222222,
+      "recall": 1,
+      "f1": 0.3636363636363636,
+      "tp": 2,
+      "fp": 7,
+      "fn": 0
+    }
+  },
+  "missing": [
+    {
+      "text": "Aalbers",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "pathway": "personal",
+      "rationale": "Bare surname form — appears as 'Aalbers' possessive on page 5. Phase 4 entity-propagation candidate."
+    },
+    {
+      "text": "47 Pohutukawa Terrace, Tauranga 3110",
+      "type": "address",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Aalbers' home address."
+    },
+    {
+      "text": "12 Miro Street, Awatere 4310",
+      "type": "address",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Thornton's home address."
+    },
+    {
+      "text": "9 Rimu Place, Awatere 4310",
+      "type": "address",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "personal",
+      "rationale": "Valeafou's home address."
+    },
+    {
+      "text": "settlement range, should any affected party pursue a claim, is $180,000 to $450,000",
+      "type": "legal-privilege",
+      "mustMatch": "substring",
+      "page": 8,
+      "pathway": "governance",
+      "rationale": "Privileged settlement range from external counsel; s7(2)(g) protects solicitor-client content."
+    },
+    {
+      "text": "Farrow & Slate",
+      "type": "confidential",
+      "mustMatch": "substring",
+      "page": 8,
+      "pathway": "governance",
+      "rationale": "External legal firm associated with privileged advice. Mirrors Holroyd Partners pattern (B1) and Rata Legal pattern (A) — protect to preserve privilege context."
+    },
+    {
+      "text": "commercial-in-confidence schedule detailing proprietary chlorine-dosing calibration procedures",
+      "type": "commercial",
+      "mustMatch": "substring",
+      "page": 8,
+      "pathway": "commercial",
+      "rationale": "Pacific Flowline's trade-secret schedule — third-party competitive-prejudice content; s7(2)(b)(i)/(ii). Also appears on page 7; page 8 is the formal Commercial Arrangements section."
+    }
+  ],
+  "unexpected": [
+    {
+      "text": "PO Box 2184, Wellington 6011",
+      "type": "address",
+      "page": 1,
+      "confidence": 85
+    },
+    {
+      "text": "47 Pohutukawa Terrace",
+      "type": "address",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "12 Miro Street",
+      "type": "address",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "188 Vivian Street",
+      "type": "address",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "9 Rimu Place",
+      "type": "address",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "The contamination response plan activation threshold of 4.5 mg/L (for the inverse event - over-chlorination) had been tabletopped in 2024 but the under-dosing threshold had not been rehearsed since 2019.",
+      "type": "law-enforcement",
+      "page": 4,
+      "confidence": 85
+    },
+    {
+      "text": "The 2024 risk register had recorded 'concurrent failure of primary and backup chlorine dosing' as a high-likelihood / high-consequence risk, rated Priority 1 for mitigation.",
+      "type": "law-enforcement",
+      "page": 5,
+      "confidence": 90
+    },
+    {
+      "text": "Ms Henderson's 11 November warning",
+      "type": "harassment-risk",
+      "page": 5,
+      "confidence": 85
+    },
+    {
+      "text": "Mr Thornton's employment with Council ended on 12 December 2025 by mutual agreement.",
+      "type": "harassment-risk",
+      "page": 6,
+      "confidence": 85
+    },
+    {
+      "text": "Ms Henderson's 11 November 14:22 email",
+      "type": "harassment-risk",
+      "page": 6,
+      "confidence": 85
+    },
+    {
+      "text": "Pacific Flowline's contract includes a variation clause for emergency call-out. The variation fee claimed by Pacific Flowline for the 14-16 November diaphragm replacement was $18,400, of which $6,200 covered parts (at cost) and $12,200 covered labour (at the contract's standard emergency rate).",
+      "type": "commercial",
+      "page": 7,
+      "confidence": 85
+    },
+    {
+      "text": "Pacific Flowline's broader commercial arrangements with Council are governed by the maintenance contract dated 3 April 2024, which includes a commercial-in-confidence schedule detailing proprietary chlorine-dosing calibration procedures and a trade-secret schedule of Pacific Flowline's preferred parts suppliers.",
+      "type": "commercial",
+      "page": 7,
+      "confidence": 90
+    },
+    {
+      "text": "Finding 3: The organisational tolerance for maintenance deferral has, in the Inquiry's view, drifted materially from safe practice. Officers routinely deferred six-monthly replacements to nine- or twelve-month cycles on the implicit assumption that redundancy would absorb the risk. That assumption was wrong on the facts; it was also wrong in principle. Redundancy is a margin for unexpected failure, not a licence for expected failure.",
+      "type": "free-frank",
+      "page": 9,
+      "confidence": 85
+    },
+    {
+      "text": "Finding 4: The escalation path on 12-13 November was not functional. Mr Valeafou's attempts to reach Mr Thornton on 13 November were met with a budget-session absence and an unresponsive acting Group Manager's office. The Inquiry finds that single-point-of-failure escalation paths are incompatible with Priority 1 public-health risk management and must be replaced with a roster-backed on-call system.",
+      "type": "free-frank",
+      "page": 9,
+      "confidence": 85
+    },
+    {
+      "text": "Certain operational details in these measures are withheld from public release under s7(2)(d) because disclosure would reveal specific vulnerabilities that an adversary could exploit to trigger a contamination event.",
+      "type": "health-safety",
+      "page": 10,
+      "confidence": 95
+    },
+    {
+      "text": "Appendix E contains operational information whose disclosure could endanger public safety if exploited and must not be released under LGOIMA.",
+      "type": "health-safety",
+      "page": 10,
+      "confidence": 90
+    },
+    {
+      "text": "The protective-measure specification includes the dispatch sequencing and alternate dosing-source coordinates for the backup supply, both of which are withheld from public release on the same s7(2)(d) basis.",
+      "type": "health-safety",
+      "page": 10,
+      "confidence": 95
+    },
+    {
+      "text": "Ms Rua Maia Henderson",
+      "type": "personal-name",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "Mr Thornton's conduct fell short of the standard reasonably expected of a Group Manager with direct accountability for a Priority 1 public-health risk",
+      "type": "harassment-risk",
+      "page": 6,
+      "confidence": 85
+    },
+    {
+      "text": "proprietary chlorine-dosing calibration procedures and a trade-secret schedule of Pacific Flowline's preferred parts suppliers",
+      "type": "commercial",
+      "page": 7,
+      "confidence": 85
+    },
+    {
+      "text": "privileged advice from Farrow & Slate Lawyers on Council's exposure under the Health Act 1956 and the Local Government Act 2002",
+      "type": "legal-privilege",
+      "page": 8,
+      "confidence": 95
+    },
+    {
+      "text": "proprietary signal-processing methodology which Pacific Flowline represents as a trade secret under their commercial-in-confidence submission",
+      "type": "commercial",
+      "page": 8,
+      "confidence": 85
+    },
+    {
+      "text": "In candid retrospect, staff concerns raised in the 2024 risk register were not actioned with appropriate urgency.",
+      "type": "free-frank",
+      "page": 9,
+      "confidence": 80
+    },
+    {
+      "text": "The Inquiry finds, frankly, that the prior Group Manager's public framing of the 2024 audit as 'clean' was inconsistent with the audit's actual findings.",
+      "type": "free-frank",
+      "page": 9,
+      "confidence": 85
+    },
+    {
+      "text": "The organisational tolerance for maintenance deferral has, in the Inquiry's view, drifted materially from safe practice.",
+      "type": "free-frank",
+      "page": 9,
+      "confidence": 80
+    },
+    {
+      "text": "The escalation path on 12-13 November was not functional.",
+      "type": "free-frank",
+      "page": 9,
+      "confidence": 80
+    },
+    {
+      "text": "The detailed protocol is set out in Appendix E of this report. Appendix E contains operational information whose disclosure could endanger public safety if exploited and must not be released under LGOIMA.",
+      "type": "health-safety",
+      "page": 10,
+      "confidence": 95
+    },
+    {
+      "text": "In candid retrospect, the Council's organisational tolerance for maintenance deferral has drifted materially from safe practice. I was part of that drift and I bear a portion of the accountability for it.",
+      "type": "free-frank",
+      "page": 6,
+      "confidence": 80
+    },
+    {
+      "text": "The Inquiry has been provided with privileged advice from Farrow & Slate Lawyers on Council's exposure under the Health Act 1956 and the Local Government Act 2002.",
+      "type": "legal-privilege",
+      "page": 8,
+      "confidence": 95
+    },
+    {
+      "text": "Finding 2: The Inquiry finds, frankly, that the prior Group Manager's public framing of the 2024 audit as 'clean' was inconsistent with the audit's actual findings. The audit was not clean. It contained one material adverse finding, and that finding was the proximate cause of the November 2025 event. Misrepresenting the audit to the public and to elected members denied those audiences the information they needed to hold officers to account.",
+      "type": "free-frank",
+      "page": 9,
+      "confidence": 90
+    },
+    {
+      "text": "Contamination response plan activation thresholds, updated to include automated triggering at the internal operating-band lower bound (0.50 mg/L) rather than the statutory minimum alone, and extended to cover a stress-tested boil-water notice distribution list.",
+      "type": "health-safety",
+      "page": 10,
+      "confidence": 90
+    }
+  ]
+}

@@ -18,6 +18,7 @@
     "bench:detection": "tsx scripts/bench/bench-detection.ts",
     "bench:suite": "tsx scripts/bench/bench-suite.ts",
     "bench:compare": "tsx scripts/bench/compare-baseline.ts",
+    "bench:canonical": "tsx scripts/bench/bench-canonical-capture.ts",
     "test:e2e:seed": "tsx e2e/seed-test-users.ts",
     "test:e2e": "npm run test:e2e:seed && playwright test",
     "test:e2e:ui": "playwright test --ui",
