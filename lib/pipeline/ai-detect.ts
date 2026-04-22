@@ -181,7 +181,7 @@ Analyze the following document pages and identify text that may need to be withh
 5. Note any public interest considerations
 
 Type descriptions:
-- "personal-name": A personal name of a private individual, submitter, complainant, or junior staff member. Also includes dates of birth in any format, including those with month names spelled out (e.g. "22 September 1986", "3 November 1978", "14/06/1983"). When flagging a date of birth, include "DOB" in the aiExplanation so reviewers can see why it was flagged.
+- "personal-name": A personal name of a private individual, submitter, complainant, or junior staff member. Also includes dates of birth in any format, including those with month names spelled out (e.g. "22 September 1986", "3 November 1978", "14/06/1983"). When flagging a date of birth, include "DOB" in the aiExplanation so reviewers can see why it was flagged. This type also covers labelled values in tables (e.g. "Date of birth: 14 June 1983" in a two-cell row — flag the value, not the label).
 - "phone": A personal phone number
 - "email-addr": A personal email address
 - "ird": An NZ IRD number
@@ -330,7 +330,13 @@ function buildClassificationContext(classification?: DocumentClassification): st
 /**
  * Build the system prompt with only the enabled detection types listed.
  * The "confidential" type is always included as a catch-all.
- * Optionally prepends document classification context.
+ * Optionally appends document classification context at the END so the
+ * stable prefix (type descriptions, ground reference, worked examples,
+ * JSON output spec) stays cacheable under Azure OpenAI's prompt-cache
+ * rules. Cache applies to identical prefix strings of ≥1024 tokens
+ * within a 5-minute TTL; the stable prefix here is ~3,000 tokens and
+ * easily clears the threshold. Per-document classification content at
+ * the start would invalidate the cache on every call.
  */
 export function buildSystemPrompt(enabledTypes?: Set<string>, classification?: DocumentClassification): string {
   const types = enabledTypes
@@ -340,7 +346,7 @@ export function buildSystemPrompt(enabledTypes?: Set<string>, classification?: D
   const basePrompt = SYSTEM_PROMPT_BASE
     .replace("{{TYPES}}", types.map((t) => `"${t}"`).join(", "))
     .replace("{{GROUNDS_REFERENCE}}", buildGroundsReference());
-  return classificationBlock ? classificationBlock + basePrompt : basePrompt;
+  return classificationBlock ? basePrompt + "\n\n---\n\n" + classificationBlock : basePrompt;
 }
 
 // ---------------------------------------------------------------------------
