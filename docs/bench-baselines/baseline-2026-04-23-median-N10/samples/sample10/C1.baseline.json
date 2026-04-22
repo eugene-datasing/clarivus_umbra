@@ -1,0 +1,183 @@
+{
+  "fixture": "C1",
+  "overall": {
+    "precision": 0.5454545454545454,
+    "recall": 0.3157894736842105,
+    "f1": 0.39999999999999997,
+    "tp": 6,
+    "fp": 5,
+    "fn": 13
+  },
+  "byPathway": {
+    "personal": {
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 0
+    },
+    "commercial": {
+      "precision": 0.6666666666666666,
+      "recall": 0.35294117647058826,
+      "f1": 0.46153846153846156,
+      "tp": 6,
+      "fp": 3,
+      "fn": 11
+    },
+    "governance": {
+      "precision": 0,
+      "recall": 0,
+      "f1": 0,
+      "tp": 0,
+      "fp": 2,
+      "fn": 2
+    },
+    "enforcement": {
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 0
+    }
+  },
+  "missing": [
+    {
+      "text": "$3.42M over four years, includes $180k contingency for emergency response and a 12% margin on installation",
+      "type": "commercial",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "commercial",
+      "rationale": "Bidder A's price, contingency, and margin structure — third-party competitive position; s7(2)(b)(ii)."
+    },
+    {
+      "text": "margin structure not be disclosed to other bidders",
+      "type": "commercial",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "commercial",
+      "rationale": "Explicit confidentiality undertaking on margin disclosure; reinforces the s7(2)(b)(ii) basis for withholding."
+    },
+    {
+      "text": "$3.78M over four years, lean margin (8%), no contingency",
+      "type": "commercial",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "commercial",
+      "rationale": "Bidder B's commercial terms under confidentiality undertaking; s7(2)(b)(ii)."
+    },
+    {
+      "text": "$4.15M over four years, bundled with optional upgrades",
+      "type": "commercial",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "commercial",
+      "rationale": "Bidder C's price; third-party competitive position s7(2)(b)(ii)."
+    },
+    {
+      "text": "novel dual-stage pipeline inspection process — combining ground-penetrating radar with low-frequency acoustic monitoring",
+      "type": "commercial",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "commercial",
+      "rationale": "Kaitiaki's proprietary method description — trade secret under their commercial-in-confidence submission; s7(2)(b)(i)."
+    },
+    {
+      "text": "SIG's acoustic leak-detection methodology relies on a proprietary signal-processing pipeline",
+      "type": "commercial",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "commercial",
+      "rationale": "Bidder C's second trade-secret-adjacent disclosure; s7(2)(b)(i)."
+    },
+    {
+      "text": "Council's preferred bidder rank is Kaitiaki Engineering, contingent on successful referee checks and commercial terms",
+      "type": "council-commercial",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "commercial",
+      "rationale": "Council's own commercial strategic position on preferred bidder pre-referee-check; s7(2)(h)."
+    },
+    {
+      "text": "well-placed to negotiate Pacific down from their listed price given their stated margin position",
+      "type": "negotiation",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "commercial",
+      "rationale": "Council's strategy for exploiting Bidder B's commercial position; s7(2)(i)."
+    },
+    {
+      "text": "BATNA assessment",
+      "type": "negotiation",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "commercial",
+      "rationale": "Best-alternative-to-negotiated-agreement language is a strong signal for negotiation-strategy content."
+    },
+    {
+      "text": "extend the existing interim maintenance arrangement with the in-house Assets team for a further twelve months at an estimated internal cost of $1.1M per year",
+      "type": "council-commercial",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "commercial",
+      "rationale": "Council's internal-cost fallback position; council-commercial s7(2)(h)."
+    },
+    {
+      "text": "This should not be signalled externally as it would weaken our negotiating hand",
+      "type": "negotiation",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "commercial",
+      "rationale": "Explicit non-disclosure directive tied to negotiating position; s7(2)(i)."
+    },
+    {
+      "text": "wāhi tapu identified by Ngāti Awatere",
+      "type": "cultural-sensitivity",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "governance",
+      "rationale": "Wāhi tapu is a v3.1 structural-heuristics strong trigger; s7(2)(ba)."
+    },
+    {
+      "text": "kōiwi tangata protocol",
+      "type": "cultural-sensitivity",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "governance",
+      "rationale": "Kōiwi tangata is a v3.1 structural-heuristics strong trigger; s7(2)(ba) protects the specific protocol reference alongside the wāhi tapu location."
+    }
+  ],
+  "unexpected": [
+    {
+      "text": "Kaitiaki's proposal included a novel dual-stage pipeline inspection process - combining ground-penetrating radar with low-frequency acoustic monitoring - which their technical appendix identifies as proprietary and developed in-house over four years.",
+      "type": "commercial",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "The panel's BATNA assessment: if no preferred supplier emerges from referee checks, council's next-best alternative is to extend the existing interim maintenance arrangement with the in-house Assets team for a further twelve months at an estimated internal cost of $1.1M per year. This should not be signalled externally as it would weaken our negotiating hand with the commercial bidders.",
+      "type": "negotiation",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "The trunkmain corridor traverses land adjacent to known wahi tapu identified by Ngāti Awatere in their cultural impact assessment dated November 2022.",
+      "type": "cultural-sensitivity",
+      "page": 2,
+      "confidence": 90
+    },
+    {
+      "text": "The successful bidder will be required to engage with iwi liaison prior to groundworks, and the koiwi tangata protocol attached as Appendix D must be observed for any excavation within the protected zone.",
+      "type": "cultural-sensitivity",
+      "page": 2,
+      "confidence": 85
+    },
+    {
+      "text": "This should not be signalled externally as it would weaken our negotiating hand with the commercial bidders.",
+      "type": "negotiation",
+      "page": 1,
+      "confidence": 85
+    }
+  ]
+}
