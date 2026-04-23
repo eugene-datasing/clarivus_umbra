@@ -1,0 +1,157 @@
+{
+  "fixture": "B2",
+  "overall": {
+    "precision": 0.6666666666666666,
+    "recall": 0.5,
+    "f1": 0.5714285714285715,
+    "tp": 10,
+    "fp": 5,
+    "fn": 10
+  },
+  "byPathway": {
+    "personal": {
+      "precision": 0.8888888888888888,
+      "recall": 0.5333333333333333,
+      "f1": 0.6666666666666667,
+      "tp": 8,
+      "fp": 1,
+      "fn": 7
+    },
+    "commercial": {
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 0
+    },
+    "governance": {
+      "precision": 0.3333333333333333,
+      "recall": 0.5,
+      "f1": 0.4,
+      "tp": 2,
+      "fp": 4,
+      "fn": 2
+    },
+    "enforcement": {
+      "precision": 1,
+      "recall": 0,
+      "f1": 0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 1
+    }
+  },
+  "missing": [
+    {
+      "text": "Witness Statement in the matter of Ferguson v Kellogg",
+      "type": "law-enforcement",
+      "mustMatch": "exact",
+      "page": 1,
+      "pathway": "enforcement",
+      "rationale": "Title line identifies the document as evidence in a formal grievance/investigation; s6(c) conclusive ground applies in enforcement contexts."
+    },
+    {
+      "text": "27 Kowhai Street, Awatere 4310",
+      "type": "address",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Declarant's home address; appears in header table and in Declaration paragraph."
+    },
+    {
+      "text": "Sarah Mitchell",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "HR Manager / Interviewer — third-party council staff in grievance context. Per v3.1 Phase 3 reworded carve-out, investigator-in-grievance-context IS flaggable."
+    },
+    {
+      "text": "HR-INV-2026-018",
+      "type": "confidential",
+      "mustMatch": "exact",
+      "page": 1,
+      "pathway": "governance",
+      "rationale": "Investigation file reference; s7(2)(a) protects the case identifier linking to HR records."
+    },
+    {
+      "text": "Priya Sharma",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Declarant's manager; named in Background prose — third-party council staff in grievance context."
+    },
+    {
+      "text": "Helen Ferguson",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Complainant's full name — appears in Background prose. Substring match handles subsequent 'Ms Ferguson' references on pages 1 and 2."
+    },
+    {
+      "text": "Ms Ferguson",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "pathway": "personal",
+      "rationale": "Honorific form appears multiple times across both pages; Phase 4 entity-propagation candidate."
+    },
+    {
+      "text": "David Kellogg",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Respondent's full name — appears in Background prose."
+    },
+    {
+      "text": "Mr Kellogg",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "pathway": "personal",
+      "rationale": "Honorific form appears multiple times; Phase 4 entity-propagation candidate."
+    },
+    {
+      "text": "Mr Kellogg's conduct towards Ms Ferguson has, in my observation, been different in tone from his conduct towards male colleagues",
+      "type": "free-frank",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "governance",
+      "rationale": "Candid observation on the respondent's pattern of behaviour from the Broader Context paragraph; free-frank s7(2)(f)(i)."
+    }
+  ],
+  "unexpected": [
+    {
+      "text": "27 Kowhai Street",
+      "type": "address",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "In candour, I would be concerned about retaliation if this statement were shared in full with Mr Kellogg during any disciplinary process.",
+      "type": "free-frank",
+      "page": 2,
+      "confidence": 85
+    },
+    {
+      "text": "I am aware other members of the team hold similar views but they are uncomfortable speaking up.",
+      "type": "harassment-risk",
+      "page": 2,
+      "confidence": 85
+    },
+    {
+      "text": "I am also mindful that if this statement were released under LGOIMA it should be withheld under s7(2)(a) as it contains my personal information and that of junior staff who are not parties to the complaint.",
+      "type": "harassment-risk",
+      "page": 2,
+      "confidence": 90
+    },
+    {
+      "text": "In candour, I would be concerned about retaliation if this statement were shared in full with Mr Kellogg during any disciplinary process, and I ask that my identity be managed carefully.",
+      "type": "free-frank",
+      "page": 2,
+      "confidence": 85
+    }
+  ]
+}
