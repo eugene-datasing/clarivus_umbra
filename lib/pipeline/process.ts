@@ -26,6 +26,7 @@ import { classifyDocument, type DocumentClassification } from "./doc-classify";
 import { detectDuplicates } from "./duplicate-detect";
 import { executeCustomRules } from "./custom-rules";
 import { calculateBBoxAll } from "./bbox";
+import { propagateNameDetections } from "./entity-propagation";
 import {
   buildCanonicalPdf,
   isCanonicalPdfSupported,
@@ -655,6 +656,38 @@ export async function processDocument(docId: string): Promise<void> {
         source: "custom-rule",
       })),
     ];
+
+    // Entity propagation (Phase 4, April 2026). Deterministic pass over
+    // the unified detections: personal-name and harassment-risk seeds
+    // generate full-name / honorific+surname / bare-surname variants and
+    // the document text is searched for non-overlapping occurrences. One
+    // new detection per match, carrying the seed's type and ground.
+    // Downstream bbox enrichment + dedup run unchanged. See
+    // lib/pipeline/entity-propagation.ts for the full design rationale.
+    const propagated = propagateNameDetections(extraction.pages, allDetections);
+    if (propagated.length > 0) {
+      const personalCount = propagated.filter((d) => d.seedType === "personal-name").length;
+      const harassmentCount = propagated.filter((d) => d.seedType === "harassment-risk").length;
+      log.info("Entity propagation complete", {
+        docId,
+        propagated: propagated.length,
+        fromPersonalName: personalCount,
+        fromHarassmentRisk: harassmentCount,
+      });
+      for (const p of propagated) {
+        allDetections.push({
+          type: p.type,
+          text: p.text,
+          confidence: p.confidence,
+          page: p.page,
+          suggestedGround: p.suggestedGround,
+          reasoning: p.reasoning,
+          piConsideration: p.piConsideration,
+          aiExplanation: p.aiExplanation,
+          source: p.source,
+        });
+      }
+    }
 
     // Enrich with coordinates BEFORE deduplication to allow multiple instances on the same page
     //

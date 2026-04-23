@@ -11,7 +11,8 @@
     "Health-safety entries use type=health-safety (ground s7(2)(d)): the vulnerability assessment protocol and the emergency backup chlorination procedure. Disclosure of operational details would reveal a vulnerability an adversary could exploit to trigger a contamination event — the Phase 3 Example 17 narrow-reading test.",
     "Free-and-frank uses type=free-frank (ground s7(2)(f)(i)): Inquiry's candid findings on organisational culture and the prior GM's misrepresentation of the 2024 audit.",
     "Legal-privilege uses type=legal-privilege (ground s7(2)(g)): Farrow & Slate's privileged advice on statutory exposure and counsel's settlement range.",
-    "Commercial uses type=commercial (ground s7(2)(b)(i)/(ii)): Pacific Flowline's trade-secret proprietary methodology and commercial-in-confidence schedule."
+    "Commercial uses type=commercial (ground s7(2)(b)(i)/(ii)): Pacific Flowline's trade-secret proprietary methodology and commercial-in-confidence schedule.",
+    "Phase 4 entity-propagation retune (2026-04-23): the name-variant entries (Dr Aalbers, Aalbers, Mr Thornton, Thornton, Ms Henderson, Henderson, Mr Valeafou, Valeafou, plus bare Ashworth) expanded from one no-page entry each into per-page entries matching the canonical pages where each variant actually occurs in the rendered PDF. The pipeline now emits one detection per (variant, page); per-page expected entries align the ground truth with that output. Page distributions were enumerated via pdfjs-dist against the committed B3_Long_Investigation.pdf. See docs/detection-coverage-plan-2026-04.md Phase 4."
   ],
   "expectedDetections": [
     {
@@ -21,6 +22,14 @@
       "page": 1,
       "pathway": "personal",
       "rationale": "Commissioner's full name in parties table; third-party professional per v3.1 Phase 3 Example 15 — FLAGGED despite official role."
+    },
+    {
+      "text": "Ashworth",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 10,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Bare surname appears in the page 10 sign-off block."
     },
     {
       "text": "Dr Tenisha Marama Aalbers",
@@ -34,15 +43,49 @@
       "text": "Dr Aalbers",
       "type": "personal-name",
       "mustMatch": "substring",
+      "page": 3,
       "pathway": "personal",
-      "rationale": "Honorific form appears multiple times across pages 3-5, 9. Phase 4 entity-propagation candidate."
+      "rationale": "Phase 4 entity-propagation target. Honorific form in technical-advisor discussion section on page 3."
+    },
+    {
+      "text": "Dr Aalbers",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 4,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Honorific form recurs on page 4 (technical evidence)."
+    },
+    {
+      "text": "Dr Aalbers",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 5,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Honorific form recurs on page 5."
     },
     {
       "text": "Aalbers",
       "type": "personal-name",
       "mustMatch": "substring",
+      "page": 3,
       "pathway": "personal",
-      "rationale": "Bare surname form — appears as 'Aalbers' possessive on page 5. Phase 4 entity-propagation candidate."
+      "rationale": "Phase 4 entity-propagation target. Bare surname on page 3."
+    },
+    {
+      "text": "Aalbers",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 4,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Bare surname on page 4."
+    },
+    {
+      "text": "Aalbers",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 5,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Bare surname on page 5."
     },
     {
       "text": "Gareth Alexander Thornton",
@@ -56,15 +99,97 @@
       "text": "Mr Thornton",
       "type": "personal-name",
       "mustMatch": "substring",
+      "page": 3,
       "pathway": "personal",
-      "rationale": "Honorific form — most-repeated name variant in the document (pages 3, 5, 6, 7). Key Phase 4 propagation target."
+      "rationale": "Phase 4 entity-propagation target. Honorific form on page 3."
+    },
+    {
+      "text": "Mr Thornton",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 5,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Honorific form on page 5."
+    },
+    {
+      "text": "Mr Thornton",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 6,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Honorific form heavily recurring on page 6 (findings-about-Thornton section)."
+    },
+    {
+      "text": "Mr Thornton",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 7,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Honorific form on page 7."
+    },
+    {
+      "text": "Mr Thornton",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 8,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Honorific form on page 8."
+    },
+    {
+      "text": "Mr Thornton",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 9,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Honorific form on page 9 (recommendations)."
     },
     {
       "text": "Thornton",
       "type": "personal-name",
       "mustMatch": "substring",
+      "page": 3,
       "pathway": "personal",
-      "rationale": "Bare surname — appears on pages 6, 8 in 'Thornton's conduct' style. Phase 4 target."
+      "rationale": "Phase 4 entity-propagation target. Bare surname on page 3."
+    },
+    {
+      "text": "Thornton",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 5,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Bare surname on page 5."
+    },
+    {
+      "text": "Thornton",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 6,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Bare surname in 'Thornton's conduct' style on page 6."
+    },
+    {
+      "text": "Thornton",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 7,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Bare surname on page 7."
+    },
+    {
+      "text": "Thornton",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 8,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Bare surname on page 8."
+    },
+    {
+      "text": "Thornton",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 9,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Bare surname on page 9."
     },
     {
       "text": "Rua Maia Henderson",
@@ -78,15 +203,97 @@
       "text": "Ms Henderson",
       "type": "personal-name",
       "mustMatch": "substring",
+      "page": 3,
       "pathway": "personal",
-      "rationale": "Honorific form — appears across pages 3, 4, 5, 7, 8. Phase 4 propagation target."
+      "rationale": "Phase 4 entity-propagation target. Honorific form on page 3."
+    },
+    {
+      "text": "Ms Henderson",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 4,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Honorific form on page 4."
+    },
+    {
+      "text": "Ms Henderson",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 5,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Honorific form on page 5."
+    },
+    {
+      "text": "Ms Henderson",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 6,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Honorific form on page 6."
+    },
+    {
+      "text": "Ms Henderson",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 7,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Honorific form heavily recurring on page 7."
+    },
+    {
+      "text": "Ms Henderson",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 8,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Honorific form on page 8."
     },
     {
       "text": "Henderson",
       "type": "personal-name",
       "mustMatch": "substring",
+      "page": 3,
       "pathway": "personal",
-      "rationale": "Bare surname — appears on pages 7, 8 ('Henderson asked', 'Henderson immediately'). Phase 4 target."
+      "rationale": "Phase 4 entity-propagation target. Bare surname on page 3."
+    },
+    {
+      "text": "Henderson",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 4,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Bare surname on page 4."
+    },
+    {
+      "text": "Henderson",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 5,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Bare surname on page 5."
+    },
+    {
+      "text": "Henderson",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 6,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Bare surname on page 6."
+    },
+    {
+      "text": "Henderson",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 7,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Bare surname on page 7."
+    },
+    {
+      "text": "Henderson",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 8,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Bare surname on page 8."
     },
     {
       "text": "Ieremia Hemi Valeafou",
@@ -100,15 +307,57 @@
       "text": "Mr Valeafou",
       "type": "personal-name",
       "mustMatch": "substring",
+      "page": 2,
       "pathway": "personal",
-      "rationale": "Honorific form — appears on pages 3, 6, 7. Phase 4 propagation target."
+      "rationale": "Phase 4 entity-propagation target. Honorific form on page 2 (distinct from the full-name anchor elsewhere on the same page)."
+    },
+    {
+      "text": "Mr Valeafou",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 3,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Honorific form on page 3."
+    },
+    {
+      "text": "Mr Valeafou",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 7,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Honorific form heavily recurring on page 7 (witness testimony)."
+    },
+    {
+      "text": "Mr Valeafou",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 9,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Honorific form on page 9 (findings)."
     },
     {
       "text": "Valeafou",
       "type": "personal-name",
       "mustMatch": "substring",
+      "page": 3,
       "pathway": "personal",
-      "rationale": "Bare surname — appears on pages 7, 9 ('Valeafou confirmed', 'Valeafou's conduct'). Phase 4 target."
+      "rationale": "Phase 4 entity-propagation target. Bare surname on page 3."
+    },
+    {
+      "text": "Valeafou",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 7,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Bare surname on page 7 ('Valeafou confirmed', 'Valeafou's conduct')."
+    },
+    {
+      "text": "Valeafou",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 9,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Bare surname on page 9."
     },
     {
       "text": "4 August 1971",
