@@ -1,0 +1,195 @@
+{
+  "fixture": "A",
+  "overall": {
+    "precision": 0.45,
+    "recall": 0.47368421052631576,
+    "f1": 0.46153846153846156,
+    "tp": 9,
+    "fp": 11,
+    "fn": 10
+  },
+  "byPathway": {
+    "personal": {
+      "precision": 0.375,
+      "recall": 0.75,
+      "f1": 0.5,
+      "tp": 3,
+      "fp": 5,
+      "fn": 1
+    },
+    "commercial": {
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 0
+    },
+    "governance": {
+      "precision": 0.5,
+      "recall": 0.4,
+      "f1": 0.4444444444444445,
+      "tp": 6,
+      "fp": 6,
+      "fn": 9
+    },
+    "enforcement": {
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 0
+    }
+  },
+  "missing": [
+    {
+      "text": "027 445 1982",
+      "type": "phone",
+      "mustMatch": "exact",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Petitioner's mobile; regex detection."
+    },
+    {
+      "text": "SUB-2026-184",
+      "type": "confidential",
+      "mustMatch": "exact",
+      "page": 1,
+      "pathway": "governance",
+      "rationale": "Internal submission reference ID; linkage to petitioner's written submission. Debatable: could also be disclosed as a bare reference. Including as a conservative expected."
+    },
+    {
+      "text": "Rata Legal",
+      "type": "confidential",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "governance",
+      "rationale": "External legal firm associated with privileged advice. Mirrors Holroyd Partners pattern in B1.expected.json — protect to preserve privilege context."
+    },
+    {
+      "text": "privileged legal opinion from Jennifer McAllister of Rata Legal regarding council's exposure if the bylaw is challenged under the Bill of Rights Act",
+      "type": "legal-privilege",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "governance",
+      "rationale": "Direct reference to privileged external-counsel advice; Phase 3 Example 10 pattern, s7(2)(g). Incidentally names Jennifer McAllister within the flagged span."
+    },
+    {
+      "text": "without express waiver from the Chief Executive in consultation with the Mayor",
+      "type": "legal-privilege",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "governance",
+      "rationale": "Reinforces the privileged-advice framing; flagged to avoid disclosing the waiver mechanism alongside unredacted content."
+    },
+    {
+      "text": "A former Animal Management officer has provided a written account on condition of anonymity",
+      "type": "confidential",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "governance",
+      "rationale": "Whistleblower submission under obligation of confidence; Phase 3 Example 18 pattern, s7(2)(c)(i)."
+    },
+    {
+      "text": "enforcement practices in the Kowhai Precinct between 2022 and 2024 systematically favoured specific property owners known to the previous Area Manager",
+      "type": "confidential",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "governance",
+      "rationale": "Substance of the confidential account; disclosure of the specific allegation could identify the informant via context; s7(2)(c)(i)."
+    },
+    {
+      "text": "professional retaliation concerns",
+      "type": "harassment-risk",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "governance",
+      "rationale": "Explicit retaliation flag from the informant; s7(2)(f)(ii) applies to protect identity from harm."
+    },
+    {
+      "text": "HR-INV-2025-042",
+      "type": "confidential",
+      "mustMatch": "exact",
+      "page": 2,
+      "pathway": "governance",
+      "rationale": "Investigation file reference; the linkage to the informant's account must be protected to preserve anonymity. Appears twice across the memo."
+    },
+    {
+      "text": "Mayor (verbal briefing scheduled 14 March 2026)",
+      "type": "free-frank",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "governance",
+      "rationale": "Evidence of back-channel briefing arrangement; s7(2)(f)(i) protects the informal advice process. Debatable: release could be justified on transparency grounds."
+    }
+  ],
+  "unexpected": [
+    {
+      "text": "A former Animal Management officer has provided a written account on condition of anonymity, indicating that enforcement practices in the Kowhai Precinct between 2022 and 2024 systematically favoured specific property owners known to the previous Area Manager.",
+      "type": "confidential",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "The former officer has asked that their identity not be disclosed due to professional retaliation concerns; their written account is held in the HR investigation file HR-INV-2025-042.",
+      "type": "confidential",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "Patterson",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 85
+    },
+    {
+      "text": "027 445 1982)",
+      "type": "phone",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "Mrs Patterson",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 85
+    },
+    {
+      "text": "A former Animal Management officer has provided a written account on condition of anonymity, indicating that enforcement practices in the Kowhai Precinct between 2022 and 2024 systematically favoured specific property owners known to the previous Area Manager. The account alleges selective non-enforcement of off-leash complaints where the offending dog's owner was a member of the local residents' association.",
+      "type": "confidential",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "Our considered view, expressed candidly: the current 100-metre leash-on requirement across the Kowhai Precinct is unenforceable in practice.",
+      "type": "free-frank",
+      "page": 1,
+      "confidence": 85
+    },
+    {
+      "text": "Elected members have been told by officers that \"enforcement is robust\", and that characterisation is at best generous.",
+      "type": "free-frank",
+      "page": 1,
+      "confidence": 85
+    },
+    {
+      "text": "McAllister",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 85
+    },
+    {
+      "text": "Ms McAllister",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 85
+    },
+    {
+      "text": "the current 100-metre leash-on requirement across the Kowhai Precinct is unenforceable in practice.",
+      "type": "free-frank",
+      "page": 1,
+      "confidence": 85
+    }
+  ]
+}
