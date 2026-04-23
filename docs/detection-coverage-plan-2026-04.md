@@ -9,7 +9,7 @@
 
 ## Status as of 2026-04-23
 
-Phase 3 is complete. What remains is Phases 4/5/6. The executive summary and phase sections below describe the plan as originally drafted; use this status block as the orientation for what's done and where a fresh session should pick up.
+Phases 3 and 4 are complete. What remains is Phases 5/6. The executive summary and phase sections below describe the plan as originally drafted; use this status block as the orientation for what's done and where a fresh session should pick up.
 
 **Shipped:**
 
@@ -28,8 +28,17 @@ Phase 3 is complete. What remains is Phases 4/5/6. The executive summary and pha
   - **B2 variance meaningfully tightened: stddev 6.1pp → 2.0pp** even as its median moved −1.3pp (0.584 → 0.571). More consistent output on B2 is a durability win.
   - Suite aggregate F1 0.516 → 0.521 (+0.005). All five fixtures within the 12pp per-fixture CI gate.
   - Watch-item: **C1 variance widened** (stddev 5.5pp → 9.1pp, low-side 8.8pp approaching the 12pp gate). Not a blocker; monitor in Phase 4/5 work.
+- **Phase 4 — entity propagation for person-name detections** (PR #31, commit on `phase-4-entity-propagation`): **merged**. New deterministic post-AI pass in `lib/pipeline/entity-propagation.ts` that takes each `personal-name` or `harassment-risk` seed, generates full-name / honorific+surname / bare-surname variants, and searches all page text for non-overlapping case-sensitive-first-letter matches. Supporting files: `lib/pipeline/stopwords.ts` (sentence-start-ambiguous surname deny-list + known-titles), `lib/pipeline/__tests__/entity-propagation.test.ts` (13 unit tests). Wired into `process.ts` between unified-detection building and bbox enrichment; propagated detections flow through `calculateBBoxAll` and `(page, type, text, posY_rounded)` dedup like any other source. `B1.expected.json` and `B3.expected.json` retuned to enumerate per-(variant, page) entries so the first-match-wins scorer credits per-occurrence propagation correctly. Post-PR-4 N=10 canonical captured at `docs/bench-baselines/baseline-2026-04-23-post-phase-4-median-N10`; `CANONICAL` now points at that folder. Landed numbers vs the post-Phase-3 canonical:
+  - **Suite aggregate F1 0.521 → 0.616 (+9.5pp)** — the largest single-phase move of the April programme.
+  - **Personal pathway: 0.667 → 0.758 (+9.1pp)**. Propagation of full-name anchors into surname-only and honorific+surname occurrences is the mechanism.
+  - **B3 fixture: 0.636 → 0.779 (+14.3pp)**. The 10-page cross-batch investigation fixture was Phase 4's primary target and it moved hardest.
+  - **B1 fixture: 0.391 → 0.485 (+9.4pp)**. Short of the ≥0.50 stretch target by 1.5pp but well above the +5pp minimum intent. B1 is single-batch so its lift comes entirely from intra-document propagation of Ferguson / Kellogg variants, not from cross-batch recovery.
+  - **Governance pathway: 0.345 → 0.337 (-0.8pp)** — did NOT clear the +0.40 stretch target. Root cause: `fromHarassmentRisk` propagation count was **zero across all 10 N=10 samples**. The plumbing is wired (harassment-risk is a declared seed type) but the AI rarely produces harassment-risk type detections in the first place, so there's nothing to propagate. Governance content still lives primarily in free-frank / legal-privilege sentence-typed detections that are deliberately out of Phase 4's scope (sentence-shaped, not entity-shaped). Phase 5 label-adjacent detection is a better route to governance lift.
+  - **B2 watch-flag: 0.571 → 0.513 (-5.8pp median)**. Still within the 12pp per-fixture CI gate but the largest regression of the PR. Cause is a knock-on from the B3/B1 expected.json retune pattern (first-match-wins semantics) combined with ordinary AI non-determinism at B2's stddev of 4.6pp. Watch-item for Phase 5.
+  - **A fixture: 0.467 → 0.431 (-3.6pp); C1 fixture: 0.433 → 0.407 (-2.6pp)**. Regression-to-mean on single-batch fixtures that Phase 4 does not target directly.
+  - Issue #30 (scorer: substring mustMatch expected entries should be many-to-many against actuals) filed during iteration. The per-(variant, page) retune is a workaround; a proper scorer fix is the longer-term resolution.
 
-**Next work:** Phase 4 entity propagation (see the Phase 4 section for the full scope). Governance pathway anchor for Phase 4 success measurement is **0.345**, not 0.337 — any lift Phase 4 delivers on governance stacks on top of PR B's 0.007 gain.
+**Next work:** Phase 5 label-adjacent detection (regex-over-raw-text; governance pathway is the primary target now that Phase 4 has exhausted entity-shaped lift). Phase 6 structured outputs migration is a parallel hardening track.
 
 **Outstanding issues:**
 - Issue #20 — Tier 2 `TEXT_SEARCH_MAX_LENGTH` follow-up. Priority medium. Completes the auto-redaction loop for long-narrative detections that PR B now produces more of.
@@ -592,7 +601,18 @@ Cache key is the exact prefix string. With the restructured `buildSystemPrompt()
 
 ## Phase 4 — Entity propagation pass
 
-**Status (2026-04-23):** queued, not started. Blocked by Phase 3 PR B (expected-after-Phase-3 bench numbers inform whether Phase 4 still needs to lift bare-surname recall or whether prompt rework has already closed it on B3).
+**Status (2026-04-23): SHIPPED.** Merged on `phase-4-entity-propagation`. Landed numbers captured at `docs/bench-baselines/baseline-2026-04-23-post-phase-4-median-N10/`. Suite F1 0.521 → 0.616 (+9.5pp). Personal pathway +9.1pp, B3 +14.3pp, B1 +9.4pp (1.5pp short of the ≥0.50 stretch target). Governance pathway did not clear 0.40 (0.345 → 0.337): `fromHarassmentRisk=0` across all 10 samples — the AI rarely produces harassment-risk seeds, so the propagation plumbing is wired but never fires for governance. See the top-level "Status as of 2026-04-23" block for the full delta table and the retrospective for the narrative.
+
+**Implementation deviations from the plan below:**
+
+- **Seed types expanded from `personal-name` only to `personal-name` + `harassment-risk`** (per Eugene's lock-in on 2026-04-23). The distinction drawn during implementation: `personal-name` and `harassment-risk` are entity-shaped (protective ground attaches to a person) and can propagate; `free-frank`, `legal-privilege`, `commercial`, `negotiation`, and `confidential` are sentence-shaped and do not. Propagated detections carry the seed's own type rather than transmuting — a `harassment-risk` seed produces `harassment-risk` propagations, a `personal-name` seed produces `personal-name` propagations. The `seedType` is tracked per propagated detection for per-pathway attribution in logs and PR bodies.
+- **Emission semantics simplified to one detection per (variant, page)** rather than one per character-offset match. Rationale: `calculateBBoxAll` downstream expands a single detection into N per-occurrence bboxes via per-visual-line geometry. Emitting N propagated detections would double-multiply against that expansion and inflate false positives against the first-match-wins scorer. The v1 implementation (per-match emission) tripped exactly this failure mode during directional bench — B3 dropped ~12pp. The v2 (per-(variant,page)) implementation recovered.
+- **Anchor rules simplified from the v2 plan.** The plan's Phase 4 algorithm sketch called for requiring a capitalised proper-noun neighbour within ±20 characters of every bare-surname candidate. Implementation used a simpler rule: case-sensitive first letter in the word-boundary regex, plus a 5-character minimum, plus the deny-list. This is tighter than the plan suggests for obvious sentence-start collisions (the deny-list catches colours, verbs, virtues, age adjectives) and equally effective on the observed corpus without adding the ±20-char neighbour scan. The proper-noun-neighbour guard remains as a follow-up option if a fixture surfaces sentence-start false positives the deny-list misses.
+- **No feature flag shipped.** The plan listed `ENTITY_PROPAGATION_ENABLED` as a rollback flag. On reflection this was over-engineering for a local-branch PR with a comprehensive test suite and a bench gate — if propagation regresses the fix is to revert the PR, not to toggle it off on a live tenant. If a future production rollout surfaces a need for per-tenant disable, a flag can be added in a follow-up with 10 lines of work.
+
+The sections below are preserved as-is for historical context; the landed behaviour matches the spec with the deviations noted above.
+
+---
 
 ### 1. Scope and success criteria
 

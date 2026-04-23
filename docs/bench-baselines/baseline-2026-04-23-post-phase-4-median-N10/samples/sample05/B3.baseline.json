@@ -1,0 +1,283 @@
+{
+  "fixture": "B3",
+  "overall": {
+    "precision": 0.6804123711340206,
+    "recall": 0.9166666666666666,
+    "f1": 0.7810650887573964,
+    "tp": 66,
+    "fp": 31,
+    "fn": 6
+  },
+  "byPathway": {
+    "personal": {
+      "precision": 0.8571428571428571,
+      "recall": 0.9523809523809523,
+      "f1": 0.9022556390977443,
+      "tp": 60,
+      "fp": 10,
+      "fn": 3
+    },
+    "commercial": {
+      "precision": 0.25,
+      "recall": 0.5,
+      "f1": 0.3333333333333333,
+      "tp": 1,
+      "fp": 3,
+      "fn": 1
+    },
+    "governance": {
+      "precision": 0.2727272727272727,
+      "recall": 0.6,
+      "f1": 0.37499999999999994,
+      "tp": 3,
+      "fp": 8,
+      "fn": 2
+    },
+    "enforcement": {
+      "precision": 0.16666666666666666,
+      "recall": 1,
+      "f1": 0.2857142857142857,
+      "tp": 2,
+      "fp": 10,
+      "fn": 0
+    }
+  },
+  "missing": [
+    {
+      "text": "47 Pohutukawa Terrace, Tauranga 3110",
+      "type": "address",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Aalbers' home address."
+    },
+    {
+      "text": "12 Miro Street, Awatere 4310",
+      "type": "address",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Thornton's home address."
+    },
+    {
+      "text": "9 Rimu Place, Awatere 4310",
+      "type": "address",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "personal",
+      "rationale": "Valeafou's home address."
+    },
+    {
+      "text": "the prior Group Manager's public framing of the 2024 audit as \"clean\" was inconsistent with the audit's actual findings",
+      "type": "free-frank",
+      "mustMatch": "substring",
+      "page": 9,
+      "pathway": "governance",
+      "rationale": "Inquiry's Finding 2 — candid finding on officer misrepresentation to public. s7(2)(f)(i)."
+    },
+    {
+      "text": "Farrow & Slate",
+      "type": "confidential",
+      "mustMatch": "substring",
+      "page": 8,
+      "pathway": "governance",
+      "rationale": "External legal firm associated with privileged advice. Mirrors Holroyd Partners pattern (B1) and Rata Legal pattern (A) — protect to preserve privilege context."
+    },
+    {
+      "text": "commercial-in-confidence schedule detailing proprietary chlorine-dosing calibration procedures",
+      "type": "commercial",
+      "mustMatch": "substring",
+      "page": 8,
+      "pathway": "commercial",
+      "rationale": "Pacific Flowline's trade-secret schedule — third-party competitive-prejudice content; s7(2)(b)(i)/(ii). Also appears on page 7; page 8 is the formal Commercial Arrangements section."
+    }
+  ],
+  "unexpected": [
+    {
+      "text": "PO Box 2184, Wellington 6011",
+      "type": "address",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "Aalbers",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 85
+    },
+    {
+      "text": "47 Pohutukawa Terrace",
+      "type": "address",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "Thornton",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 85
+    },
+    {
+      "text": "12 Miro Street",
+      "type": "address",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "Henderson",
+      "type": "personal-name",
+      "page": 2,
+      "confidence": 85
+    },
+    {
+      "text": "188 Vivian Street",
+      "type": "address",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "Valeafou",
+      "type": "personal-name",
+      "page": 2,
+      "confidence": 85
+    },
+    {
+      "text": "9 Rimu Place",
+      "type": "address",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "Ms Henderson's 11 November warning",
+      "type": "harassment-risk",
+      "page": 5,
+      "confidence": 85
+    },
+    {
+      "text": "In candid retrospect, the Council's organisational tolerance for maintenance deferral has drifted materially from safe practice. I was part of that drift and I bear a portion of the accountability for it.",
+      "type": "free-frank",
+      "page": 6,
+      "confidence": 85
+    },
+    {
+      "text": "Mr Thornton's employment with Council ended on 12 December 2025 by mutual agreement.",
+      "type": "harassment-risk",
+      "page": 6,
+      "confidence": 85
+    },
+    {
+      "text": "proprietary chlorine-dosing calibration procedures and a trade-secret schedule of Pacific Flowline's preferred parts suppliers",
+      "type": "commercial",
+      "page": 7,
+      "confidence": 85
+    },
+    {
+      "text": "The Inquiry finds, frankly, that the prior Group Manager's public framing of the 2024 audit as 'clean' was inconsistent with the audit's actual findings.",
+      "type": "free-frank",
+      "page": 9,
+      "confidence": 85
+    },
+    {
+      "text": "The organisational tolerance for maintenance deferral has, in the Inquiry's view, drifted materially from safe practice.",
+      "type": "free-frank",
+      "page": 9,
+      "confidence": 85
+    },
+    {
+      "text": "The escalation path on 12-13 November was not functional.",
+      "type": "free-frank",
+      "page": 9,
+      "confidence": 85
+    },
+    {
+      "text": "Contamination response plan activation thresholds, updated to include automated triggering at the internal operating-band lower bound (0.50 mg/L) rather than the statutory minimum alone, and extended to cover a stress-tested boil-water notice distribution list.",
+      "type": "health-safety",
+      "page": 10,
+      "confidence": 90
+    },
+    {
+      "text": "The detailed protocol is set out in Appendix E of this report. Appendix E contains operational information whose disclosure could endanger public safety if exploited and must not be released under LGOIMA.",
+      "type": "health-safety",
+      "page": 10,
+      "confidence": 95
+    },
+    {
+      "text": "The protective-measure specification includes the dispatch sequencing and alternate dosing-source coordinates for the backup supply, both of which are withheld from public release on the same s7(2)(d) basis.",
+      "type": "health-safety",
+      "page": 10,
+      "confidence": 95
+    },
+    {
+      "text": "Ashworth",
+      "type": "personal-name",
+      "page": 10,
+      "confidence": 85
+    },
+    {
+      "text": "Mr Thornton's explanation, as he put it: 'I was in the final week of the draft budget cycle and I will be candid - I prioritised the budget submission over a maintenance escalation that, on the face of the email, did not read to me as same-day urgent.'",
+      "type": "harassment-risk",
+      "page": 6,
+      "confidence": 85
+    },
+    {
+      "text": "proprietary signal-processing methodology which Pacific Flowline represents as a trade secret under their commercial-in-confidence submission",
+      "type": "commercial",
+      "page": 8,
+      "confidence": 90
+    },
+    {
+      "text": "Emergency backup chlorination procedure at the 4.5 mg/L threshold, rehearsed at annual frequency and tested against both under-dosing and over-dosing scenarios. The protective-measure specification includes the dispatch sequencing and alternate dosing-source coordinates for the backup supply.",
+      "type": "health-safety",
+      "page": 10,
+      "confidence": 90
+    },
+    {
+      "text": "Mandatory six-monthly vulnerability assessment protocols for chlorine dosing equipment, with explicit component-lifecycle flagging and an escalation path that does not rely on a single officer. The detailed protocol is set out in Appendix E of this report.",
+      "type": "health-safety",
+      "page": 10,
+      "confidence": 90
+    },
+    {
+      "text": "The contamination response plan activation threshold of 4.5 mg/L (for the inverse event - over-chlorination).",
+      "type": "health-safety",
+      "page": 4,
+      "confidence": 90
+    },
+    {
+      "text": "The plant's automated alerting did not distinguish between the statutory minimum (0.20 mg/L) and the internal operating band lower bound (0.50 mg/L).",
+      "type": "health-safety",
+      "page": 4,
+      "confidence": 90
+    },
+    {
+      "text": "In candid retrospect, the Council's organisational tolerance for maintenance deferral has drifted materially from safe practice.",
+      "type": "free-frank",
+      "page": 6,
+      "confidence": 85
+    },
+    {
+      "text": "proprietary signal-processing methodology",
+      "type": "commercial",
+      "page": 8,
+      "confidence": 90
+    },
+    {
+      "text": "Appendix E contains operational information whose disclosure could endanger public safety if exploited and must not be released under LGOIMA.",
+      "type": "health-safety",
+      "page": 10,
+      "confidence": 95
+    },
+    {
+      "text": "The protective-measure specification includes the dispatch sequencing and alternate dosing-source coordinates for the backup supply.",
+      "type": "health-safety",
+      "page": 10,
+      "confidence": 95
+    },
+    {
+      "text": "Contamination response plan activation thresholds, updated to include automated triggering at the internal operating-band lower bound (0.50 mg/L) rather than the statutory minimum alone.",
+      "type": "health-safety",
+      "page": 10,
+      "confidence": 90
+    }
+  ]
+}

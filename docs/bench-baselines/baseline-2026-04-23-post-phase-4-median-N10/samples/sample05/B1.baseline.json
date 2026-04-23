@@ -1,0 +1,362 @@
+{
+  "fixture": "B1",
+  "overall": {
+    "precision": 0.4375,
+    "recall": 0.5121951219512195,
+    "f1": 0.47191011235955055,
+    "tp": 21,
+    "fp": 27,
+    "fn": 20
+  },
+  "byPathway": {
+    "personal": {
+      "precision": 0.38095238095238093,
+      "recall": 0.8,
+      "f1": 0.5161290322580645,
+      "tp": 16,
+      "fp": 26,
+      "fn": 4
+    },
+    "commercial": {
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 0
+    },
+    "governance": {
+      "precision": 1,
+      "recall": 0.23809523809523808,
+      "f1": 0.3846153846153846,
+      "tp": 5,
+      "fp": 0,
+      "fn": 16
+    },
+    "enforcement": {
+      "precision": 0,
+      "recall": 1,
+      "f1": 0,
+      "tp": 0,
+      "fp": 1,
+      "fn": 0
+    }
+  },
+  "missing": [
+    {
+      "text": "Sarah Mitchell",
+      "type": "harassment-risk",
+      "mustMatch": "substring",
+      "pathway": "governance",
+      "rationale": "Investigator's name — appears in the header table and the Prepared-by signoff on page 4. Retuned from personal-name to harassment-risk at Phase 3 PR B per the reworded carve-out + Example 11: investigators acting in a grievance or disciplinary context are flagged under s7(2)(f)(ii) rather than s7(2)(a), because the protective need is retaliation-avoidance not privacy."
+    },
+    {
+      "text": "Ben Mahuika",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "pathway": "personal",
+      "rationale": "External counsel (Holroyd Partners) named in the header and in the commentary section. Third-party professional — flaggable under v3.1 Phase 3 Example 15 pattern."
+    },
+    {
+      "text": "Holroyd Partners",
+      "type": "confidential",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "governance",
+      "rationale": "External legal firm named alongside privileged advice — protect to preserve privilege context. Debatable: could also be released as the firm's identity is already disclosed in other council records."
+    },
+    {
+      "text": "Ms Ferguson",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Honorific form in prose on page 2 (body)."
+    },
+    {
+      "text": "Awatere 4310",
+      "type": "address",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "personal",
+      "rationale": "Complainant home address — suburb + postcode portion. The street address portion of the full row should also be caught by a broader address match; this substring entry guards against the multi-line cell truncation seen in prior redactions where only the street line was caught."
+    },
+    {
+      "text": "Band 5 ($102,400 p.a.)",
+      "type": "confidential",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "governance",
+      "rationale": "Complainant salary band — individual compensation info under s7(2)(a). Type choice deliberate: 'confidential' catch-all fits better than any dedicated type for salary PII."
+    },
+    {
+      "text": "Mr Kellogg",
+      "type": "personal-name",
+      "mustMatch": "substring",
+      "page": 3,
+      "pathway": "personal",
+      "rationale": "Phase 4 entity-propagation target. Honorific form in prose on page 3 (findings)."
+    },
+    {
+      "text": "Band 6 ($124,800 p.a.)",
+      "type": "confidential",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "governance",
+      "rationale": "Respondent salary band."
+    },
+    {
+      "text": "Awatere Medical Centre",
+      "type": "confidential",
+      "mustMatch": "substring",
+      "pathway": "governance",
+      "rationale": "Third-party medical provider named alongside complainant's medical information. Type 'confidential' with ground s7(2)(a) — organisation names don't fit 'personal-name'."
+    },
+    {
+      "text": "F43.23",
+      "type": "confidential",
+      "mustMatch": "substring",
+      "pathway": "governance",
+      "rationale": "ICD-10 diagnostic code for complainant's diagnosis. Type choice deliberate: 'confidential' with ground s7(2)(a) rather than 'health-safety' (which is about public protective measures, not individual diagnoses). Phase 6 (structured outputs / new patterns) target."
+    },
+    {
+      "text": "BEN-48291",
+      "type": "confidential",
+      "mustMatch": "exact",
+      "pathway": "governance",
+      "rationale": "Benestar EAP counselling session reference — third-party service provider identifier. Phase 6 new-pattern target."
+    },
+    {
+      "text": "Angela Torres",
+      "type": "harassment-risk",
+      "mustMatch": "substring",
+      "pathway": "governance",
+      "rationale": "Witness in the Interviews table AND cited as corroborating witness in Findings. Phase 3 Example 11 pattern — witness identity in grievance context → harassment-risk (s7(2)(f)(ii))."
+    },
+    {
+      "text": "Jonathan Briggs",
+      "type": "harassment-risk",
+      "mustMatch": "substring",
+      "pathway": "governance",
+      "rationale": "Witness (Graduate Planner) named in Interviews table and cited in Findings as corroborating."
+    },
+    {
+      "text": "Priya Sharma",
+      "type": "harassment-risk",
+      "mustMatch": "substring",
+      "pathway": "governance",
+      "rationale": "Witness (Director, Planning) in Interviews table. EDGE CASE: Director = senior manager in official capacity — normally carve-out excludes her. But she's a witness in a grievance context; plan's Phase 3 reworded carve-out should distinguish witness-in-grievance-context from senior-manager-acting-on-policy. Eugene's call on whether to flag."
+    },
+    {
+      "text": "Mere Rauhihi",
+      "type": "harassment-risk",
+      "mustMatch": "substring",
+      "pathway": "governance",
+      "rationale": "Witness (Executive Assistant) in Interviews table."
+    },
+    {
+      "text": "In my assessment Mr Kellogg's conduct crosses the line of what is acceptable",
+      "type": "free-frank",
+      "mustMatch": "substring",
+      "page": 3,
+      "pathway": "governance",
+      "rationale": "Investigator's candid assessment opening sentence of the free-and-frank section. Phase 3 Example 9 target."
+    },
+    {
+      "text": "Both parties have credibility issues",
+      "type": "free-frank",
+      "mustMatch": "substring",
+      "page": 3,
+      "pathway": "governance",
+      "rationale": "Candid investigator assessment of both parties — structural-heuristics trigger (inside (free and frank) section)."
+    },
+    {
+      "text": "described her management style as \"exhausting\"",
+      "type": "free-frank",
+      "mustMatch": "substring",
+      "page": 3,
+      "pathway": "governance",
+      "rationale": "Unnamed-witness characterisation quoted in investigator's candid commentary. Also arguably 'harassment-risk' since unnamed-witness-about-complainant pattern — but free-frank is the dominant signal given the section context."
+    },
+    {
+      "text": "Council would be exposed to a significant settlement risk",
+      "type": "free-frank",
+      "mustMatch": "substring",
+      "page": 3,
+      "pathway": "governance",
+      "rationale": "Council strategic risk assessment — candid internal view."
+    },
+    {
+      "text": "$55,000 — $110,000",
+      "type": "legal-privilege",
+      "mustMatch": "substring",
+      "page": 3,
+      "pathway": "governance",
+      "rationale": "Legal-privileged settlement range attributed to Ben Mahuika's separate privileged advice. Phase 3 Example 10 target."
+    }
+  ],
+  "unexpected": [
+    {
+      "text": "Kellogg",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 85
+    },
+    {
+      "text": "Ferguson",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 85
+    },
+    {
+      "text": "108-412-889",
+      "type": "ird",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "JKA1234",
+      "type": "nhi",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "42 Whiteman Street",
+      "type": "address",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "hferg1983@gmail.com",
+      "type": "email-addr",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "027 412 6789",
+      "type": "phone",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "helen.ferguson@awateredc.govt.nz",
+      "type": "email-addr",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "12-3456-7890123-00",
+      "type": "bank-account",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "049-091-850",
+      "type": "ird",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "MNE9087",
+      "type": "nhi",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "022 337 8812",
+      "type": "phone",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "david.kellogg@awateredc.govt.nz",
+      "type": "email-addr",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "Ferguson",
+      "type": "personal-name",
+      "page": 2,
+      "confidence": 85
+    },
+    {
+      "text": "s.liang@awateremedical.co.nz",
+      "type": "email-addr",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "angela.torres@awatere dc.govt.nz",
+      "type": "email-addr",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "Angela Torres",
+      "type": "personal-name",
+      "page": 2,
+      "confidence": 90
+    },
+    {
+      "text": "021 887 3021",
+      "type": "phone",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "j.briggs@awateredc.go",
+      "type": "email-addr",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "Jonathan Briggs",
+      "type": "personal-name",
+      "page": 2,
+      "confidence": 90
+    },
+    {
+      "text": "027 129 4480",
+      "type": "phone",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "Briggs",
+      "type": "personal-name",
+      "page": 3,
+      "confidence": 85
+    },
+    {
+      "text": "Ms Torres",
+      "type": "personal-name",
+      "page": 3,
+      "confidence": 85
+    },
+    {
+      "text": "Torres",
+      "type": "personal-name",
+      "page": 3,
+      "confidence": 85
+    },
+    {
+      "text": "Mr Briggs",
+      "type": "personal-name",
+      "page": 3,
+      "confidence": 85
+    },
+    {
+      "text": "Kellogg",
+      "type": "personal-name",
+      "page": 3,
+      "confidence": 85
+    },
+    {
+      "text": "adjustment disorder with mixed anxiety and depressed mood (ICD-10 F43.23)",
+      "type": "health-safety",
+      "page": 2,
+      "confidence": 90
+    }
+  ]
+}
