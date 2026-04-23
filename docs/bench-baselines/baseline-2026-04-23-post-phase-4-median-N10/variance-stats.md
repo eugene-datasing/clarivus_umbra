@@ -30,3 +30,9 @@
 - Max per-fixture F1 range across 10 samples: **0.147** (14.7pp).
 - With the canonical anchored at the median rather than a single-run top-of-range, expect one-sided (canonical → fresh CI run) deviation of roughly ±7.4pp.
 - Proposed per-fixture CI threshold: **0.12 (12pp)**. See PR discussion for the final call.
+
+## Post-capture data points (not used to re-anchor)
+
+These are single-sample observations captured AFTER the N=10 median was frozen. They are noted here for future variance characterisation only — the canonical reference remains the per-fixture median of the 10 samples above.
+
+- **2026-04-23, PR #31 bench-CI run** (single unioned 3-run sample, post-Phase-4 pipeline, live Azure): governance pathway F1 read **0.374** vs the 0.337 canonical median (+3.7pp, a single-sample high). Personal 0.751, commercial 0.579, enforcement 0.444, suite aggregate 0.632. First time governance has drifted near the 0.40 stretch target on a recent run; does NOT justify re-anchoring — the durable number is the N=10 median at 0.337, and a single sample is inside the expected distribution width. Relevant to issue #32 (harassment-risk under-seeding) if repeated samples show the distribution shifting.
