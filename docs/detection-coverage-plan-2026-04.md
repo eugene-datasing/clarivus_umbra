@@ -9,7 +9,7 @@
 
 ## Status as of 2026-04-23
 
-Most of the plan has shipped. What remains is Phase 3 PR B (prompt content rework), then Phases 4/5/6. The executive summary and phase sections below describe the plan as originally drafted; use this status block as the orientation for what's done and where a fresh session should pick up.
+Phase 3 is complete. What remains is Phases 4/5/6. The executive summary and phase sections below describe the plan as originally drafted; use this status block as the orientation for what's done and where a fresh session should pick up.
 
 **Shipped:**
 
@@ -19,14 +19,20 @@ Most of the plan has shipped. What remains is Phase 3 PR B (prompt content rewor
 - **Phase 1.75 — AI detection bbox-stripping fix:** shipped, deployed as cr18. Long-narrative AI detections (text > 80 chars) were silently dropped before storage by an empty-array return from `calculateBBoxAll`; fix emits a zero-bbox placeholder so detections survive. Downstream follow-up filed as issue #20 — Tier 2 `TEXT_SEARCH_MAX_LENGTH` cap at `redact-pdf.ts:360` still skips long text at auto-redact time, so long-narrative detections currently reach the review UI but rely on the manual-detection flow for redaction. Findings at `docs/phase-1-75-ai-detection-stripping-findings.md`.
 - **Phase 2 — benchmark harness** (scoring library, pipeline invoker, bench-suite CLI, CI regression guard, 5 fixtures B1/B2/A/C1/B3, baselines committed): complete. CI workflow at `.github/workflows/bench-detection.yml` runs on every PR touching `lib/pipeline/**`, `test-fixtures/bench/**`, `docs/bench-baselines/**`, `scripts/bench/**`, or `lib/bench/**`.
 - **Phase 3 PR A — cache-friendly prompt restructure + labelled-values hint** (PR #26): merged. `buildClassificationContext()` output moved to the tail of the system prompt so the ~3000-token stable prefix becomes eligible for Azure OpenAI prompt caching (≥1024-token, 5-minute TTL). Personal-name type description extended with "labelled values in tables" language to prepare for PR B's Example 12.
-- **N=10 canonical rebaseline (issue #27, PR #28, commit `22bb840`):** merged. `docs/bench-baselines/CANONICAL` now points at `baseline-2026-04-23-median-N10`. Per-fixture CI threshold dropped 16pp → 12pp. The N=10 capture replaces a single-run point-estimate anchor sitting at the top of B2's 15.1pp distribution; observed low-side deviation from the new median canonical is now ≤7pp worst-case. Capture script at `scripts/bench/bench-canonical-capture.ts`; variance-stats at `docs/bench-baselines/baseline-2026-04-23-median-N10/variance-stats.md`.
+- **N=10 canonical rebaseline (issue #27, PR #28, commit `22bb840`):** merged. Per-fixture CI threshold dropped 16pp → 12pp. The N=10 capture replaced a single-run point-estimate anchor sitting at the top of B2's 15.1pp distribution; observed low-side deviation from the median canonical is now ≤7pp worst-case. Capture script at `scripts/bench/bench-canonical-capture.ts`.
+- **Phase 3 PR B — governance-pathway content lift** (PR #29, commit `ef45c1b`): **merged**. Reworded council-official carve-out distinguishing council-own / third-party-professional / investigator-in-grievance; 11 new worked examples (9–19 including the v3.2 medical-diagnosis pattern); structural-heuristics block with a tightened "protect candour, not procedure" qualifier on free-and-frank sections; B1.expected.json retune (Sarah Mitchell personal-name → harassment-risk). Post-PR-B N=10 canonical captured and `docs/bench-baselines/CANONICAL` now points at `baseline-2026-04-23-post-phase-3-median-N10`. Landed numbers:
+  - **Governance pathway median F1: 0.345** (prev 0.337, +0.7pp). Judgment-zone outcome (0.337 ≤ g < 0.357); accepted with Phase 4 entity propagation inheriting 0.345 as its new governance starting point.
+  - **Commercial pathway: +6.5pp** (0.413 → 0.478) from Examples 16 and 18 firing.
+  - **Personal pathway: +1.7pp** (0.650 → 0.667) from the reworded carve-out releasing third-party professionals.
+  - **B1 fixture: +6.6pp** (0.325 → 0.391), driven by the Mitchell retune + reworded carve-out.
+  - **B2 variance meaningfully tightened: stddev 6.1pp → 2.0pp** even as its median moved −1.3pp (0.584 → 0.571). More consistent output on B2 is a durability win.
+  - Suite aggregate F1 0.516 → 0.521 (+0.005). All five fixtures within the 12pp per-fixture CI gate.
+  - Watch-item: **C1 variance widened** (stddev 5.5pp → 9.1pp, low-side 8.8pp approaching the 12pp gate). Not a blocker; monitor in Phase 4/5 work.
 
-**Governance-pathway target re-anchored.** Under the old single-run canonical the governance-pathway F1 was 0.282, which Phase 3 PR B planned to lift to ≥0.40 — a +11.8pp claim. Under the new median canonical the governance anchor is **0.337**. A lift to ~0.40 now represents **+6.3pp** over the true current median. Every Phase 3 PR B target number should be read against 0.337, not 0.282.
-
-**Next work:** Phase 3 PR B (prompt content rework). See the sharpened Phase 3 §1 below for the enumerated deliverables and success criteria. Phases 4, 5, and 6 remain queued per the plan; no work started.
+**Next work:** Phase 4 entity propagation (see the Phase 4 section for the full scope). Governance pathway anchor for Phase 4 success measurement is **0.345**, not 0.337 — any lift Phase 4 delivers on governance stacks on top of PR B's 0.007 gain.
 
 **Outstanding issues:**
-- Issue #20 — Tier 2 `TEXT_SEARCH_MAX_LENGTH` follow-up. Priority medium. Completes the auto-redaction loop for long-narrative detections that Phase 3 PR B will produce.
+- Issue #20 — Tier 2 `TEXT_SEARCH_MAX_LENGTH` follow-up. Priority medium. Completes the auto-redaction loop for long-narrative detections that PR B now produces more of.
 - Issue #14 — `buildCanonicalPdf` guard for spike / bench harnesses. Priority low. Prevents recurrence of the Phase 1.5 spike-harness artefact.
 
 ---
@@ -419,12 +425,12 @@ Disable the CI workflow via `.github/workflows/bench-detection.yml.disabled` ren
 
 ### PR split status
 
-Phase 3 ships in two PRs:
+Phase 3 shipped in two PRs; **both merged**.
 
-- **PR A — cache-friendly prompt restructure + labelled-values hint.** Shipped (PR #26). `buildClassificationContext()` moved to the tail of the system message so the ~3000-token stable prefix is cacheable; personal-name type description extended to explicitly cover labelled values in tables. Zero-intended-behaviour-change.
-- **PR B — prompt content rework.** Remaining scope; this is what "Phase 3 PR B" means in the current handoff and in this status entry. Deliverables enumerated in §1 below.
+- **PR A — cache-friendly prompt restructure + labelled-values hint** (PR #26): merged. `buildClassificationContext()` moved to the tail of the system message so the ~3000-token stable prefix is cacheable; personal-name type description extended to explicitly cover labelled values in tables. Zero-intended-behaviour-change.
+- **PR B — prompt content rework** (PR #29, commit `ef45c1b`): **merged 2026-04-23**. Carve-out reword + 11 worked examples (9–19) + structural-heuristics block + B1.expected.json Mitchell retune + N=10 canonical re-capture (`baseline-2026-04-23-post-phase-3-median-N10/`). Landed outcome: governance pathway median F1 **0.345** (+0.7pp over 0.337 anchor, judgment-zone accepted); commercial pathway **+6.5pp** (0.413 → 0.478); personal **+1.7pp**; B1 fixture **+6.6pp**; suite aggregate **+0.5pp**; B2 variance meaningfully tightened (stddev 6.1pp → 2.0pp). All five fixtures within the 12pp per-fixture CI gate; C1 variance widened as a watch-item (stddev 5.5pp → 9.1pp) for future reviewers. See the top-of-doc "Status as of 2026-04-23" block for the full landed-numbers summary.
 
-### 1. Scope and success criteria — PR B (remaining work)
+### 1. Scope and success criteria — PR B (merged, retained for historical reference)
 
 Layer additive content changes across the council-official carve-out, worked examples, and a new structural-heuristics block, then re-capture the canonical in the same PR. Every change lives in `lib/pipeline/ai-detect.ts` except the expected.json retune and the canonical folder. PR B is self-contained; no pipeline or schema changes.
 
