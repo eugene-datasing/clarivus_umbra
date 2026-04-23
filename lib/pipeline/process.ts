@@ -21,6 +21,7 @@ import { extractText, OCRUnavailableError, ExtractionCorruptionError } from "./e
 import { validateFile } from "./file-validator";
 import { convertFromPages, convertToReviewFormat } from "./format-converter";
 import { detectPatterns } from "./patterns";
+import { detectLabelAdjacent } from "./label-adjacent";
 import { detectWithAI } from "./ai-detect";
 import { classifyDocument, type DocumentClassification } from "./doc-classify";
 import { detectDuplicates } from "./duplicate-detect";
@@ -523,6 +524,19 @@ export async function processDocument(docId: string): Promise<void> {
     patternDetectionMs = Date.now() - patternStart;
     log.info("Pattern detection complete", { docId, matches: patternMatches.length });
 
+    // Label-adjacent detection (Phase 5, April 2026). Deterministic
+    // regex pass for labelled table rows ("Date of birth: 14 June
+    // 1983", "| Employee number | ADC-2284 |") the AI classifies
+    // inconsistently. Runs alongside detectPatterns; output merges
+    // through the same bbox enrichment + (page, type, text,
+    // posY_rounded) dedup. Targets personal / commercial pathways;
+    // orthogonal to governance. See lib/pipeline/label-adjacent.ts.
+    const labelAdjacentMatches = detectLabelAdjacent(extraction.pages, enabledTypes);
+    log.info("Label-adjacent detection complete", {
+      docId,
+      matches: labelAdjacentMatches.length,
+    });
+
     // ------------------------------------------------------------------
     // 6.5 Custom rules detection (WP8)
     // ------------------------------------------------------------------
@@ -654,6 +668,17 @@ export async function processDocument(docId: string): Promise<void> {
         piConsideration: "",
         aiExplanation: `Custom rule: ${crm.ruleName}. ${crm.reasoning}`,
         source: "custom-rule",
+      })),
+      ...labelAdjacentMatches.map((la) => ({
+        type: la.type,
+        text: la.text,
+        confidence: la.confidence,
+        page: la.page,
+        suggestedGround: la.suggestedGround,
+        reasoning: la.reasoning,
+        piConsideration: "",
+        aiExplanation: `Label-adjacent match on "${la.labelMatched}". ${la.reasoning}`,
+        source: "label-adjacent",
       })),
     ];
 

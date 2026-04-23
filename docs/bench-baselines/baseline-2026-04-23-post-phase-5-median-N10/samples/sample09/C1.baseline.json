@@ -1,0 +1,157 @@
+{
+  "fixture": "C1",
+  "overall": {
+    "precision": 0.625,
+    "recall": 0.5263157894736842,
+    "f1": 0.5714285714285714,
+    "tp": 10,
+    "fp": 6,
+    "fn": 9
+  },
+  "byPathway": {
+    "personal": {
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 0
+    },
+    "commercial": {
+      "precision": 0.7692307692307693,
+      "recall": 0.5882352941176471,
+      "f1": 0.6666666666666667,
+      "tp": 10,
+      "fp": 3,
+      "fn": 7
+    },
+    "governance": {
+      "precision": 0,
+      "recall": 0,
+      "f1": 0,
+      "tp": 0,
+      "fp": 3,
+      "fn": 2
+    },
+    "enforcement": {
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 0
+    }
+  },
+  "missing": [
+    {
+      "text": "$3.42M over four years, includes $180k contingency for emergency response and a 12% margin on installation",
+      "type": "commercial",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "commercial",
+      "rationale": "Bidder A's price, contingency, and margin structure — third-party competitive position; s7(2)(b)(ii)."
+    },
+    {
+      "text": "novel dual-stage pipeline inspection process — combining ground-penetrating radar with low-frequency acoustic monitoring",
+      "type": "commercial",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "commercial",
+      "rationale": "Kaitiaki's proprietary method description — trade secret under their commercial-in-confidence submission; s7(2)(b)(i)."
+    },
+    {
+      "text": "budgetary authority to $4.1M and should not disclose this ceiling during negotiations",
+      "type": "negotiation",
+      "mustMatch": "substring",
+      "page": 1,
+      "pathway": "commercial",
+      "rationale": "Explicit non-disclosure of budget ceiling — core negotiation-position protection; s7(2)(i)."
+    },
+    {
+      "text": "well-placed to negotiate Pacific down from their listed price given their stated margin position",
+      "type": "negotiation",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "commercial",
+      "rationale": "Council's strategy for exploiting Bidder B's commercial position; s7(2)(i)."
+    },
+    {
+      "text": "BATNA assessment",
+      "type": "negotiation",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "commercial",
+      "rationale": "Best-alternative-to-negotiated-agreement language is a strong signal for negotiation-strategy content."
+    },
+    {
+      "text": "extend the existing interim maintenance arrangement with the in-house Assets team for a further twelve months at an estimated internal cost of $1.1M per year",
+      "type": "council-commercial",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "commercial",
+      "rationale": "Council's internal-cost fallback position; council-commercial s7(2)(h)."
+    },
+    {
+      "text": "This should not be signalled externally as it would weaken our negotiating hand",
+      "type": "negotiation",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "commercial",
+      "rationale": "Explicit non-disclosure directive tied to negotiating position; s7(2)(i)."
+    },
+    {
+      "text": "wāhi tapu identified by Ngāti Awatere",
+      "type": "cultural-sensitivity",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "governance",
+      "rationale": "Wāhi tapu is a v3.1 structural-heuristics strong trigger; s7(2)(ba)."
+    },
+    {
+      "text": "kōiwi tangata protocol",
+      "type": "cultural-sensitivity",
+      "mustMatch": "substring",
+      "page": 2,
+      "pathway": "governance",
+      "rationale": "Kōiwi tangata is a v3.1 structural-heuristics strong trigger; s7(2)(ba) protects the specific protocol reference alongside the wāhi tapu location."
+    }
+  ],
+  "unexpected": [
+    {
+      "text": "The panel's BATNA assessment: if no preferred supplier emerges from referee checks, council's next-best alternative is to extend the existing interim maintenance arrangement with the in-house Assets team for a further twelve months at an estimated internal cost of $1.1M per year. This should not be signalled externally as it would weaken our negotiating hand with the commercial bidders.",
+      "type": "negotiation",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "The trunkmain corridor traverses land adjacent to known wahi tapu identified by Ngāti Awatere in their cultural impact assessment dated November 2022.",
+      "type": "cultural-sensitivity",
+      "page": 2,
+      "confidence": 90
+    },
+    {
+      "text": "The successful bidder will be required to engage with iwi liaison prior to groundworks, and the koiwi tangata protocol attached as Appendix D must be observed for any excavation within the protected zone.",
+      "type": "cultural-sensitivity",
+      "page": 2,
+      "confidence": 85
+    },
+    {
+      "text": "The combination of these two methods, and the specific operating thresholds, are represented as trade secrets under their commercial-in-confidence submission.",
+      "type": "commercial",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "SIG have disclosed the methodology exists but withheld technical operating parameters under trade-secret protection.",
+      "type": "commercial",
+      "page": 1,
+      "confidence": 85
+    },
+    {
+      "text": "The koiwi tangata protocol attached as Appendix D must be observed for any excavation within the protected zone.",
+      "type": "cultural-sensitivity",
+      "page": 2,
+      "confidence": 85
+    }
+  ]
+}
