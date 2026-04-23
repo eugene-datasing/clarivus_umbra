@@ -1,18 +1,48 @@
 {
-  "fixtureSha256": "5ffbce061da3c93ea0c79f31be1338b8c6544587a04d2a0bb109e38913628f5f",
-  "documentType": "HR investigation report (Awatere District Council, Ferguson v Kellogg bullying complaint)",
-  "fixtureSource": "test-fixtures/bench/B1_HR_Investigation_Report_Kellogg_Ferguson.docx",
-  "canonicalPageCount": 4,
-  "canonicalCharCount": "~5596 (per Phase 1.5 findings, production canonical-PDF extraction)",
-  "authorshipNote": "Authored by Eugene (per plan Decision (d), B1 is the incident anchor and owns Eugene's judgement). Drafted with Cowork assistance 2026-04-20.",
-  "notes": [
-    "Each entry below uses mustMatch='substring' where variants are expected (e.g. surname appears as 'Ms Ferguson', 'Ferguson', 'Melissa Ferguson'), and 'exact' where the detection should match the precise string.",
-    "Some type assignments are deliberately conservative — e.g. medical diagnosis prose is typed 'personal-name' under s7(2)(a) rather than 'health-safety' (which is about public protective measures, not individual diagnoses). The v3.2 plan amendment discussed adding a new worked example for this pattern.",
-    "Witness names in the Interviews table and Findings section are typed 'harassment-risk' (s7(2)(f)(ii)) because the document is a bullying grievance — witness identities must be protected per Phase 3 Example 11 pattern. The investigator (Sarah Mitchell) is also typed 'harassment-risk' from Phase 3 PR B onwards: the reworded carve-out at `lib/pipeline/ai-detect.ts` flags investigator-in-grievance-context under s7(2)(f)(ii) rather than treating them as generic personal-name.",
-    "Organisation names (Awatere Medical Centre, Holroyd Partners) are typed 'confidential' with ground s7(2)(a) — type 'personal-name' is specifically for individuals.",
-    "Salary-band rows are typed 'confidential' with ground s7(2)(a) — individual compensation is privacy-sensitive PII but doesn't fit any other dedicated type."
-  ],
-  "expectedDetections": [
+  "fixture": "B1",
+  "overall": {
+    "precision": 0.43333333333333335,
+    "recall": 0.37142857142857144,
+    "f1": 0.4,
+    "tp": 13,
+    "fp": 17,
+    "fn": 22
+  },
+  "byPathway": {
+    "personal": {
+      "precision": 0.36,
+      "recall": 0.6428571428571429,
+      "f1": 0.4615384615384615,
+      "tp": 9,
+      "fp": 16,
+      "fn": 5
+    },
+    "commercial": {
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 0
+    },
+    "governance": {
+      "precision": 0.8,
+      "recall": 0.19047619047619047,
+      "f1": 0.3076923076923077,
+      "tp": 4,
+      "fp": 1,
+      "fn": 17
+    },
+    "enforcement": {
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 0
+    }
+  },
+  "missing": [
     {
       "text": "Sarah Mitchell",
       "type": "harassment-risk",
@@ -36,42 +66,11 @@
       "rationale": "External legal firm named alongside privileged advice — protect to preserve privilege context. Debatable: could also be released as the firm's identity is already disclosed in other council records."
     },
     {
-      "text": "Ferguson",
-      "type": "personal-name",
-      "mustMatch": "substring",
-      "pathway": "personal",
-      "rationale": "Surname appears many times across pages 2-3 in prose. Phase 4 entity propagation test case — only B1 test case after Phase 4 ships. NOTE: expect multiple detections; the scorer's first-match-wins will tie this to the first actual detection matching Ferguson."
-    },
-    {
       "text": "Ms Ferguson",
       "type": "personal-name",
       "mustMatch": "substring",
       "pathway": "personal",
       "rationale": "Honorific form appears dozens of times in prose on pages 2-3."
-    },
-    {
-      "text": "14 June 1983",
-      "type": "personal-name",
-      "mustMatch": "exact",
-      "page": 1,
-      "pathway": "personal",
-      "rationale": "Complainant DOB in labelled table row. Phase 3 Example 12 labelled-DOB pattern test."
-    },
-    {
-      "text": "ADC-2284",
-      "type": "confidential",
-      "mustMatch": "exact",
-      "page": 1,
-      "pathway": "governance",
-      "rationale": "Complainant employee number — internal identifier that can re-identify an individual. Phase 3 Example 13 labelled-employee-number pattern test + Phase 5 label-adjacent regex target."
-    },
-    {
-      "text": "EA123456",
-      "type": "driver-licence",
-      "mustMatch": "exact",
-      "page": 1,
-      "pathway": "personal",
-      "rationale": "Complainant NZ driver licence in labelled table row. Phase 1 driver-licence regex test. Phase 3 Example 14 labelled-driver-licence pattern."
     },
     {
       "text": "Awatere 4310",
@@ -88,13 +87,6 @@
       "page": 1,
       "pathway": "governance",
       "rationale": "Complainant salary band — individual compensation info under s7(2)(a). Type choice deliberate: 'confidential' catch-all fits better than any dedicated type for salary PII."
-    },
-    {
-      "text": "Kellogg",
-      "type": "personal-name",
-      "mustMatch": "substring",
-      "pathway": "personal",
-      "rationale": "Surname appears many times in prose on pages 2-3 (pattern mirrors Ferguson). Phase 4 entity propagation target."
     },
     {
       "text": "Mr Kellogg",
@@ -120,22 +112,6 @@
       "rationale": "Respondent employee number."
     },
     {
-      "text": "LA429183",
-      "type": "nz-passport",
-      "mustMatch": "exact",
-      "page": 2,
-      "pathway": "personal",
-      "rationale": "Respondent NZ passport in labelled table row. Phase 1 toggle-default test (nz-passport default-true)."
-    },
-    {
-      "text": "8b Marlin Grove, Awatere 4318",
-      "type": "address",
-      "mustMatch": "exact",
-      "page": 2,
-      "pathway": "personal",
-      "rationale": "Respondent home address — full single-line address."
-    },
-    {
       "text": "Band 6 ($124,800 p.a.)",
       "type": "confidential",
       "mustMatch": "substring",
@@ -144,32 +120,11 @@
       "rationale": "Respondent salary band."
     },
     {
-      "text": "Dr Sarah Liang",
-      "type": "personal-name",
-      "mustMatch": "substring",
-      "pathway": "personal",
-      "rationale": "Complainant's GP named in the Medical section prose. Third-party professional — Phase 3 Example 15 pattern (reworded carve-out must not suppress this). 2026-04-20 spike showed o4-mini caught 2/3 vs gpt-4o 0/3."
-    },
-    {
       "text": "Awatere Medical Centre",
       "type": "confidential",
       "mustMatch": "substring",
       "pathway": "governance",
       "rationale": "Third-party medical provider named alongside complainant's medical information. Type 'confidential' with ground s7(2)(a) — organisation names don't fit 'personal-name'."
-    },
-    {
-      "text": "(06) 759 2217",
-      "type": "phone",
-      "mustMatch": "substring",
-      "pathway": "personal",
-      "rationale": "GP landline with parenthesised area code. cr16 regex fix target — confirmed catching on live instance 2026-04-20."
-    },
-    {
-      "text": "adjustment disorder with mixed anxiety and depressed mood",
-      "type": "personal-name",
-      "mustMatch": "substring",
-      "pathway": "personal",
-      "rationale": "Complainant's medical diagnosis in prose. Type 'personal-name' with ground s7(2)(a) — personal medical details attached to an identified individual. NOTE: v3.2 plan amendment proposed adding a dedicated worked example for this pattern. Currently a known plan gap."
     },
     {
       "text": "F43.23",
@@ -214,22 +169,6 @@
       "rationale": "Witness (Executive Assistant) in Interviews table."
     },
     {
-      "text": "In my assessment Mr Kellogg's conduct crosses the line of what is acceptable",
-      "type": "free-frank",
-      "mustMatch": "substring",
-      "page": 3,
-      "pathway": "governance",
-      "rationale": "Investigator's candid assessment opening sentence of the free-and-frank section. Phase 3 Example 9 target."
-    },
-    {
-      "text": "Both parties have credibility issues",
-      "type": "free-frank",
-      "mustMatch": "substring",
-      "page": 3,
-      "pathway": "governance",
-      "rationale": "Candid investigator assessment of both parties — structural-heuristics trigger (inside (free and frank) section)."
-    },
-    {
       "text": "Ms Ferguson has a reputation among her peers for being abrasive",
       "type": "free-frank",
       "mustMatch": "substring",
@@ -268,14 +207,110 @@
       "page": 3,
       "pathway": "governance",
       "rationale": "Legal-privileged settlement range attributed to Ben Mahuika's separate privileged advice. Phase 3 Example 10 target."
+    }
+  ],
+  "unexpected": [
+    {
+      "text": "108-412-889",
+      "type": "ird",
+      "page": 1,
+      "confidence": 95
     },
     {
-      "text": "Ben Mahuika's initial estimate (covered in his separate privileged advice)",
-      "type": "legal-privilege",
-      "mustMatch": "substring",
-      "page": 3,
-      "pathway": "governance",
-      "rationale": "Explicit reference to privileged advice — protect under s7(2)(g)."
+      "text": "JKA1234",
+      "type": "nhi",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "42 Whiteman Street",
+      "type": "address",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "hferg1983@gmail.com",
+      "type": "email-addr",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "027 412 6789",
+      "type": "phone",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "helen.ferguson@awateredc.govt.nz",
+      "type": "email-addr",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "12-3456-7890123-00",
+      "type": "bank-account",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "3 November 1978",
+      "type": "personal-name",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "ADC-0917",
+      "type": "confidential",
+      "page": 1,
+      "confidence": 90
+    },
+    {
+      "text": "049-091-850",
+      "type": "ird",
+      "page": 1,
+      "confidence": 95
+    },
+    {
+      "text": "MNE9087",
+      "type": "nhi",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "022 337 8812",
+      "type": "phone",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "david.kellogg@awateredc.govt.nz",
+      "type": "email-addr",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "s.liang@awateremedical.co.nz",
+      "type": "email-addr",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "021 887 3021",
+      "type": "phone",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "j.briggs@awateredc.go",
+      "type": "email-addr",
+      "page": 2,
+      "confidence": 95
+    },
+    {
+      "text": "027 129 4480",
+      "type": "phone",
+      "page": 2,
+      "confidence": 95
     }
   ]
 }
