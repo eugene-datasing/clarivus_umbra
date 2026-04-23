@@ -9,7 +9,7 @@
 
 ## Status as of 2026-04-23
 
-Phases 3 and 4 are complete. What remains is Phases 5/6. The executive summary and phase sections below describe the plan as originally drafted; use this status block as the orientation for what's done and where a fresh session should pick up.
+Phases 3 and 4 are complete. What remains is the new **Phase 3.5** (harassment-risk seeding investigation, added post-Phase-4 on the strength of the N=10 canonical finding) plus Phases 5 and 6. The executive summary and phase sections below describe the plan as originally drafted; use this status block as the orientation for what's done and where a fresh session should pick up.
 
 **Shipped:**
 
@@ -33,14 +33,22 @@ Phases 3 and 4 are complete. What remains is Phases 5/6. The executive summary a
   - **Personal pathway: 0.667 → 0.758 (+9.1pp)**. Propagation of full-name anchors into surname-only and honorific+surname occurrences is the mechanism.
   - **B3 fixture: 0.636 → 0.779 (+14.3pp)**. The 10-page cross-batch investigation fixture was Phase 4's primary target and it moved hardest.
   - **B1 fixture: 0.391 → 0.485 (+9.4pp)**. Short of the ≥0.50 stretch target by 1.5pp but well above the +5pp minimum intent. B1 is single-batch so its lift comes entirely from intra-document propagation of Ferguson / Kellogg variants, not from cross-batch recovery.
-  - **Governance pathway: 0.345 → 0.337 (-0.8pp)** — did NOT clear the +0.40 stretch target. Root cause: `fromHarassmentRisk` propagation count was **zero across all 10 N=10 samples**. The plumbing is wired (harassment-risk is a declared seed type) but the AI rarely produces harassment-risk type detections in the first place, so there's nothing to propagate. Governance content still lives primarily in free-frank / legal-privilege sentence-typed detections that are deliberately out of Phase 4's scope (sentence-shaped, not entity-shaped). Phase 5 label-adjacent detection is a better route to governance lift.
+  - **Governance pathway: 0.345 → 0.337 (-0.8pp)** — did NOT clear the 0.40 stretch target. Root cause: `fromHarassmentRisk` propagation count was **zero across all 10 N=10 samples**. The plumbing is wired (harassment-risk is a declared seed type) but the AI rarely produces harassment-risk type detections in the first place, so there's nothing to propagate. This is the motivating finding for **Phase 3.5** (see below) — a prompt-tuning investigation targeting upstream harassment-risk seeding. Phase 5 (label-adjacent detection) is orthogonal and targets labelled-row misses, not governance.
   - **B2 watch-flag: 0.571 → 0.513 (-5.8pp median)**. Still within the 12pp per-fixture CI gate but the largest regression of the PR. Cause is a knock-on from the B3/B1 expected.json retune pattern (first-match-wins semantics) combined with ordinary AI non-determinism at B2's stddev of 4.6pp. Watch-item for Phase 5.
   - **A fixture: 0.467 → 0.431 (-3.6pp); C1 fixture: 0.433 → 0.407 (-2.6pp)**. Regression-to-mean on single-batch fixtures that Phase 4 does not target directly.
   - Issue #30 (scorer: substring mustMatch expected entries should be many-to-many against actuals) filed during iteration. The per-(variant, page) retune is a workaround; a proper scorer fix is the longer-term resolution.
 
-**Next work:** Phase 5 label-adjacent detection (regex-over-raw-text; governance pathway is the primary target now that Phase 4 has exhausted entity-shaped lift). Phase 6 structured outputs migration is a parallel hardening track.
+**Queued:**
+
+- **Phase 3.5 — harassment-risk seeding investigation** (new; queued, not started). Motivating finding from Phase 4: `fromHarassmentRisk` propagation count was zero across the N=10 post-Phase-4 canonical, so the entity-propagation plumbing for governance is wired but never fires. Goal: diagnose why the AI is under-seeding `harassment-risk` despite Phase 3 PR B's Example 11 and structural heuristics, and ship a prompt-tuning change that moves governance from 0.337 toward the 0.40 stretch target. Candidate interventions listed in issue #32 (priority/medium, filed 2026-04-23): more grievance-context worked examples; revisit the s7(2)(f)(i) vs (f)(ii) split trigger; add a negative counter-pattern distinguishing named-witness-in-grievance from standalone person reference; extend the investigator-in-grievance carve-out branch to witnesses and complainants. Success criterion: directional bench shows `fromHarassmentRisk > 0` on a majority of runs; N=10 re-capture lands governance median ≥ 0.40. Starting anchor **0.337** (post-Phase-4 N=10 median). See the Phase 3.5 section below for full scope.
+- **Phase 5 — label-adjacent detection via regex-over-raw-text** (queued, not started). Targets labelled-row miss class on B1 (the DOB `3 November 1978`, the DL `EA123456`, the NHI `MNE9087`, the employee numbers `ADC-2284` / `ADC-0917`). Orthogonal to Phase 3.5 — Phase 5 is NOT the governance lever; it covers labelled table-cell detections that regex and AI both currently miss. Could run in parallel with Phase 3.5 with separate bench captures.
+- **Phase 6 — structured outputs migration** (queued, not started). Hardening track; AI output validated against a JSON schema so invalid grounds / types can't leak through. Can slip without blocking any other phase.
+
+**Next up:** Phase 3.5 and Phase 5 are the two immediate options. **Phase 3.5 is the governance lever** — the cheapest way to unlock the Phase 4 propagation pipeline's latent governance benefit. Phase 5 is orthogonal labelled-row coverage. Pick based on whether the governance pathway F1 or the B1-labelled-row miss class is the higher-priority gap at that moment; they can also interleave (Phase 3.5 directional bench while Phase 5 dictionary curation runs).
 
 **Outstanding issues:**
+- Issue #32 — Phase 3.5 scope: AI under-seeding harassment-risk. Priority medium. Unblocks governance pathway lift.
+- Issue #30 — Scorer: substring mustMatch expected entries should be many-to-many against actuals. Priority unranked; makes per-(variant, page) ground-truth enumeration unnecessary if fixed.
 - Issue #20 — Tier 2 `TEXT_SEARCH_MAX_LENGTH` follow-up. Priority medium. Completes the auto-redaction loop for long-narrative detections that PR B now produces more of.
 - Issue #14 — `buildCanonicalPdf` guard for spike / bench harnesses. Priority low. Prevents recurrence of the Phase 1.5 spike-harness artefact.
 
@@ -711,9 +719,81 @@ Feature-flag via a new `SystemSetting` key `ENTITY_PROPAGATION_ENABLED` (default
 
 ---
 
+## Phase 3.5 — Harassment-risk seeding investigation (new)
+
+**Status (2026-04-23):** queued, not started. Added post-Phase-4 on the strength of the N=10 canonical finding that the AI produces zero `harassment-risk` seeds on the bench corpus, making Phase 4's governance-pathway propagation pipeline latent. Issue #32 (priority/medium) captures the scope and candidate interventions.
+
+### 1. Scope and success criteria
+
+A targeted prompt-tuning investigation on `lib/pipeline/ai-detect.ts` to raise the AI's `harassment-risk` seed rate on investigation-style content (B1 is the anchor fixture; B3 provides cross-batch validation). Phase 4 has already wired propagation to consume `harassment-risk` seeds, so any lift in seed rate translates directly into governance-pathway recall through the existing entity-propagation pass.
+
+**Success:** directional bench on B1 shows `fromHarassmentRisk > 0` on a majority of runs; N=10 canonical re-capture shows governance pathway median F1 **≥ 0.40** (stretch target unchanged from the original Phase 3 PR B framing). Starting anchor is **governance 0.337** (post-Phase-4 N=10 median). A lift to 0.40 is +6.3pp — within a single prompt-tuning cycle's typical move.
+
+### 2. Schema changes
+
+None.
+
+### 3. File-level change list
+
+**Modified:**
+- `lib/pipeline/ai-detect.ts` — targeted edits to the worked-examples block, structural-heuristics block, and/or council-official carve-out. Specific intervention to be chosen from the four candidates below based on directional bench evidence.
+
+**Likely-modified:**
+- `test-fixtures/bench/B1.expected.json` — if a prompt intervention semantically shifts which names are typed `harassment-risk` vs `personal-name` (as the PR B Mitchell retune did), the expected ground truth updates in the same PR under the existing "expected.json retune alongside prompt changes when type shifts" convention.
+
+### 4. New or modified API routes
+
+None.
+
+### 5. Pipeline changes
+
+None. This phase consumes the existing Phase 4 propagation pipeline — it just changes upstream seeding.
+
+### 6. Coordinate system
+
+N/A.
+
+### 7. Test strategy
+
+**Unit:** The existing `lib/pipeline/__tests__/entity-propagation.test.ts` already covers `harassment-risk` seed propagation. No new unit tests required unless the prompt change adds a new decision rule that warrants its own coverage.
+
+**Integration (directional):** single-run 5-fixture bench after each candidate prompt intervention. The logged `fromHarassmentRisk` count per fixture is the primary signal — the governance F1 move follows mechanically once seeds start firing.
+
+**Canonical (if directional succeeds):** full N=10 re-capture per the standing convention, folded into the same PR as the prompt change.
+
+### 8. Candidate interventions
+
+Enumerated in issue #32. Pick one for the first iteration based on directional evidence; holdover candidates become follow-up PRs if the first doesn't move the signal.
+
+1. **Strengthen Example 11 with 2–3 additional grievance-context variants.** Covers bare-surname witness references, investigator-in-grievance identity, complainant-subject-of-bullying patterns. Lowest-risk intervention; preserves existing structure.
+2. **Revisit the s7(2)(f)(i) vs (f)(ii) split trigger in the structural-heuristics block.** Current wording on which sentence within a candour section flips to (f)(ii) may not be firing reliably. Consider moving the discriminator to a more concrete trigger (proper-noun-in-grievance-context).
+3. **Add a negative counter-pattern.** "`Mere Rauhihi` in `investigator interviewed Mere Rauhihi on 2024-01-14` is harassment-risk, not personal-name." The pattern that most clearly distinguishes the two for HR investigation content.
+4. **Down-weight the personal-name carve-out language for grievance-adjacent content.** Extend the investigator-in-grievance branch of Phase 3 PR B's reword to witnesses-in-grievance and complainants-in-grievance explicitly.
+
+### 9. Rollback plan
+
+Revert the prompt edit. No schema, no pipeline changes, no runtime flags required.
+
+### 10. Effort estimate
+
+**1–3 engineer-days** per iteration (one iteration = one candidate intervention + directional bench + decision on N=10 re-capture). If candidate 1 moves the signal, the full cycle including re-capture is ~1 day. If the first 2–3 candidates don't move it, escalate to a broader prompt review.
+
+### 11. Dependencies
+
+- **Blocks:** Nothing — Phase 5 and Phase 6 are orthogonal.
+- **Blocked by:** Nothing — Phase 4's propagation pipeline is already the consumer.
+
+### 12. Non-goals
+
+- Revisit Phase 4's propagation plumbing. Verified correct by unit tests and by the `fromPersonalName` side firing correctly.
+- Change scorer semantics. Issue #30 tracks that separately.
+- Chase governance lift via Phase 5 (label-adjacent detection). Phase 5 targets the labelled-row miss class on B1, not grievance content, and running Phase 5 before Phase 3.5 would mask which phase is responsible for governance movement.
+
+---
+
 ## Phase 5 — Label-adjacent detection
 
-**Status (2026-04-23):** queued, not started. Orthogonal to Phases 3 and 4; could run in parallel with them once bench capacity allows.
+**Status (2026-04-23):** queued, not started. Orthogonal to Phases 3, 3.5, and 4; could run in parallel with them once bench capacity allows. **Not the governance lever** — Phase 5 targets the labelled-row miss class on B1 (DOB, DL, NHI, employee numbers sitting in table cells with adjacent labels). Governance lever is Phase 3.5.
 
 ### 1. Scope and success criteria
 
