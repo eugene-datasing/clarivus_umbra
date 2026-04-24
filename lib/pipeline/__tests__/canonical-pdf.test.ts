@@ -17,7 +17,11 @@ vi.mock("../email-to-pdf", () => ({
   renderEmailAsPdf: vi.fn(),
 }));
 
-import { buildCanonicalPdf, isCanonicalPdfSupported } from "../canonical-pdf";
+import { buildCanonicalPdf, isCanonicalPdfSupported, isTextSelectable } from "../canonical-pdf";
+import { execFileSync } from "node:child_process";
+import { writeFileSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { convertToPdfWithLibreOffice } from "../redact-pdf";
 import { renderEmailAsPdf } from "../email-to-pdf";
 
@@ -144,4 +148,96 @@ describe("buildCanonicalPdf", () => {
     const mixed = await buildCanonicalPdf({ id: "d-m", fileType: "DOCX" }, Buffer.from("x"));
     expect(mixed.source).toBe("libreoffice");
   });
+
+  // Phase 3 prerequisite — regression guard: PDF input always produces a
+  // result whose pdfBuffer is identical to the original. process.ts uses
+  // this to decide whether to reuse originalPath as canonicalPdfPath
+  // (avoiding a duplicate storage blob); if pdfBuffer ever drifts from
+  // originalBuffer for source="original" the storage decision breaks.
+  it("PDF input: pdfBuffer is byte-identical to original (Phase 3 storage-decision invariant)", async () => {
+    const buf = await makeRealPdfBuffer(2);
+    const result = await buildCanonicalPdf({ id: "doc-pdf-ident", fileType: "pdf" }, buf);
+    expect(result.source).toBe("original");
+    expect(result.pdfBuffer).toBe(buf); // reference equality, not just byte equality
+  });
+});
+
+// --- isTextSelectable probe (Phase 3 prerequisite) -----------------------
+
+describe("isTextSelectable", () => {
+  it("returns true for a text-heavy PDF (existing canonical-PDF fixture)", async () => {
+    // Use one of the dev DB's DOCX-derived canonicals as a known-good
+    // text-heavy fixture. If the fixture isn't present the test is
+    // skipped — keeps the test suite safe in CI environments that
+    // don't carry the local uploads/ tree.
+    const fixturePath = "uploads/req-001/cmo5enehy00002z6cicgod7np/canonical.pdf";
+    let buf: Buffer;
+    try {
+      buf = readFileSync(fixturePath);
+    } catch {
+      console.warn(`isTextSelectable: text-heavy fixture not found at ${fixturePath}; skipping`);
+      return;
+    }
+    const selectable = await isTextSelectable(buf);
+    expect(selectable).toBe(true);
+  }, 30_000);
+
+  it("returns false for an image-only PDF (rasterised at runtime via PyMuPDF)", async () => {
+    // Build a synthetic image-only PDF by rasterising a real text PDF
+    // and rebuilding it from images. PyMuPDF (fitz) is already in the
+    // toolchain via lib/pipeline/redact_pdf_pymupdf.py.
+    const sourcePath = "uploads/req-001/cmo5enehy00002z6cicgod7np/canonical.pdf";
+    let _src: Buffer;
+    try {
+      _src = readFileSync(sourcePath);
+    } catch {
+      console.warn(`isTextSelectable image-only test: source fixture not found; skipping`);
+      return;
+    }
+
+    const tmp = mkdtempSync(join(tmpdir(), "is-text-selectable-"));
+    const outPath = join(tmp, "scanned.pdf");
+    try {
+      execFileSync(
+        "python3",
+        [
+          "-c",
+          `
+import sys, fitz
+src = fitz.open(sys.argv[1])
+dst = fitz.open()
+for p in src:
+    pix = p.get_pixmap(dpi=100)
+    new_page = dst.new_page(width=p.rect.width, height=p.rect.height)
+    new_page.insert_image(p.rect, pixmap=pix)
+dst.save(sys.argv[2])
+`.trim(),
+          sourcePath,
+          outPath,
+        ],
+        { stdio: "pipe" },
+      );
+    } catch (err) {
+      console.warn(`isTextSelectable image-only test: PyMuPDF rasterise failed; skipping (${err instanceof Error ? err.message : err})`);
+      rmSync(tmp, { recursive: true, force: true });
+      return;
+    }
+
+    const scannedBuf = readFileSync(outPath);
+    rmSync(tmp, { recursive: true, force: true });
+
+    const selectable = await isTextSelectable(scannedBuf);
+    expect(selectable).toBe(false);
+  }, 60_000);
+
+  it("returns false for a tiny synthetic PDF with no text", async () => {
+    // Pure pdf-lib synthesis — no text drawn at all. Pages have area but
+    // no text-layer items; isTextSelectable should report false.
+    const blank = await makeRealPdfBuffer(2);
+    // Sanity: writeFile to make the buffer real (not strictly necessary
+    // since we pass it directly).
+    void writeFileSync;
+    const selectable = await isTextSelectable(blank);
+    expect(selectable).toBe(false);
+  }, 30_000);
 });

@@ -90,11 +90,12 @@ model Document {
   processingError String?
 
   // Canonical PDF — one-PDF-per-document viewer rework (Phase 1, April 2026)
-  canonicalPdfPath      String? @map("canonical_pdf_path")
-  canonicalPdfSha256    String? @map("canonical_pdf_sha256")
-  canonicalPdfPageCount Int?    @map("canonical_pdf_page_count")
-  canonicalPdfBuildMs   Int?    @map("canonical_pdf_build_ms")
-  canonicalPdfSource    String? @map("canonical_pdf_source") // "original" | "libreoffice" | "email-template"
+  canonicalPdfPath            String?  @map("canonical_pdf_path")
+  canonicalPdfSha256          String?  @map("canonical_pdf_sha256")
+  canonicalPdfPageCount       Int?     @map("canonical_pdf_page_count")
+  canonicalPdfBuildMs         Int?     @map("canonical_pdf_build_ms")
+  canonicalPdfSource          String?  @map("canonical_pdf_source") // "original" | "libreoffice" | "email-template"
+  canonicalPdfTextSelectable  Boolean? @map("canonical_pdf_text_selectable") // pdf.js text-layer probe; null = not yet probed, false = scanned/image-only
 
   // AI results (denormalized for list views)
   detectionCount Int   @default(0)
