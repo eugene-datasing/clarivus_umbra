@@ -2,6 +2,12 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
+# The postinstall hook runs `tsx scripts/copy-pdfjs-worker.ts` (Slice A,
+# PR #42), which needs the script file present in the container at
+# `npm ci` time. We stage it here so the Stage 1 layer cache still only
+# invalidates on package.json / lock / copy-script changes — all three
+# are infrequent — rather than relying on the full `COPY . .` in Stage 2.
+COPY scripts/copy-pdfjs-worker.ts ./scripts/copy-pdfjs-worker.ts
 RUN npm ci
 
 # Stage 2: Build the application
