@@ -101,8 +101,10 @@ export interface ReviewClientProps {
   detections: Detection[];
   documentIds: string[];
   currentDocIndex: number;
-  isPdf?: boolean;
+  canonicalPdfPath?: string;
+  canonicalPdfTextSelectable?: boolean;
   pdfUrl?: string;
+  viewerMode: "html" | "pdf";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -282,9 +284,15 @@ export default function ReviewClient({
   detections,
   documentIds,
   currentDocIndex,
-  isPdf,
+  canonicalPdfPath,
   pdfUrl,
+  viewerMode,
 }: ReviewClientProps) {
+  // Slice A routing: the pdf.js viewer is reached only when the admin
+  // flag is flipped AND a canonical PDF exists. Default viewerMode is
+  // "html" per lib/data/settings, so reviewers continue to see the HTML
+  // reconstruction branch. Slice D flips the default.
+  const showPdf = viewerMode === "pdf" && !!canonicalPdfPath;
   const router = useRouter();
 
   // ----- State (initialised from DB data via props) -----
@@ -1652,7 +1660,7 @@ export default function ReviewClient({
         {/* --- Document Panels (single scroll container) --- */}
         <div className="flex-1 overflow-y-auto min-h-0">
           <div className="flex min-h-full review-split-pane">
-            {isPdf && pdfUrl ? (
+            {showPdf && pdfUrl ? (
               /* ===== PDF MODE: single panel with detection overlays ===== */
               <div className="w-full h-full">
                 <PdfViewer

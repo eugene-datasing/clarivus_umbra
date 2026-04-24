@@ -7,8 +7,9 @@ import "react-pdf/dist/Page/TextLayer.css";
 import PdfDetectionOverlay from "./pdf-detection-overlay";
 import PdfToolbar from "./pdf-toolbar";
 
-// Configure pdfjs worker from CDN
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+// Same-origin worker — copied into public/ by scripts/copy-pdfjs-worker.ts
+// (postinstall). Third-party CDN removed for data-sovereignty + CSP.
+pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
 interface DetectionForOverlay {
   id: string;
@@ -178,7 +179,7 @@ export default function PdfViewer({
                 pageNumber={pageNum}
                 scale={scale}
                 width={containerWidth > 0 ? containerWidth - 48 : undefined}
-                renderTextLayer={false}
+                renderTextLayer={true}
                 renderAnnotationLayer={false}
               />
               <PdfDetectionOverlay

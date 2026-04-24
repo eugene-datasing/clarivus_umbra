@@ -19,6 +19,7 @@ export const SETTING_KEYS = {
   SETUP_WIZARD_STATE: "setup_wizard_state",
   ACTIVATION_STATUS: "activation_status",
   INSTANCE_CONFIG: "instance_config",
+  VIEWER_MODE: "VIEWER_MODE",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
@@ -279,3 +280,27 @@ export interface InstanceConfig {
 }
 
 export const DEFAULT_INSTANCE_CONFIG: InstanceConfig = {};
+
+// ---------------------------------------------------------------------------
+// Viewer mode (rollback lever for the pdf.js viewer cutover — Phase 3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Review-UI viewer mode. `"html"` renders the legacy HTML reconstruction
+ * dual-panel branch; `"pdf"` routes to the pdf.js-based canonical viewer
+ * (Phase 3 of the viewer rework). The value is stored as a bare JSON
+ * string in `system_settings.value` — unset rows fall through to the
+ * default via `getSetting(key, default)`.
+ *
+ * This is a rollback lever, not a user-facing preference (Decision h,
+ * v2). Admins flip via Prisma Studio or a direct settings update. Slice
+ * A ships with default `"html"` so the legacy branch continues to render
+ * for every reviewer until Slice D flips the default.
+ */
+export type ViewerMode = "html" | "pdf";
+
+export const DEFAULT_VIEWER_MODE: ViewerMode = "html";
+
+export function isViewerMode(v: unknown): v is ViewerMode {
+  return v === "html" || v === "pdf";
+}

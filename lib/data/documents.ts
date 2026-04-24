@@ -45,6 +45,8 @@ export async function getDocument(id: string) {
     updatedAt: d.updatedAt.toISOString(),
     duplicateGroup: d.duplicateGroup ?? undefined,
     originalPath: d.originalPath ?? undefined,
+    canonicalPdfPath: d.canonicalPdfPath ?? undefined,
+    canonicalPdfTextSelectable: d.canonicalPdfTextSelectable ?? undefined,
   };
 }
 
