@@ -13,6 +13,7 @@ import {
   EyeOff,
   Edit,
   AlertCircle,
+  Info,
   Star,
   FileText,
   Shield,
@@ -55,6 +56,7 @@ const PdfViewer = dynamic(() => import("@/components/review/pdf-viewer"), {
 import { lgoimaGrounds } from "@/lib/lgoima-grounds";
 import { cn } from "@/lib/utils";
 import { compareDetectionsByPosition } from "@/lib/review/sort-detections";
+import { computePdfSelectionBbox, findPdfPageWrapper } from "@/lib/review/pdf-selection";
 import {
   type DetectionHistoryEntry,
   formatFieldChange,
@@ -286,14 +288,29 @@ export default function ReviewClient({
   documentIds,
   currentDocIndex,
   canonicalPdfPath,
+  canonicalPdfTextSelectable,
   pdfUrl,
   viewerMode,
 }: ReviewClientProps) {
-  // Slice A routing: the pdf.js viewer is reached only when the admin
-  // flag is flipped AND a canonical PDF exists. Default viewerMode is
-  // "html" per lib/data/settings, so reviewers continue to see the HTML
-  // reconstruction branch. Slice D flips the default.
-  const showPdf = viewerMode === "pdf" && !!canonicalPdfPath;
+  // Routing — a three-way decision now (Slice C):
+  //   1. flag=pdf + canonical present + text-selectable (true | null) → PdfViewer.
+  //   2. flag=pdf + canonical present + text-selectable === false    → HTML + Option C banner.
+  //   3. everything else (flag=html, or no canonical)                → HTML, no banner.
+  //
+  // The `!== false` comparison is deliberate. `canonicalPdfTextSelectable`
+  // is nullable — unpopulated on legacy rows predating PR #39. We treat
+  // `null` as "unknown, probably fine" and keep those rows on the PDF
+  // path; only an explicit `false` forces the HTML fallback. This avoids
+  // degrading UX for the long tail of documents the backfill hasn't
+  // probed yet.
+  const showPdf =
+    viewerMode === "pdf" &&
+    !!canonicalPdfPath &&
+    canonicalPdfTextSelectable !== false;
+  const showOptionCBanner =
+    viewerMode === "pdf" &&
+    !!canonicalPdfPath &&
+    canonicalPdfTextSelectable === false;
   const router = useRouter();
 
   // ----- State (initialised from DB data via props) -----
@@ -592,7 +609,12 @@ export default function ReviewClient({
     }
   }, []);
 
-  // ----- Text selection handler for manual detection (WP22) -----
+  // ----- Text selection handler for manual detection (HTML branch, WP22) ----
+  //
+  // Reads `dataset.page` from the reconstructed-paragraph tree. Unchanged
+  // from Slices A/B; Slice C adds a parallel PDF-branch handler below.
+  // Mouse-only (onMouseUp); keyboard selection support could be extended
+  // to this branch in a later ticket but is out of scope for Slice C.
   const handleTextSelection = useCallback((e: React.MouseEvent) => {
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed || !selection.toString().trim()) return;
@@ -625,6 +647,56 @@ export default function ReviewClient({
       position: { x: e.clientX, y: e.clientY },
     });
   }, []);
+
+  // ----- Text selection handler for manual detection (PDF branch, Slice C) --
+  //
+  // Reads `dataset.pageNumber` from the per-page wrapper inside the
+  // PdfViewer (Slice B adds `data-page-row="true"` + `data-page-number`
+  // on that element) and translates `range.getBoundingClientRect()` into
+  // percentage-space bbox coords that match the existing overlay storage
+  // format.
+  //
+  // Invoked from both mouseup AND keyup events so Shift+Arrow keyboard
+  // selection also fires the popover — the existing HTML handler misses
+  // this because it's onMouseUp-only. Guards inside the pure helper
+  // (cross-page, <2 chars, degenerate, layout-race) turn keyups with no
+  // live selection into no-ops.
+  const handlePdfTextSelection = useCallback(
+    (e: { clientX?: number; clientY?: number } = {}) => {
+      const selection = typeof window !== "undefined" ? window.getSelection() : null;
+      if (!selection || selection.isCollapsed) return;
+
+      const anchor = findPdfPageWrapper(selection.anchorNode);
+      const focus = findPdfPageWrapper(selection.focusNode);
+      if (!anchor || !focus) return; // selection not inside any PDF page
+      if (anchor.page !== focus.page) return; // cross-page
+
+      const range = selection.getRangeAt(0);
+      const bbox = computePdfSelectionBbox({
+        text: selection.toString(),
+        anchorPage: anchor.page,
+        focusPage: focus.page,
+        selectionRect: range.getBoundingClientRect(),
+        wrapperRect: anchor.element.getBoundingClientRect(),
+      });
+      if (!bbox) return;
+
+      // Position the popover near the event when we have one (mouseup),
+      // else fall back to the bottom-right of the selection rect (keyup).
+      const hasMouseCoords =
+        typeof e.clientX === "number" && typeof e.clientY === "number";
+      const position = hasMouseCoords
+        ? { x: e.clientX as number, y: e.clientY as number }
+        : bbox.popoverAnchor;
+
+      setManualPopover({
+        text: bbox.text,
+        page: bbox.page,
+        position,
+      });
+    },
+    [],
+  );
 
   const handleManualDetectionSubmit = useCallback(
     async (data: { text: string; type: string; page: number; ground?: string; reasoning?: string }) => {
@@ -1628,6 +1700,24 @@ export default function ReviewClient({
 
       {/* ===== MAIN CONTENT: Split Panels + Bottom Detection Table ===== */}
       <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Option C banner — only when the HTML fallback is serving because
+            the canonical PDF has no selectable text layer. Legacy rows with
+            `canonicalPdfTextSelectable == null` stay on the PDF path and
+            don't see this banner. See showOptionCBanner derivation above. */}
+        {showOptionCBanner && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex items-start gap-2 px-4 py-2 bg-blue-50 border-b border-blue-200 text-xs text-blue-900"
+            data-option-c-banner="true"
+          >
+            <Info size={13} className="mt-0.5 shrink-0 text-blue-700" aria-hidden="true" />
+            <span>
+              This document doesn&apos;t have selectable text (scanned or image-only).
+              Showing the reconstructed text view so you can still select and annotate text.
+            </span>
+          </div>
+        )}
         {/* --- Document Panels (single scroll container) --- */}
         <div className="flex-1 overflow-y-auto min-h-0">
           <div className="flex min-h-full review-split-pane">
@@ -1640,6 +1730,7 @@ export default function ReviewClient({
                   selectedDetectionId={selectedDetectionId}
                   onDetectionClick={handleHighlightClick}
                   detectionStates={detectionStates}
+                  onTextSelection={handlePdfTextSelection}
                 />
               </div>
             ) : (

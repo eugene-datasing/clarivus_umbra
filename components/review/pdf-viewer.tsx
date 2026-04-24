@@ -56,6 +56,14 @@ interface PdfViewerProps {
   selectedDetectionId: string | null;
   onDetectionClick: (detectionId: string) => void;
   detectionStates: Record<string, { status: string }>;
+  /**
+   * Manual-detection hook — fired on mouseup AND keyup inside the
+   * viewer so Shift+Arrow keyboard selection also triggers the
+   * popover (Slice C). Mouse-originated events pass clientX/clientY
+   * for popover anchoring; keyboard events leave them undefined and
+   * the consumer falls back to the selection rect.
+   */
+  onTextSelection?: (e: { clientX?: number; clientY?: number }) => void;
 }
 
 export default function PdfViewer({
@@ -64,6 +72,7 @@ export default function PdfViewer({
   selectedDetectionId,
   onDetectionClick,
   detectionStates,
+  onTextSelection,
 }: PdfViewerProps) {
   const [numPages, setNumPages] = useState(0);
   const [scale, setScale] = useState(1);
@@ -139,6 +148,20 @@ export default function PdfViewer({
     []
   );
 
+  // Wire keyboard-selection support (Shift+Arrow, etc). The mouseup
+  // pathway is bound as a React prop below; keyup has to attach
+  // imperatively because React's synthetic-event system doesn't fire
+  // keyup on non-focused elements reliably. Scoped to the scroll
+  // container so global keyups outside the viewer don't fire it.
+  useEffect(() => {
+    if (!onTextSelection) return;
+    const el = containerRef.current;
+    if (!el) return;
+    const handler = () => onTextSelection({});
+    el.addEventListener("keyup", handler);
+    return () => el.removeEventListener("keyup", handler);
+  }, [onTextSelection]);
+
   const handleZoomIn = useCallback(() => {
     setScale((s) => Math.min(3, s + 0.25));
   }, []);
@@ -212,6 +235,12 @@ export default function PdfViewer({
         ref={containerRef}
         className="flex-1 overflow-y-auto bg-gray-100"
         data-dual-panel-active={showLeftPanel ? "true" : "false"}
+        tabIndex={-1}
+        onMouseUp={
+          onTextSelection
+            ? (e) => onTextSelection({ clientX: e.clientX, clientY: e.clientY })
+            : undefined
+        }
       >
         <Document
           file={fileUrl}
