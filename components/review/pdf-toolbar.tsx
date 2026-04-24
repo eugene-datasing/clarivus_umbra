@@ -1,6 +1,13 @@
 "use client";
 
-import { ZoomIn, ZoomOut, Maximize2, Download } from "lucide-react";
+import {
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  Download,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from "lucide-react";
 
 interface PdfToolbarProps {
   currentPage: number;
@@ -10,6 +17,14 @@ interface PdfToolbarProps {
   onZoomOut: () => void;
   onFitWidth: () => void;
   downloadUrl?: string;
+
+  // Dual-panel toggle (Slice B). When `dualPanelAvailable` is false
+  // (e.g. content area narrower than the 1280px collapse breakpoint),
+  // the toggle is not rendered at all — there's no dual panel to
+  // toggle off of.
+  dualPanelAvailable?: boolean;
+  showOriginal?: boolean;
+  onToggleShowOriginal?: () => void;
 }
 
 export default function PdfToolbar({
@@ -20,6 +35,9 @@ export default function PdfToolbar({
   onZoomOut,
   onFitWidth,
   downloadUrl,
+  dualPanelAvailable = false,
+  showOriginal = true,
+  onToggleShowOriginal,
 }: PdfToolbarProps) {
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 bg-surface-card border-b border-border">
@@ -51,6 +69,21 @@ export default function PdfToolbar({
       </button>
 
       <div className="h-4 w-px bg-border mx-1" />
+
+      {dualPanelAvailable && onToggleShowOriginal && (
+        <>
+          <button
+            onClick={onToggleShowOriginal}
+            className="btn-ghost p-1"
+            title={showOriginal ? "Hide original — show redaction preview only" : "Show original alongside redaction preview"}
+            aria-pressed={showOriginal}
+            aria-label={showOriginal ? "Hide original" : "Show original"}
+          >
+            {showOriginal ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
+          </button>
+          <div className="h-4 w-px bg-border mx-1" />
+        </>
+      )}
 
       <span className="text-[10px] text-txt-secondary">
         Page {currentPage} of {totalPages}
