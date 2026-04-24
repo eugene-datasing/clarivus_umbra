@@ -54,6 +54,7 @@ const PdfViewer = dynamic(() => import("@/components/review/pdf-viewer"), {
 });
 import { lgoimaGrounds } from "@/lib/lgoima-grounds";
 import { cn } from "@/lib/utils";
+import { compareDetectionsByPosition } from "@/lib/review/sort-detections";
 import {
   type DetectionHistoryEntry,
   formatFieldChange,
@@ -459,43 +460,13 @@ export default function ReviewClient({
     );
   }, [detections, activeTab]);
 
-  // Build document-order index for detection sorting.
-  // Walks paragraphs, list items, and table cells so detections in all
-  // content structures get a position (not just top-level segments).
-  const detectionOrder = useMemo(() => {
-    const order = new Map<string, number>();
-    let idx = 0;
-    function walk(paras: DocParagraph[]) {
-      for (const para of paras) {
-        for (const seg of para.segments) {
-          if (seg.detectionId && !order.has(seg.detectionId)) {
-            order.set(seg.detectionId, idx++);
-          }
-        }
-        if (para.items) walk(para.items);
-        if (para.rows) {
-          for (const row of para.rows) {
-            for (const cell of row.cells) {
-              for (const seg of cell.segments) {
-                if (seg.detectionId && !order.has(seg.detectionId)) {
-                  order.set(seg.detectionId, idx++);
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    walk(documentContent);
-    return order;
-  }, [documentContent]);
-
-  // Sort filtered detections by document position (top → bottom)
+  // Sort filtered detections by document position (top → bottom).
+  // Slice B switched from walking `documentContent` (the HTML-branch
+  // paragraph tree) to a direct comparator shared with unit tests via
+  // `lib/review/sort-detections`. See that file for the rationale.
   const sortedDetections = useMemo(() => {
-    return [...filteredDetections].sort((a, b) => {
-      return (detectionOrder.get(a.id) ?? Infinity) - (detectionOrder.get(b.id) ?? Infinity);
-    });
-  }, [filteredDetections, detectionOrder]);
+    return [...filteredDetections].sort(compareDetectionsByPosition);
+  }, [filteredDetections]);
 
   const stats = useMemo(() => {
     const total = detections.length;
