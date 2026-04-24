@@ -31,6 +31,7 @@ import { propagateNameDetections } from "./entity-propagation";
 import {
   buildCanonicalPdf,
   isCanonicalPdfSupported,
+  isTextSelectable,
   type CanonicalPdfResult,
 } from "./canonical-pdf";
 import { buildContent, buildContentFromBlocks, verifyDetectionCoverage } from "./content-builder";
@@ -220,18 +221,30 @@ export async function processDocument(docId: string): Promise<void> {
     // the canonical PDF.
     let canonicalPdfResult: CanonicalPdfResult | null = null;
     let canonicalPdfKey: string | null = null;
+    let canonicalPdfTextSelectable: boolean | null = null;
     if (isCanonicalPdfSupported(doc.fileType)) {
       try {
         canonicalPdfResult = await buildCanonicalPdf(
           { id: doc.id, fileType: doc.fileType },
           buffer,
         );
-        canonicalPdfKey = `${caseId}/${docId}/canonical.pdf`;
-        await storage.upload(
-          canonicalPdfKey,
-          canonicalPdfResult.pdfBuffer,
-          "application/pdf",
-        );
+        // PDF-as-own-canonical (Phase 3 prerequisite, 2026-04-24): when
+        // the source is "original" the canonical PDF is byte-identical to
+        // the original (no LibreOffice convert, no email render). Reuse
+        // the existing originalPath rather than uploading a duplicate
+        // blob — saves storage + an upload call per PDF, keeps the
+        // "every processed document has a canonical_pdf_path" invariant
+        // Phase 3 needs without doubling per-PDF storage.
+        if (canonicalPdfResult.source === "original" && doc.originalPath) {
+          canonicalPdfKey = doc.originalPath;
+        } else {
+          canonicalPdfKey = `${caseId}/${docId}/canonical.pdf`;
+          await storage.upload(
+            canonicalPdfKey,
+            canonicalPdfResult.pdfBuffer,
+            "application/pdf",
+          );
+        }
         log.info("Canonical PDF persisted", {
           docId,
           canonicalPdfKey,
@@ -239,7 +252,29 @@ export async function processDocument(docId: string): Promise<void> {
           pageCount: canonicalPdfResult.pageCount,
           sha256: canonicalPdfResult.sha256.slice(0, 16),
           durationMs: canonicalPdfResult.durationMs,
+          reusedOriginalPath: canonicalPdfResult.source === "original",
         });
+
+        // Probe text-selectability against the canonical buffer.
+        // Phase 3 routes text-less canonicals (scanned / image-only PDFs)
+        // to the HTML fallback view; this column drives that branch.
+        try {
+          canonicalPdfTextSelectable = await isTextSelectable(
+            canonicalPdfResult.pdfBuffer,
+          );
+          log.info("Canonical PDF text-selectability probed", {
+            docId,
+            textSelectable: canonicalPdfTextSelectable,
+          });
+        } catch (probeErr) {
+          // Probe failure is non-fatal — leave the column NULL and let
+          // the backfill script retry. Logging only.
+          log.warn("isTextSelectable probe failed, leaving column NULL", {
+            docId,
+            error: probeErr instanceof Error ? probeErr.message : String(probeErr),
+          });
+          canonicalPdfTextSelectable = null;
+        }
       } catch (canonicalErr) {
         // Build failed for a supported type (e.g. LibreOffice subprocess
         // timeout, malformed email). Do NOT mark the document as error —
@@ -252,6 +287,7 @@ export async function processDocument(docId: string): Promise<void> {
         });
         canonicalPdfResult = null;
         canonicalPdfKey = null;
+        canonicalPdfTextSelectable = null;
       }
     } else {
       log.info("Skipping canonical PDF build for unsupported fileType", {
@@ -891,6 +927,7 @@ export async function processDocument(docId: string): Promise<void> {
           canonicalPdfPageCount: canonicalPdfResult?.pageCount ?? null,
           canonicalPdfBuildMs: canonicalPdfResult?.durationMs ?? null,
           canonicalPdfSource: canonicalPdfResult?.source ?? null,
+          canonicalPdfTextSelectable,
         },
       });
 
