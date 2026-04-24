@@ -27,6 +27,9 @@ e2e/.auth/
 .DS_Store
 *.tsbuildinfo
 
+# pdf.js worker — copied into public/ by postinstall from node_modules/pdfjs-dist
+public/pdf.worker.min.mjs
+
 # Local working files (not shared with the team)
 PNCC-demo-cheatsheet.docx
 playwright_output.txt

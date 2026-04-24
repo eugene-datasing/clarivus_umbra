@@ -24,6 +24,8 @@ import {
   DEFAULT_CONFIDENCE_THRESHOLDS,
   DEFAULT_SETUP_WIZARD_STATE,
   DEFAULT_ACTIVATION_STATUS,
+  DEFAULT_VIEWER_MODE,
+  isViewerMode,
 } from "../settings";
 import { prisma } from "@/lib/db/prisma";
 
@@ -138,6 +140,59 @@ describe("SETTING_KEYS", () => {
     expect(SETTING_KEYS.CONFIDENCE_THRESHOLDS).toBe("confidence_thresholds");
     expect(SETTING_KEYS.SETUP_WIZARD_STATE).toBe("setup_wizard_state");
     expect(SETTING_KEYS.ACTIVATION_STATUS).toBe("activation_status");
+    expect(SETTING_KEYS.VIEWER_MODE).toBe("VIEWER_MODE");
+  });
+});
+
+describe("VIEWER_MODE", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("DEFAULT_VIEWER_MODE is 'html'", () => {
+    expect(DEFAULT_VIEWER_MODE).toBe("html");
+  });
+
+  it("isViewerMode accepts 'html' and 'pdf', rejects anything else", () => {
+    expect(isViewerMode("html")).toBe(true);
+    expect(isViewerMode("pdf")).toBe(true);
+    expect(isViewerMode("HTML")).toBe(false);
+    expect(isViewerMode("")).toBe(false);
+    expect(isViewerMode(null)).toBe(false);
+    expect(isViewerMode(undefined)).toBe(false);
+    expect(isViewerMode({ mode: "pdf" })).toBe(false);
+    expect(isViewerMode(42)).toBe(false);
+  });
+
+  it("getSetting returns 'html' when VIEWER_MODE row is absent", async () => {
+    mockFindUnique.mockResolvedValue(null);
+    const result = await getSetting(SETTING_KEYS.VIEWER_MODE, DEFAULT_VIEWER_MODE);
+    expect(result).toBe("html");
+    expect(mockFindUnique).toHaveBeenCalledWith({ where: { key: "VIEWER_MODE" } });
+  });
+
+  it("getSetting returns the stored value when VIEWER_MODE row is 'pdf'", async () => {
+    mockFindUnique.mockResolvedValue({ key: "VIEWER_MODE", value: "pdf" });
+    const result = await getSetting(SETTING_KEYS.VIEWER_MODE, DEFAULT_VIEWER_MODE);
+    expect(result).toBe("pdf");
+  });
+
+  it("getSetting returns 'html' when row exists but is explicitly set to 'html'", async () => {
+    mockFindUnique.mockResolvedValue({ key: "VIEWER_MODE", value: "html" });
+    const result = await getSetting(SETTING_KEYS.VIEWER_MODE, DEFAULT_VIEWER_MODE);
+    expect(result).toBe("html");
+  });
+
+  it("isViewerMode guards callers against malformed stored values", async () => {
+    // Simulates a hand-edited row with the old object-shaped value from the
+    // plan doc's earlier spec; getSetting returns it verbatim and the caller
+    // is expected to validate before using it.
+    mockFindUnique.mockResolvedValue({ key: "VIEWER_MODE", value: { mode: "pdf" } });
+    const raw = await getSetting<unknown>(SETTING_KEYS.VIEWER_MODE, DEFAULT_VIEWER_MODE);
+    expect(isViewerMode(raw)).toBe(false);
+    // Caller falls back to default
+    const resolved = isViewerMode(raw) ? raw : DEFAULT_VIEWER_MODE;
+    expect(resolved).toBe("html");
   });
 });
 
