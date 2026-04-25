@@ -4,7 +4,7 @@ import { SEED } from "../fixtures/test-data";
 test.describe("Export API", () => {
   test("POST /api/export/:requestId/generate rejects empty document list", async ({ request }) => {
     const res = await request.post(
-      `/api/export/${SEED.cases.coastalWalkway.id}/generate`,
+      `/api/export/${SEED.cases.featherstonStreet.id}/generate`,
       { data: { documentIds: [] } },
     );
     // May return 403 (CSRF), 400 (empty docs), or 422
@@ -13,10 +13,10 @@ test.describe("Export API", () => {
 
   test("POST /api/export/:requestId/generate rejects unreviewed documents", async ({ request }) => {
     const res = await request.post(
-      `/api/export/${SEED.cases.coastalWalkway.id}/generate`,
+      `/api/export/${SEED.cases.featherstonStreet.id}/generate`,
       {
         data: {
-          documentIds: [SEED.documents.councilReport.id],
+          documentIds: [SEED.documents.mainCaseFile.id],
           packageType: "internal",
         },
       },
@@ -27,14 +27,14 @@ test.describe("Export API", () => {
 
   test("GET /api/export/:requestId/batch-status requires batchGroupId", async ({ request }) => {
     const res = await request.get(
-      `/api/export/${SEED.cases.coastalWalkway.id}/batch-status`,
+      `/api/export/${SEED.cases.featherstonStreet.id}/batch-status`,
     );
     // Should return error without batchGroupId param
     expect(res.status()).toBeGreaterThanOrEqual(400);
   });
 
   test("GET /api/schedule/:requestId returns schedule PDF", async ({ request }) => {
-    const res = await request.get(`/api/schedule/${SEED.cases.coastalWalkway.id}`);
+    const res = await request.get(`/api/schedule/${SEED.cases.featherstonStreet.id}`);
     expect(res.status()).toBeLessThan(500);
     if (res.ok()) {
       const contentType = res.headers()["content-type"];

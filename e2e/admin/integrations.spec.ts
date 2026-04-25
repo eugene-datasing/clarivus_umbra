@@ -3,10 +3,11 @@ import { test, expect } from "@playwright/test";
 test.describe("Admin — Integrations", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/admin/settings");
-    const tab = page.getByRole("button", { name: /integration/i }).or(
-      page.getByText("Integrations"),
-    );
-    await tab.click();
+    // Slice D1 — strict-mode-safe exact match. The previous form used
+    // `.or(getByText("Integrations"))` which matched both the tab
+    // button and a description paragraph containing "...integrations,
+    // and system health" → strict-mode violation.
+    await page.getByRole("button", { name: "Integrations", exact: true }).click();
   });
 
   test("shows Microsoft 365 integration card", async ({ page }) => {

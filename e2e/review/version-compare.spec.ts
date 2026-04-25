@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { SEED } from "../fixtures/test-data";
 
 test.describe("Version Comparison", () => {
-  const compareUrl = `/requests/${SEED.cases.coastalWalkway.id}/review/${SEED.documents.councilReport.id}/compare`;
+  const compareUrl = `/requests/${SEED.cases.featherstonStreet.id}/review/${SEED.documents.mainCaseFile.id}/compare`;
 
   test("renders the version comparison page", async ({ page }) => {
     await page.goto(compareUrl);

@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { SEED } from "../fixtures/test-data";
 
 test.describe("Bulk Review", () => {
-  const bulkReviewUrl = `/requests/${SEED.cases.coastalWalkway.id}/bulk-review`;
+  const bulkReviewUrl = `/requests/${SEED.cases.featherstonStreet.id}/bulk-review`;
 
   test("renders the bulk review page with heading", async ({ page }) => {
     await page.goto(bulkReviewUrl);

@@ -15,8 +15,8 @@ test.describe("Case List & Filtering", () => {
 
   test("displays seeded case references in the table", async ({ page }) => {
     await page.goto("/requests");
-    await expect(page.locator("body")).toContainText(SEED.cases.coastalWalkway.reference);
-    await expect(page.locator("body")).toContainText(SEED.cases.devonStreet.reference);
+    await expect(page.locator("body")).toContainText(SEED.cases.featherstonStreet.reference);
+    await expect(page.locator("body")).toContainText(SEED.cases.resourceConsent.reference);
   });
 
   test("shows case count", async ({ page }) => {
@@ -34,9 +34,9 @@ test.describe("Case List & Filtering", () => {
   test("can search for a case by reference", async ({ page }) => {
     await page.goto("/requests");
     const searchInput = page.locator('input[type="text"], input[type="search"]').first();
-    await searchInput.fill(SEED.cases.coastalWalkway.reference);
+    await searchInput.fill(SEED.cases.featherstonStreet.reference);
     // After search, should still show the matching case
-    await expect(page.locator("body")).toContainText(SEED.cases.coastalWalkway.reference);
+    await expect(page.locator("body")).toContainText(SEED.cases.featherstonStreet.reference);
   });
 
   test("has filter controls", async ({ page }) => {
@@ -66,12 +66,12 @@ test.describe("Case List & Filtering", () => {
   test("clicking a case navigates to its detail page", async ({ page }) => {
     await page.goto("/requests");
     const caseLink = page
-      .getByRole("link", { name: new RegExp(SEED.cases.coastalWalkway.reference) })
-      .or(page.locator(`a[href*="${SEED.cases.coastalWalkway.id}"]`).first());
+      .getByRole("link", { name: new RegExp(SEED.cases.featherstonStreet.reference) })
+      .or(page.locator(`a[href*="${SEED.cases.featherstonStreet.id}"]`).first());
 
     if (await caseLink.isVisible({ timeout: 5_000 }).catch(() => false)) {
       await caseLink.click();
-      await page.waitForURL(new RegExp(SEED.cases.coastalWalkway.id), {
+      await page.waitForURL(new RegExp(SEED.cases.featherstonStreet.id), {
         timeout: 10_000,
       });
     }

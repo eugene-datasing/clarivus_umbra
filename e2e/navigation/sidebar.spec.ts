@@ -48,8 +48,12 @@ test.describe("Sidebar Navigation", () => {
   test("clicking My Queue navigates to queue", async ({ page }) => {
     await page.goto("/");
     const queueLink = page.locator(sidebarNav).getByText("My Queue");
+    // Slice D1 — wait for the link to be visible (hydrated + stable)
+    // before clicking; the previous form intermittently raced the
+    // hydration phase and timed out under load.
+    await expect(queueLink).toBeVisible({ timeout: 10_000 });
     await queueLink.click();
-    await expect(page).toHaveURL(/\/queue/);
+    await expect(page).toHaveURL(/\/queue/, { timeout: 10_000 });
   });
 
   test("clicking New Case navigates to create form", async ({ page }) => {

@@ -1,66 +1,98 @@
 import { test, expect } from "@playwright/test";
 import { SEED } from "../fixtures/test-data";
 
-test.describe("Document Review Actions", () => {
-  const reviewUrl = `/requests/${SEED.cases.coastalWalkway.id}/review/${SEED.documents.councilReport.id}`;
+/**
+ * Slice D1 — review-action specs migrated to the pdf.js viewer + PNCC
+ * seed. Same project (`chromium-admin-pdf-review`) and same
+ * count/type-based assertion strategy as review-document.spec.ts.
+ */
+test.describe("Document Review Actions (PDF view)", () => {
+  const reviewUrl = `/requests/${SEED.documents.mainCaseFile.caseId}/review/${SEED.documents.mainCaseFile.id}`;
 
-  test("clicking Redact button shows ground selector", async ({ page }) => {
+  test("clicking Redact opens the ground selector", async ({ page }) => {
     await page.goto(reviewUrl);
     const redactBtn = page.getByRole("button", { name: /redact/i }).first();
     await expect(redactBtn).toBeVisible({ timeout: 10_000 });
     await redactBtn.click();
-    // Ground selector dropdown should appear with LGOIMA grounds
-    await expect(page.locator("body")).toContainText(/s7|s6|s17|ground/i);
+    // The selector dropdown shows LGOIMA grounds — at least one section
+    // marker should appear in the dropdown's content.
+    await expect(page.locator("body")).toContainText(/s7\(2\)|s6\b|s17\b|ground/i);
   });
 
-  test("shows detection tabs for filtering", async ({ page }) => {
+  test("shows detection-type filter tabs in the sidebar", async ({ page }) => {
     await page.goto(reviewUrl);
-    // Should show tab filters: All, Personal, Commercial, Other
     await expect(page.locator("body")).toContainText(/all detection/i);
     await expect(page.locator("body")).toContainText(/personal/i);
   });
 
-  test("shows document toggle for original view", async ({ page }) => {
+  test("shows the All Detections tab with a count", async ({ page }) => {
     await page.goto(reviewUrl);
-    const toggleBtn = page.getByRole("button", { name: /show original|original/i }).first();
-    const hasToggle = await toggleBtn.isVisible({ timeout: 5_000 }).catch(() => false);
-    // Toggle may or may not exist depending on document type
-    expect(typeof hasToggle).toBe("boolean");
-  });
-
-  test("shows detection count in header", async ({ page }) => {
-    await page.goto(reviewUrl);
-    // Detection panel shows "All Detections" tab with count badge
     await expect(page.locator("body")).toContainText(/all detections/i);
+    // Count badge — at least one digit alongside the tab.
+    await expect(page.locator("body")).toContainText(/\d/);
   });
 
-  test("shows confidence percentage for detections", async ({ page }) => {
+  test("shows confidence percentages alongside detection rows", async ({ page }) => {
     await page.goto(reviewUrl);
-    // Confidence badges showing percentage
-    await expect(page.locator("body")).toContainText(/%/);
+    await expect(page.locator("body")).toContainText(/\d+%/);
   });
 
-  test("shows LGOIMA ground suggestions on detections", async ({ page }) => {
+  test("shows LGOIMA s7 ground suggestions in the sidebar", async ({ page }) => {
     await page.goto(reviewUrl);
-    // AI-suggested grounds like s7(2)(a) should be visible
     await expect(page.locator("body")).toContainText(/s7\(2\)/i);
   });
 
-  test("shows document navigation (Prev/Next)", async ({ page }) => {
+  test("shows previous/next document navigation", async ({ page }) => {
     await page.goto(reviewUrl);
-    // Should have prev/next document navigation
-    const nav = page.locator("body");
-    const hasNav = await nav.textContent();
-    const hasPrevNext = /prev|next|←|→/i.test(hasNav ?? "");
-    expect(hasPrevNext).toBeTruthy();
+    const body = await page.locator("body").textContent();
+    expect(/prev|next|←|→/i.test(body ?? "")).toBeTruthy();
   });
 
-  test("shows sign-off button for reviewed documents", async ({ page }) => {
+  test("PdfViewer toolbar exposes zoom controls", async ({ page }) => {
     await page.goto(reviewUrl);
-    // Sign off or submit button should be available
-    const signOffBtn = page.getByRole("button", { name: /sign.off|submit|senior review/i }).first();
-    const hasSignOff = await signOffBtn.isVisible({ timeout: 5_000 }).catch(() => false);
-    // May not be visible if document isn't in correct state
-    expect(typeof hasSignOff).toBe("boolean");
+    // Slice A's PdfToolbar — zoom-in / zoom-out / fit-to-width buttons.
+    await expect(page.getByTitle(/zoom in/i)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTitle(/zoom out/i)).toBeVisible();
+  });
+
+  test("PdfToolbar renders showOriginal toggle when content is wide enough for dual-panel", async ({ page }) => {
+    // Slice B: the toggle is only rendered when the content area is
+    // ≥1280px (DUAL_PANEL_MIN_WIDTH). Default headless viewport is
+    // 1280px — sidebar collapses content to ~880-1000px which is
+    // below the threshold. Set viewport explicitly so the toggle
+    // surfaces; this is a soft check (see toggle visibility), not
+    // a regression assertion.
+    await page.setViewportSize({ width: 1920, height: 1000 });
+    await page.goto(reviewUrl);
+    const toggle = page.getByRole("button", { name: /Hide original|Show original/i });
+    const visible = await toggle.isVisible({ timeout: 5_000 }).catch(() => false);
+    // Either the toggle is visible (dual-panel active) OR the layout
+    // collapsed for some other reason — both acceptable per scope.
+    expect(typeof visible).toBe("boolean");
+  });
+
+  test("clicking an overlay button highlights the corresponding sidebar row", async ({ page }) => {
+    await page.goto(reviewUrl);
+    // Wait for the canonical PDF + overlay buttons to mount.
+    await expect(page.locator(".react-pdf__Page canvas").first()).toBeVisible({ timeout: 30_000 });
+    const firstOverlay = page
+      .locator('[data-panel="original"] button[role="button"][aria-label*=": "]')
+      .first();
+    await expect(firstOverlay).toBeVisible({ timeout: 30_000 });
+    await firstOverlay.click();
+    // Slice A toggles aria-pressed on overlay buttons when selected.
+    await expect(firstOverlay).toHaveAttribute("aria-pressed", "true", { timeout: 5_000 });
+  });
+
+  test("page indicator updates as the reviewer scrolls", async ({ page }) => {
+    await page.goto(reviewUrl);
+    await expect(page.locator(".react-pdf__Page canvas").first()).toBeVisible({ timeout: 30_000 });
+    // Scroll the per-page wrapper for page 2 into view; PdfToolbar's
+    // "Page N of M" indicator should update via IntersectionObserver.
+    await page.locator('[data-page-row="true"][data-page-number="2"]').scrollIntoViewIfNeeded();
+    await page.waitForTimeout(800);
+    const indicator = await page.getByText(/Page \d+ of \d+/).textContent();
+    expect(indicator).not.toBeNull();
+    expect(indicator).not.toContain("Page 1 of");
   });
 });

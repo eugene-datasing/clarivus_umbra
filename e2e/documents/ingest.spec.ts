@@ -3,7 +3,7 @@ import path from "path";
 import { SEED } from "../fixtures/test-data";
 
 test.describe("Document Ingestion", () => {
-  const ingestUrl = `/requests/${SEED.cases.coastalWalkway.id}/ingest`;
+  const ingestUrl = `/requests/${SEED.cases.featherstonStreet.id}/ingest`;
 
   test("renders the upload/ingest page", async ({ page }) => {
     await page.goto(ingestUrl);

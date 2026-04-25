@@ -12,17 +12,17 @@ test.describe("Dashboard", () => {
   test("displays seeded case references", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator("body")).toContainText(
-      SEED.cases.coastalWalkway.reference,
+      SEED.cases.featherstonStreet.reference,
     );
   });
 
   test("navigates to case detail when clicking a case", async ({ page }) => {
     await page.goto("/");
-    const caseLink = page.getByText(SEED.cases.coastalWalkway.reference);
+    const caseLink = page.getByText(SEED.cases.featherstonStreet.reference);
     await expect(caseLink).toBeVisible();
     await caseLink.click();
     await expect(page).toHaveURL(
-      new RegExp(`/requests/${SEED.cases.coastalWalkway.id}`),
+      new RegExp(`/requests/${SEED.cases.featherstonStreet.id}`),
     );
   });
 

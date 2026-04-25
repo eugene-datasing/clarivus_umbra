@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { SEED } from "../fixtures/test-data";
 
 test.describe("Export Actions", () => {
-  const exportUrl = `/requests/${SEED.cases.coastalWalkway.id}/export`;
+  const exportUrl = `/requests/${SEED.cases.featherstonStreet.id}/export`;
 
   test("can select and deselect documents via checkboxes", async ({ page }) => {
     await page.goto(exportUrl);

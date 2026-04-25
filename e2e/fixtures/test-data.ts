@@ -1,10 +1,12 @@
 /**
  * Shared test data constants used across E2E specs.
  *
- * These credentials must match users seeded via `prisma/seed.ts`
- * (which creates users without passwords). For E2E tests the
- * global-setup script creates credential-based test users with
- * bcrypt-hashed passwords directly in the DB.
+ * Auth credentials must match users seeded via the global-setup script
+ * (which writes the e2e-* users with bcrypt-hashed passwords directly
+ * to the DB). The case / document / detection IDs match the PNCC demo
+ * seed used on dev — Slice D1 (April 2026) replaced the old
+ * `coastalWalkway` fixture set with the live PNCC seed so e2e specs
+ * can run against the same DB the reviewer demo runs against.
  */
 
 export const TEST_USERS = {
@@ -31,25 +33,76 @@ export const TEST_USERS = {
   },
 } as const;
 
-/** IDs from prisma/seed.ts — stable for assertions */
+/**
+ * Stable IDs from the PNCC demo seed (`prisma/seed.ts`). The mnemonic
+ * names describe each case's content so spec assertions read clearly.
+ *
+ * Compile-time forcing function — renaming the old `coastalWalkway` /
+ * `devonStreet` etc keys breaks every consumer at typecheck, so the
+ * Slice D1 migration is mechanical: each broken site gets the right
+ * PNCC equivalent surfaced by the type error.
+ */
 export const SEED = {
   cases: {
-    coastalWalkway: { id: "req-001", reference: "LGOIMA-2026-042" },
-    devonStreet: { id: "req-002", reference: "LGOIMA-2026-039" },
-    communityTrust: { id: "req-003", reference: "LGOIMA-2026-045" },
-    bellBlock: { id: "req-004", reference: "LGOIMA-2026-038" },
-    threeWaters: { id: "req-005", reference: "LGOIMA-2026-041" },
+    /** req-001 — Featherston Street upgrade (Manawatū Standard, in-review). */
+    featherstonStreet: { id: "req-001", reference: "LGOIMA-2026-014" },
+    /** req-002 — Resource consent RC-2025-0934 (Solicitor, in-review). */
+    resourceConsent: { id: "req-002", reference: "LGOIMA-2026-011" },
+    /** req-003 — Manawatū River water quality (Rangitāne o Manawatū, draft). */
+    waterQuality: { id: "req-003", reference: "LGOIMA-2026-018" },
+    /** req-004 — CEO performance review (NZ Herald, senior-review). */
+    ceoReview: { id: "req-004", reference: "LGOIMA-2026-009" },
+    /** req-005 — Community grants (P. Anderson, in-review). */
+    communityGrants: { id: "req-005", reference: "LGOIMA-2026-021" },
   },
   documents: {
-    councilReport: { id: "doc-001", name: "Council_Report_Coastal_Walkway_v3.pdf" },
-    budgetEstimate: { id: "doc-002", name: "Budget_Estimate_2025-26.xlsx" },
-    emailThread: { id: "doc-003", name: "Email_Thread_Project_Manager_15Mar.eml" },
-    engineeringAssessment: { id: "doc-005", name: "Engineering_Assessment_Stage2.pdf" },
+    /**
+     * req-001 / DOCX / 6 pages / 58 detections — text-selectable canonical.
+     * Anchor doc for review-flow specs.
+     */
+    mainCaseFile: {
+      id: "cmo5enehy00002z6cicgod7np",
+      caseId: "req-001",
+      name: "04_main_case_file_long.docx",
+    },
+    /**
+     * req-002 / image-only PDF — `canonicalPdfTextSelectable = false`.
+     * Use to exercise the Option C fallback (PDF view routes to HTML).
+     */
+    scannedSim: {
+      id: "cmoc936xg00005p061gn1w35e",
+      caseId: "req-002",
+      name: "Scanned-Simulation-For-Option-C.pdf",
+    },
+    /**
+     * req-005 / native PDF / 2 pages / signed-off — useful for
+     * version-compare and audit-trail specs that need a non-draft doc.
+     */
+    formalReport: {
+      id: "cmo3zc44b001o6c6cnk5bud97",
+      caseId: "req-005",
+      name: "07_formal_report.pdf",
+    },
+    /**
+     * req-005 / null `canonicalPdfPath` — backfill safety filter excluded
+     * this row. Use to verify "flag=pdf + null canonical → HTML branch"
+     * routing behaviour.
+     */
+    employmentAgreement: {
+      id: "cmo3xr66j00096c6cg7lns5g1",
+      caseId: "req-005",
+      name: "Employment Agreement - Zhang Liyong (1)[62].pdf",
+    },
   },
-  detections: {
-    johnSmith: { id: "det-001", text: "John Smith", type: "personal-name" },
-    phone: { id: "det-002", text: "021 555 7823", type: "phone" },
-    commercial: { id: "det-004", type: "commercial", status: "pending" },
-    councillor: { id: "det-012", text: "Councillor M. Bridges", confidence: 42 },
+  /**
+   * Sample detection types known to be present on `mainCaseFile`. Prefer
+   * count-based or type-based assertions over specific-text assertions;
+   * specific texts here are kept for the rare case a spec genuinely
+   * needs to verify a particular detection appears (and even then,
+   * regex-matched types like phone / nhi / bank-account are more stable
+   * than AI-inferred narrative summaries).
+   */
+  detectionTypes: {
+    onMainCaseFile: ["phone", "address", "nhi", "email-addr", "personal-name", "bank-account"] as const,
   },
 } as const;

@@ -4,19 +4,22 @@ import { SEED } from "../fixtures/test-data";
 test.describe("Case List Search & Filter", () => {
   test("search input filters cases by reference", async ({ page }) => {
     await page.goto("/requests");
-    const search = page.getByPlaceholder(/search/i);
+    // Multiple inputs match /search/i on this page (sidebar + cases
+    // page); narrow to the cases-page input via the main scope.
+    const search = page.locator("main").getByPlaceholder(/search/i).first();
     await expect(search).toBeVisible();
-    await search.fill(SEED.cases.coastalWalkway.reference);
-    // Should narrow results to matching case
-    await expect(page.locator("body")).toContainText(SEED.cases.coastalWalkway.reference);
+    await search.fill(SEED.cases.featherstonStreet.reference);
+    await expect(page.locator("body")).toContainText(SEED.cases.featherstonStreet.reference);
   });
 
   test("search input filters cases by requester name", async ({ page }) => {
     await page.goto("/requests");
-    const search = page.getByPlaceholder(/search/i);
-    await search.fill("coastal");
-    // Should find the coastal walkway case
-    await expect(page.locator("body")).toContainText(SEED.cases.coastalWalkway.reference);
+    // Multiple inputs match /search/i on this page (sidebar + cases
+    // page); narrow to the cases-page input via the main scope.
+    const search = page.locator("main").getByPlaceholder(/search/i).first();
+    // PNCC seed — search by Manawatū Standard (req-001's requester).
+    await search.fill("Manawatū");
+    await expect(page.locator("body")).toContainText(SEED.cases.featherstonStreet.reference);
   });
 
   test("search with no results shows appropriate message", async ({ page }) => {
@@ -57,10 +60,10 @@ test.describe("Case List Search & Filter", () => {
 
   test("clicking a case row navigates to case detail", async ({ page }) => {
     await page.goto("/requests");
-    const caseRow = page.getByText(SEED.cases.coastalWalkway.reference);
+    const caseRow = page.getByText(SEED.cases.featherstonStreet.reference);
     await caseRow.click();
     await expect(page).toHaveURL(
-      new RegExp(`/requests/${SEED.cases.coastalWalkway.id}`),
+      new RegExp(`/requests/${SEED.cases.featherstonStreet.id}`),
     );
   });
 });
