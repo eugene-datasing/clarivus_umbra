@@ -23,18 +23,33 @@ pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
  * explicitly recommends against it (worker contention, scroll-sync
  * bugs, memory cost, no user win at this stage).
  *
- * Responsive collapse — below 1280px content-area width the right
- * panel is hidden. `DUAL_PANEL_MIN_WIDTH` is the threshold, measured
- * against the ResizeObserver-watched `containerRef` (the scroll
- * container, which IS the content area). Using an RO rather than a
- * CSS container query because the viewer already owns a ResizeObserver
- * for `containerWidth` — reusing it keeps the dependency surface thin
- * (no `@tailwindcss/container-queries` plugin needed).
+ * Responsive collapse — below 1280px content-area width the RIGHT
+ * (redaction-preview) panel is hidden, leaving the LEFT (interactive
+ * primary view with detection overlay) at full width. `DUAL_PANEL_MIN_WIDTH`
+ * is the threshold, measured against the ResizeObserver-watched
+ * `containerRef` (the scroll container, which IS the content area).
+ * Using an RO rather than a CSS container query because the viewer
+ * already owns a ResizeObserver for `containerWidth` — reusing it
+ * keeps the dependency surface thin (no `@tailwindcss/container-queries`
+ * plugin needed). Pre-fix this was inverted (hid the LEFT, kept the
+ * display-only RIGHT alone) which left the reviewer without an
+ * interactive surface at narrow viewports.
  *
- * `showOriginal` — session-local toggle on the toolbar. When off AND
- * dual-panel is otherwise available, the left panel is hidden via
- * `display: none` and the right panel widens. Kept mounted so toggling
- * back on is instant (no re-render of the left panel's canvases).
+ * `showPreview` — session-local toggle on the toolbar. When off AND
+ * dual-panel is otherwise available, the right panel is hidden via
+ * `display: none` and the left panel widens. Kept mounted so toggling
+ * back on is instant (no re-render of the right panel's canvases).
+ *
+ * Coordinate-space binding — the detection overlay (left) and the
+ * redaction-preview overlay (right) both render with percentage
+ * coordinates. They sit inside an inner `width: fit-content` wrapper
+ * that takes the canvas's actual rendered size, NOT the panel's
+ * fixed layout width. This binds the overlay's `absolute inset-0`
+ * to the canvas bounding box so percentages map to the document
+ * coordinate space at every zoom level. Without this wrapper the
+ * overlay's coordinate space stays at panel-width regardless of the
+ * Page's `scale` prop, and boxes drift past the right edge of the
+ * canvas.
  */
 
 const DUAL_PANEL_MIN_WIDTH = 1280;
@@ -78,7 +93,7 @@ export default function PdfViewer({
   const [scale, setScale] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
   const [containerWidth, setContainerWidth] = useState(0);
-  const [showOriginal, setShowOriginal] = useState(true);
+  const [showPreview, setShowPreview] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
@@ -96,22 +111,38 @@ export default function PdfViewer({
   }, []);
 
   // Dual-panel only when the content area is ≥1280px wide. Below that
-  // the right panel is hidden (design call documented in the 2026-04-24
-  // spike — at <1280 the halved panel width puts body text below
-  // readable size even on a zoomed canonical).
+  // the right (redaction-preview) panel is hidden — leaving the left
+  // (interactive primary view with detection overlay) at full width.
+  // Design call documented in the 2026-04-24 spike: at <1280 the halved
+  // panel width puts body text below readable size even on a zoomed
+  // canonical, so collapsing to one panel is the right move; the LEFT
+  // is the panel to keep because it's where reviewers interact with
+  // detections (the right panel is display-only).
   const dualPanelAvailable = containerWidth >= DUAL_PANEL_MIN_WIDTH;
-  const showLeftPanel = dualPanelAvailable && showOriginal;
+  const showRightPanel = dualPanelAvailable && showPreview;
 
-  // Width math: right panel always renders. Left panel width matches
-  // right when dual, collapses to zero otherwise. PANEL_GAP_PX is the
-  // flex `gap` between the two panels — deducted once so both panel
-  // widths account for it.
-  const rightPanelWidth = useMemo(() => {
+  // Width math — two layers:
+  //
+  //   1. `basePanelWidth` — the layout-time panel width at scale=1.
+  //      Splits the content area in two when dual-panel is active,
+  //      takes the full width when collapsed. PANEL_GAP_PX is deducted
+  //      once and split across both panels.
+  //
+  //   2. `leftPanelWidth` / `rightPanelWidth` — the dynamic CSS width
+  //      applied to each panel `<div>`. Equals `canvasWidth + gutter`
+  //      so the panel frame hugs the rendered canvas at every zoom.
+  //      At scale=1 this matches basePanelWidth (base case); at
+  //      scale<1 panels shrink with the document so the row's flex
+  //      `justify-center` centres them in the available width
+  //      instead of leaving large empty gutters inside each panel;
+  //      at scale>1 panels grow with the document and overflow the
+  //      row, which is the expected zoom-in behaviour and existed
+  //      pre-fix.
+  const basePanelWidth = useMemo(() => {
     if (containerWidth <= 0) return 0;
-    if (!showLeftPanel) return containerWidth;
+    if (!showRightPanel) return containerWidth;
     return Math.max(0, (containerWidth - PANEL_GAP_PX) / 2);
-  }, [containerWidth, showLeftPanel]);
-  const leftPanelWidth = showLeftPanel ? rightPanelWidth : 0;
+  }, [containerWidth, showRightPanel]);
 
   // Track visible page. Observe the per-page wrapper (one element per
   // page number, regardless of whether one or two panels render inside
@@ -174,8 +205,8 @@ export default function PdfViewer({
     setScale(1);
   }, []);
 
-  const handleToggleShowOriginal = useCallback(() => {
-    setShowOriginal((v) => !v);
+  const handleToggleShowPreview = useCallback(() => {
+    setShowPreview((v) => !v);
   }, []);
 
   // Map detections once for both overlays — same shape the existing
@@ -211,10 +242,19 @@ export default function PdfViewer({
 
   // Page width for the <Page> component. Subtract a small gutter
   // (24px, matching the original `- 48` when the single panel spanned
-  // the full container) so shadow-md has room to render.
+  // the full container) so the panel has 12px of symmetric inner
+  // margin around the canvas. The canvas itself renders at
+  // `pageWidth × scale` pixels.
   const panelInnerGutter = 24;
-  const leftPageWidth = leftPanelWidth > 0 ? Math.max(0, leftPanelWidth - panelInnerGutter) : undefined;
-  const rightPageWidth = rightPanelWidth > 0 ? Math.max(0, rightPanelWidth - panelInnerGutter) : undefined;
+  const leftPageWidth = basePanelWidth > 0 ? Math.max(0, basePanelWidth - panelInnerGutter) : undefined;
+  const rightPageWidth = showRightPanel && basePanelWidth > 0 ? Math.max(0, basePanelWidth - panelInnerGutter) : undefined;
+
+  // Dynamic panel width — frames the canvas tightly at every zoom.
+  // Equals `pageWidth × scale + gutter`. The inner fit-content wrapper
+  // inside each panel takes the canvas size exactly; mx-auto centres
+  // it inside the panel for 12px symmetric margin.
+  const leftPanelWidth = leftPageWidth !== undefined ? leftPageWidth * scale + panelInnerGutter : 0;
+  const rightPanelWidth = rightPageWidth !== undefined ? rightPageWidth * scale + panelInnerGutter : 0;
 
   return (
     <div className="flex flex-col h-full">
@@ -227,14 +267,14 @@ export default function PdfViewer({
         onFitWidth={handleFitWidth}
         downloadUrl={fileUrl}
         dualPanelAvailable={dualPanelAvailable}
-        showOriginal={showOriginal}
-        onToggleShowOriginal={handleToggleShowOriginal}
+        showPreview={showPreview}
+        onToggleShowPreview={handleToggleShowPreview}
       />
 
       <div
         ref={containerRef}
         className="flex-1 overflow-y-auto bg-gray-100"
-        data-dual-panel-active={showLeftPanel ? "true" : "false"}
+        data-dual-panel-active={showRightPanel ? "true" : "false"}
         tabIndex={-1}
         onMouseUp={
           onTextSelection
@@ -277,51 +317,71 @@ export default function PdfViewer({
               style={{ gap: `${PANEL_GAP_PX}px` }}
             >
               {/* LEFT PANEL — canonical PDF + interactive detection overlay.
-                  Kept mounted but hidden via display:none when toggled
-                  off, so toggling back is instant (no canvas re-render). */}
+                  Always mounted; takes the full content width when the
+                  right (preview) panel is hidden by responsive collapse
+                  or the toolbar toggle.
+
+                  Inner `width: fit-content` wrapper binds the overlay's
+                  `absolute inset-0` to the canvas's actual rendered size
+                  rather than the panel's fixed layout width. Without
+                  this, overlay-button percentages drift past the canvas
+                  right edge whenever scale ≠ 1 (canvas = leftPageWidth ×
+                  scale; panel = leftPanelWidth — they only line up at
+                  scale=1, and even then panelInnerGutter introduces a
+                  small drift). `mx-auto` centres the canvas inside the
+                  panel for symmetric padding. */}
               <div
-                className={`relative shadow-md bg-white${showLeftPanel ? "" : " hidden"}`}
+                className="relative shadow-md bg-white"
                 style={{ width: leftPanelWidth > 0 ? `${leftPanelWidth}px` : undefined }}
                 data-panel="original"
               >
-                <Page
-                  pageNumber={pageNum}
-                  scale={scale}
-                  width={leftPageWidth}
-                  renderTextLayer={true}
-                  renderAnnotationLayer={false}
-                />
-                <PdfDetectionOverlay
-                  pageNumber={pageNum}
-                  detections={overlayDetections}
-                  selectedDetectionId={selectedDetectionId}
-                  onDetectionClick={onDetectionClick}
-                />
+                <div className="relative mx-auto" style={{ width: "fit-content" }}>
+                  <Page
+                    pageNumber={pageNum}
+                    scale={scale}
+                    width={leftPageWidth}
+                    renderTextLayer={true}
+                    renderAnnotationLayer={false}
+                  />
+                  <PdfDetectionOverlay
+                    pageNumber={pageNum}
+                    detections={overlayDetections}
+                    selectedDetectionId={selectedDetectionId}
+                    onDetectionClick={onDetectionClick}
+                  />
+                </div>
               </div>
 
-              {/* RIGHT PANEL — canonical PDF + redaction preview (display-only). */}
+              {/* RIGHT PANEL — canonical PDF + redaction preview
+                  (display-only). Hidden via `display:none` when the
+                  toolbar toggle is off OR the viewport is too narrow
+                  for dual-panel; kept mounted so toggling back on is
+                  instant (no canvas re-render). Same fit-content
+                  wrapper rationale as the left panel. */}
               <div
-                className="relative shadow-md bg-white"
+                className={`relative shadow-md bg-white${showRightPanel ? "" : " hidden"}`}
                 style={{ width: rightPanelWidth > 0 ? `${rightPanelWidth}px` : undefined }}
                 data-panel="redacted-preview"
               >
-                <Page
-                  pageNumber={pageNum}
-                  scale={scale}
-                  width={rightPageWidth}
-                  renderTextLayer={true}
-                  renderAnnotationLayer={false}
-                  canvasRef={(c) => {
-                    // aria-hidden the right-panel canvas so screen readers
-                    // don't announce the same document twice. Overlay-level
-                    // aria-hidden already handled in the preview component.
-                    if (c) c.setAttribute("aria-hidden", "true");
-                  }}
-                />
-                <PdfRedactionPreviewOverlay
-                  pageNumber={pageNum}
-                  detections={overlayDetections}
-                />
+                <div className="relative mx-auto" style={{ width: "fit-content" }}>
+                  <Page
+                    pageNumber={pageNum}
+                    scale={scale}
+                    width={rightPageWidth}
+                    renderTextLayer={true}
+                    renderAnnotationLayer={false}
+                    canvasRef={(c) => {
+                      // aria-hidden the right-panel canvas so screen readers
+                      // don't announce the same document twice. Overlay-level
+                      // aria-hidden already handled in the preview component.
+                      if (c) c.setAttribute("aria-hidden", "true");
+                    }}
+                  />
+                  <PdfRedactionPreviewOverlay
+                    pageNumber={pageNum}
+                    detections={overlayDetections}
+                  />
+                </div>
               </div>
             </div>
           ))}

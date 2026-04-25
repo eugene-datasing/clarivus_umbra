@@ -3,7 +3,10 @@
  *
  * Confirms the single-Document-paired-Pages architecture from the
  * 2026-04-24 spike recommendation and the responsive-collapse +
- * showOriginal plumbing required by Slice B.
+ * showPreview plumbing required by Slice B (showPreview was the post-
+ * Slice-B1-fix renaming of the original showOriginal flag, after the
+ * collapse direction was inverted to keep the LEFT/interactive panel
+ * at narrow viewports rather than the RIGHT/preview panel).
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -46,15 +49,25 @@ describe("PdfViewer source — Slice B dual-panel contract", () => {
     expect(src).toMatch(/containerWidth\s*>=\s*DUAL_PANEL_MIN_WIDTH/);
   });
 
-  it("hides the left panel via CSS 'hidden' rather than unmounting it", () => {
-    // Preserves canvas state so toggling showOriginal back on is instant.
-    expect(src).toMatch(/showLeftPanel\s*\?\s*""\s*:\s*" hidden"/);
+  it("hides the right (preview) panel via CSS 'hidden' rather than unmounting it", () => {
+    // Preserves canvas state so toggling showPreview back on is instant.
+    // The narrow-viewport collapse and the toolbar toggle both route
+    // through showRightPanel, so this assertion covers both paths.
+    expect(src).toMatch(/showRightPanel\s*\?\s*""\s*:\s*" hidden"/);
   });
 
-  it("passes showOriginal + onToggleShowOriginal + dualPanelAvailable to the toolbar", () => {
+  it("passes showPreview + onToggleShowPreview + dualPanelAvailable to the toolbar", () => {
     expect(src).toMatch(/dualPanelAvailable=\{dualPanelAvailable\}/);
-    expect(src).toMatch(/showOriginal=\{showOriginal\}/);
-    expect(src).toMatch(/onToggleShowOriginal=\{handleToggleShowOriginal\}/);
+    expect(src).toMatch(/showPreview=\{showPreview\}/);
+    expect(src).toMatch(/onToggleShowPreview=\{handleToggleShowPreview\}/);
+  });
+
+  it("wraps each <Page>+overlay pair in an inner fit-content container", () => {
+    // Binds the overlay's `absolute inset-0` to the canvas's actual
+    // rendered size rather than the panel's fixed layout width, so
+    // overlay percentages map to the document at every zoom level.
+    const fitContentWrappers = src.match(/width:\s*"fit-content"/g) ?? [];
+    expect(fitContentWrappers.length).toBe(2);
   });
 
   it("targets IntersectionObserver at the per-page wrapper (one element per page)", () => {
