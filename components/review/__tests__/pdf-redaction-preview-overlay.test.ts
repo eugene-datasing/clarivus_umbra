@@ -90,16 +90,26 @@ describe("PdfRedactionPreviewOverlay source — Slice B display-only contract", 
   it("uses bg-amber-500/25 for pending — the same token PdfDetectionOverlay uses on the LEFT pane", () => {
     // Visual consistency: same yellow on both panes for the same
     // detection, so reviewer reads pending-state identically across
-    // panels.
+    // panels. Borders were dropped in the Slice-B1 follow-up.
     expect(src).toMatch(/bg-amber-500\/25/);
-    expect(src).toMatch(/border-amber-500/);
+    expect(src).not.toMatch(/border-amber-500/);
   });
 
-  it("positions rectangles via percentage style props (posX/posY/posW/posH)", () => {
-    expect(src).toMatch(/left:\s*`\$\{d\.posX\}%`/);
-    expect(src).toMatch(/top:\s*`\$\{d\.posY\}%`/);
-    expect(src).toMatch(/width:\s*`\$\{d\.posW\}%`/);
-    expect(src).toMatch(/height:\s*`\$\{d\.posH\}%`/);
+  it("positions rectangles via percentage style props with a px grow for pending; tight for accepted", () => {
+    // Pending and rejected branches grow by HIGHLIGHT_GROW_PX on each
+    // side (visual breathing room around the glyph). Accepted stays
+    // tight to the bbox so the redaction preview obscures only what
+    // would actually be redacted in the export.
+    expect(src).toMatch(/HIGHLIGHT_GROW_PX/);
+    const styleFn = src.match(/function rightOverlayStyle[\s\S]*?\n\}/);
+    expect(styleFn).not.toBeNull();
+    // accepted branch: tight
+    expect(styleFn![0]).toMatch(/status === "accepted"/);
+    expect(styleFn![0]).toMatch(/left:\s+`\$\{posX\}%`/);
+    expect(styleFn![0]).toMatch(/width:\s+`\$\{posW\}%`/);
+    // grown branch (default — pending)
+    expect(styleFn![0]).toMatch(/left:\s+`calc\(\$\{posX\}% - \$\{HIGHLIGHT_GROW_PX\}px\)`/);
+    expect(styleFn![0]).toMatch(/width:\s+`calc\(\$\{posW\}% \+ \$\{HIGHLIGHT_GROW_PX \* 2\}px\)`/);
   });
 
   it("renders nothing (returns null) when the page has no visible (pending+accepted) detections", () => {

@@ -31,17 +31,40 @@ interface PdfDetectionOverlayProps {
 // obscure text, conflating the review surface with the RIGHT pane's
 // redaction preview. The previous rejected-state /15 fill was so faint
 // it read as "no overlay" alongside the /25 amber pending fill, so it
-// was bumped to /25 for visual parity. Borders are the saturated
-// /500 hue per state for a clear edge against the fill.
+// was bumped to /25 for visual parity.
+//
+// Borders removed in the Slice-B1 follow-up — the saturated /500 ring
+// around each highlight made tight glyph clusters (table cells, short
+// labels) visually noisy and competed with the underlying text. The
+// fill alone is sufficient signal; selection state still has its
+// `ring-2 ring-brand-primary` ring on top of the fill.
 function statusColor(status: string): string {
   switch (status) {
     case "accepted":
-      return "border-red-500 bg-red-500/25";          // Red = will redact
+      return "bg-red-500/25";       // Red = will redact
     case "rejected":
-      return "border-emerald-500 bg-emerald-500/25";  // Green = will keep
+      return "bg-emerald-500/25";   // Green = will keep
     default:
-      return "border-amber-500 bg-amber-500/25";      // Yellow = pending
+      return "bg-amber-500/25";     // Yellow = pending
   }
+}
+
+// Each highlight grows ~2px past the glyph bounding box so the colour
+// has a small breathing room around the text — easier to pick out at
+// a glance, especially on dense tables. Applied to all three LEFT-pane
+// states (pending / accepted / rejected) and the RIGHT pane's pending
+// highlight; the RIGHT pane's accepted black rectangle stays tight to
+// the glyph so the redaction preview obscures only what would actually
+// be redacted.
+const HIGHLIGHT_GROW_PX = 2;
+
+function highlightStyle(posX: number, posY: number, posW: number, posH: number) {
+  return {
+    left:   `calc(${posX}% - ${HIGHLIGHT_GROW_PX}px)`,
+    top:    `calc(${posY}% - ${HIGHLIGHT_GROW_PX}px)`,
+    width:  `calc(${posW}% + ${HIGHLIGHT_GROW_PX * 2}px)`,
+    height: `calc(${posH}% + ${HIGHLIGHT_GROW_PX * 2}px)`,
+  };
 }
 
 export default function PdfDetectionOverlay({
@@ -78,20 +101,15 @@ export default function PdfDetectionOverlay({
             aria-pressed={isSelected}
             className={cn(
               // `all: unset` is avoided — Tailwind's preflight already
-              // zeroes out most button defaults, and keeping `border-2 /
-              // rounded-sm / bg-*` driven from statusColor needs normal
-              // class composition. Explicit `cursor-pointer` + box-sizing
-              // keeps things deterministic.
-              "absolute border-2 rounded-sm cursor-pointer pointer-events-auto transition-all duration-150 box-border p-0 bg-clip-padding",
+              // zeroes out most button defaults; explicit `cursor-pointer`
+              // + box-sizing keeps things deterministic. Borders removed
+              // in the Slice-B1 follow-up (see statusColor comment); the
+              // selection ring is the only edge effect now.
+              "absolute rounded-sm cursor-pointer pointer-events-auto transition-all duration-150 box-border p-0 bg-clip-padding",
               statusColor(det.status),
               isSelected && "ring-2 ring-brand-primary ring-offset-1 animate-pulse"
             )}
-            style={{
-              left: `${det.posX}%`,
-              top: `${det.posY}%`,
-              width: `${det.posW}%`,
-              height: `${det.posH}%`,
-            }}
+            style={highlightStyle(det.posX, det.posY, det.posW, det.posH)}
             onClick={(e) => {
               e.stopPropagation();
               activate();
