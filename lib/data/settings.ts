@@ -286,20 +286,29 @@ export const DEFAULT_INSTANCE_CONFIG: InstanceConfig = {};
 // ---------------------------------------------------------------------------
 
 /**
- * Review-UI viewer mode. `"html"` renders the legacy HTML reconstruction
- * dual-panel branch; `"pdf"` routes to the pdf.js-based canonical viewer
- * (Phase 3 of the viewer rework). The value is stored as a bare JSON
- * string in `system_settings.value` — unset rows fall through to the
- * default via `getSetting(key, default)`.
+ * Review-UI viewer mode. `"pdf"` routes to the pdf.js-based canonical
+ * viewer (Phase 3 of the viewer rework — the post-cutover default);
+ * `"html"` falls back to the legacy HTML reconstruction dual-panel
+ * branch. The value is stored as a bare JSON string in
+ * `system_settings.value` — unset rows fall through to the default
+ * via `getSetting(key, default)`.
  *
  * This is a rollback lever, not a user-facing preference (Decision h,
- * v2). Admins flip via Prisma Studio or a direct settings update. Slice
- * A ships with default `"html"` so the legacy branch continues to render
- * for every reviewer until Slice D flips the default.
+ * v2). Admins flip via Prisma Studio or a direct settings update.
+ * Slice D2 (April 2026) flipped the default from `"html"` to `"pdf"`
+ * after Slices A → D1 landed all the dependent infrastructure: the
+ * dual-panel viewer (Slice B), the manual-detection text-layer
+ * handler (Slice C), the e2e suite migration (Slice D1), and the
+ * post-cutover bug fixes for overlay rendering / colour / dedup /
+ * keyboard selection (Slices B1, B2). The HTML branch is retained
+ * indefinitely as the Option C fallback for canonicals where pdf.js
+ * can't extract selectable text (`canonicalPdfTextSelectable === false`),
+ * so even with the default at `"pdf"` reviewers still hit the HTML
+ * view automatically on scanned / image-only documents.
  */
 export type ViewerMode = "html" | "pdf";
 
-export const DEFAULT_VIEWER_MODE: ViewerMode = "html";
+export const DEFAULT_VIEWER_MODE: ViewerMode = "pdf";
 
 export function isViewerMode(v: unknown): v is ViewerMode {
   return v === "html" || v === "pdf";
