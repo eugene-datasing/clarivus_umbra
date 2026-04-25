@@ -5,8 +5,8 @@ import {
   ZoomOut,
   Maximize2,
   Download,
-  PanelLeftClose,
-  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
 } from "lucide-react";
 
 interface PdfToolbarProps {
@@ -21,10 +21,11 @@ interface PdfToolbarProps {
   // Dual-panel toggle (Slice B). When `dualPanelAvailable` is false
   // (e.g. content area narrower than the 1280px collapse breakpoint),
   // the toggle is not rendered at all — there's no dual panel to
-  // toggle off of.
+  // toggle off of. `showPreview` controls the RIGHT (redaction-preview)
+  // panel; the LEFT (interactive primary) panel is always visible.
   dualPanelAvailable?: boolean;
-  showOriginal?: boolean;
-  onToggleShowOriginal?: () => void;
+  showPreview?: boolean;
+  onToggleShowPreview?: () => void;
 }
 
 export default function PdfToolbar({
@@ -36,8 +37,8 @@ export default function PdfToolbar({
   onFitWidth,
   downloadUrl,
   dualPanelAvailable = false,
-  showOriginal = true,
-  onToggleShowOriginal,
+  showPreview = true,
+  onToggleShowPreview,
 }: PdfToolbarProps) {
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 bg-surface-card border-b border-border">
@@ -70,16 +71,16 @@ export default function PdfToolbar({
 
       <div className="h-4 w-px bg-border mx-1" />
 
-      {dualPanelAvailable && onToggleShowOriginal && (
+      {dualPanelAvailable && onToggleShowPreview && (
         <>
           <button
-            onClick={onToggleShowOriginal}
+            onClick={onToggleShowPreview}
             className="btn-ghost p-1"
-            title={showOriginal ? "Hide original — show redaction preview only" : "Show original alongside redaction preview"}
-            aria-pressed={showOriginal}
-            aria-label={showOriginal ? "Hide original" : "Show original"}
+            title={showPreview ? "Hide redaction preview — show original only" : "Show redaction preview alongside original"}
+            aria-pressed={showPreview}
+            aria-label={showPreview ? "Hide preview" : "Show preview"}
           >
-            {showOriginal ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
+            {showPreview ? <PanelRightClose size={14} /> : <PanelRightOpen size={14} />}
           </button>
           <div className="h-4 w-px bg-border mx-1" />
         </>

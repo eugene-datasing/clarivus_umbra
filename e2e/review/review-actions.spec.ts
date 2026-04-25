@@ -55,16 +55,21 @@ test.describe("Document Review Actions (PDF view)", () => {
     await expect(page.getByTitle(/zoom out/i)).toBeVisible();
   });
 
-  test("PdfToolbar renders showOriginal toggle when content is wide enough for dual-panel", async ({ page }) => {
+  test("PdfToolbar renders showPreview toggle when content is wide enough for dual-panel", async ({ page }) => {
     // Slice B: the toggle is only rendered when the content area is
     // ≥1280px (DUAL_PANEL_MIN_WIDTH). Default headless viewport is
     // 1280px — sidebar collapses content to ~880-1000px which is
     // below the threshold. Set viewport explicitly so the toggle
     // surfaces; this is a soft check (see toggle visibility), not
     // a regression assertion.
+    //
+    // The toggle's accessible name flipped from "Hide original" /
+    // "Show original" to "Hide preview" / "Show preview" in the
+    // Slice-B1 follow-up (the toggle now hides the RIGHT redaction-
+    // preview panel rather than the LEFT interactive panel).
     await page.setViewportSize({ width: 1920, height: 1000 });
     await page.goto(reviewUrl);
-    const toggle = page.getByRole("button", { name: /Hide original|Show original/i });
+    const toggle = page.getByRole("button", { name: /Hide preview|Show preview/i });
     const visible = await toggle.isVisible({ timeout: 5_000 }).catch(() => false);
     // Either the toggle is visible (dual-panel active) OR the layout
     // collapsed for some other reason — both acceptable per scope.
