@@ -906,6 +906,12 @@ export default function ReviewClient({
           }
           break;
         case "ArrowDown": {
+          // Slice B2 fix: when Shift is held the user is extending a
+          // text selection downward on the PDF (browser default). Yield
+          // to the browser instead of advancing the sidebar — without
+          // this short-circuit, `e.preventDefault()` cancelled the
+          // selection-extension and stole focus to the sidebar.
+          if (e.shiftKey) return;
           e.preventDefault();
           const currentIdx = selectedDetectionId
             ? sortedDetections.findIndex((d) => d.id === selectedDetectionId)
@@ -925,6 +931,9 @@ export default function ReviewClient({
           break;
         }
         case "ArrowUp": {
+          // Slice B2 fix: same Shift-extends-selection rationale as
+          // ArrowDown above — yield to the browser when Shift is held.
+          if (e.shiftKey) return;
           e.preventDefault();
           const currentIdx = selectedDetectionId
             ? sortedDetections.findIndex((d) => d.id === selectedDetectionId)

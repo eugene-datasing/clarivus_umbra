@@ -2,36 +2,26 @@
 
 import { cn } from "@/lib/utils";
 import { handleOverlayBoxKeyDown } from "./overlay-key-handler";
+import type { MergedOverlay } from "@/lib/review/overlay-grouping";
 
 export { handleOverlayBoxKeyDown };
 
-interface DetectionBox {
-  id: string;
-  type: string;
-  text: string;
-  confidence: number;
-  page: number;
-  posX: number; // 0-100 percentage
-  posY: number;
-  posW: number;
-  posH: number;
-  status: string;
-}
-
 interface PdfDetectionOverlayProps {
   pageNumber: number;
-  detections: DetectionBox[];
+  /**
+   * Pre-merged overlay groups from `mergeByBbox`. Each group represents
+   * one or more detections that share an exact bbox; rendering one
+   * group avoids the stacked-translucent-fill shading bug (Slice B2).
+   * Sidebar enumeration is unaffected — it still consumes the raw
+   * detection list directly.
+   */
+  overlays: MergedOverlay[];
   selectedDetectionId: string | null;
   onDetectionClick: (detectionId: string) => void;
 }
 
 // All three states render as translucent /25 fills so the underlying
-// document text remains readable on the LEFT (interactive) panel. The
-// previous accepted-state colour was bg-gray-900/80 — opaque enough to
-// obscure text, conflating the review surface with the RIGHT pane's
-// redaction preview. The previous rejected-state /15 fill was so faint
-// it read as "no overlay" alongside the /25 amber pending fill, so it
-// was bumped to /25 for visual parity.
+// document text remains readable on the LEFT (interactive) panel.
 //
 // Borders removed in the Slice-B1 follow-up — the saturated /500 ring
 // around each highlight made tight glyph clusters (table cells, short
@@ -51,11 +41,7 @@ function statusColor(status: string): string {
 
 // Each highlight grows ~2px past the glyph bounding box so the colour
 // has a small breathing room around the text — easier to pick out at
-// a glance, especially on dense tables. Applied to all three LEFT-pane
-// states (pending / accepted / rejected) and the RIGHT pane's pending
-// highlight; the RIGHT pane's accepted black rectangle stays tight to
-// the glyph so the redaction preview obscures only what would actually
-// be redacted.
+// a glance, especially on dense tables.
 const HIGHLIGHT_GROW_PX = 2;
 
 function highlightStyle(posX: number, posY: number, posW: number, posH: number) {
@@ -69,13 +55,13 @@ function highlightStyle(posX: number, posY: number, posW: number, posH: number) 
 
 export default function PdfDetectionOverlay({
   pageNumber,
-  detections,
+  overlays,
   selectedDetectionId,
   onDetectionClick,
 }: PdfDetectionOverlayProps) {
-  const pageDetections = detections.filter((d) => d.page === pageNumber);
+  const pageOverlays = overlays.filter((o) => o.page === pageNumber);
 
-  if (pageDetections.length === 0) return null;
+  if (pageOverlays.length === 0) return null;
 
   return (
     // z-index: 3 sits the overlay above pdf.js's text layer (z-index 2),
@@ -84,45 +70,57 @@ export default function PdfDetectionOverlay({
     // to the underlying text layer. Individual boxes set pointer-events
     // back to auto so they remain focusable and clickable.
     <div className="absolute inset-0 pointer-events-none z-[3]">
-      {pageDetections.map((det) => {
-        // Skip detections with no bbox data (0,0,0,0)
-        if (det.posW === 0 && det.posH === 0) return null;
+      {pageOverlays.map((merged) => {
+        // Skip overlays with no bbox data (0,0,0,0).
+        if (merged.posW === 0 && merged.posH === 0) return null;
 
-        const isSelected = selectedDetectionId === det.id;
-        const activate = () => onDetectionClick(det.id);
+        // The merged overlay is "selected" if the currently-selected
+        // sidebar row is ANY detection in the group, not just the
+        // primary. So clicking a non-primary row in the sidebar still
+        // visibly highlights the merged overlay on the canvas.
+        const isSelected =
+          selectedDetectionId !== null && merged.detectionIds.includes(selectedDetectionId);
+        const activate = () => onDetectionClick(merged.primaryId);
+
+        // ARIA: list every distinct type in the group. For a single-
+        // detection group this reads exactly like the pre-merge label.
+        // For a multi-detection group (e.g. bank-account + phone on
+        // the same row) it surfaces both so screen readers convey the
+        // full context.
+        const ariaLabel = `${merged.types.join(", ")}: ${merged.text}`;
+        const titleText = merged.text.length > 50 ? merged.text.slice(0, 50) + "..." : merged.text;
 
         return (
           <button
             type="button"
-            key={det.id}
+            key={merged.primaryId}
             role="button"
             tabIndex={0}
-            aria-label={`${det.type}: ${det.text}`}
+            aria-label={ariaLabel}
             aria-pressed={isSelected}
+            data-overlay-merged-count={merged.detectionIds.length}
             className={cn(
               // `all: unset` is avoided — Tailwind's preflight already
               // zeroes out most button defaults; explicit `cursor-pointer`
-              // + box-sizing keeps things deterministic. Borders removed
-              // in the Slice-B1 follow-up (see statusColor comment); the
-              // selection ring is the only edge effect now.
+              // + box-sizing keeps things deterministic. Borders dropped
+              // in the Slice-B1 follow-up; the selection ring is the
+              // only edge effect.
               "absolute rounded-sm cursor-pointer pointer-events-auto transition-all duration-150 box-border p-0 bg-clip-padding",
-              statusColor(det.status),
+              statusColor(merged.status),
               isSelected && "ring-2 ring-brand-primary ring-offset-1 animate-pulse"
             )}
-            style={highlightStyle(det.posX, det.posY, det.posW, det.posH)}
+            style={highlightStyle(merged.posX, merged.posY, merged.posW, merged.posH)}
             onClick={(e) => {
               e.stopPropagation();
               activate();
             }}
             onKeyDown={(e) => {
               if (handleOverlayBoxKeyDown(e.key, activate)) {
-                // Block default scroll-on-space; let Enter fall through
-                // for screen readers that synthesise activation events.
                 e.preventDefault();
                 e.stopPropagation();
               }
             }}
-            title={`${det.type}: ${det.text.length > 50 ? det.text.slice(0, 50) + "..." : det.text} (${det.confidence}%)`}
+            title={`${merged.types.join(", ")}: ${titleText} (${merged.confidence}%)`}
           />
         );
       })}

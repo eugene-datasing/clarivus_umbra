@@ -1,10 +1,13 @@
 "use client";
 
+import type { MergedOverlay } from "@/lib/review/overlay-grouping";
+
 /**
  * Slice B redaction preview overlay — display-only companion to the
  * left-panel `PdfDetectionOverlay`.
  *
- * Per-status rendering:
+ * Per-status rendering (driven by the merged overlay's resolved
+ * status — see `mergeByBbox` for the priority rule):
  *   - `accepted` → solid black rectangle (`bg-veil-redaction-black`).
  *     Simulates what the page will look like post-redaction. Opaque
  *     to confirm the text WILL be obscured. Stays TIGHT to the glyph
@@ -14,12 +17,17 @@
  *     pane's pending visual exactly (`bg-amber-500/25`, no border).
  *     Communicates "still undecided — won't be redacted unless
  *     accepted". The reviewer sees the same yellow on both panes for
- *     the same detection. Grown by ~2px on each side for visual
+ *     the same detection group. Grown by ~2px on each side for visual
  *     breathing room (same `HIGHLIGHT_GROW_PX` rationale as the LEFT
  *     pane).
  *   - `rejected` → no overlay. The text appears as if no detection
  *     existed there, confirming the reviewer's "this is fine, do
  *     not redact" call.
+ *
+ * Slice B2: input is now `MergedOverlay[]` (pre-grouped by exact bbox
+ * match in `mergeByBbox`). Stacked detections at the same bbox render
+ * as a single overlay with the priority-resolved status, fixing the
+ * doubled-translucent-fill shading bug visible on the LEFT pane.
  *
  * The cheap "overlay rather than server-built PDF" approach from the
  * 2026-04-24 dual-panel spike (option 1) — updates instantly as
@@ -46,26 +54,17 @@
  * Slice A for the original stacking decision.
  */
 
-interface DetectionForPreview {
-  id: string;
-  page: number;
-  posX: number; // 0-100 percentage
-  posY: number;
-  posW: number;
-  posH: number;
-  status: string;
-}
-
 interface PdfRedactionPreviewOverlayProps {
   pageNumber: number;
-  detections: DetectionForPreview[];
+  /** Pre-merged overlay groups from `mergeByBbox` (Slice B2). */
+  overlays: MergedOverlay[];
 }
 
 // Display-only — `pointer-events-none` everywhere; the LEFT pane's
 // translucent yellow fill for pending is mirrored here so the same
-// detection reads the same colour on both panels. Accepted gets the
-// opaque redaction-preview black. Rejected returns null so the text
-// shows through unobscured.
+// detection group reads the same colour on both panels. Accepted gets
+// the opaque redaction-preview black. Rejected returns null so the
+// text shows through unobscured.
 //
 // Borders removed in the Slice-B1 follow-up (matches LEFT pane
 // rationale — fill alone is sufficient signal, less competition with
@@ -106,13 +105,13 @@ function rightOverlayStyle(status: string, posX: number, posY: number, posW: num
 
 export default function PdfRedactionPreviewOverlay({
   pageNumber,
-  detections,
+  overlays,
 }: PdfRedactionPreviewOverlayProps) {
-  const pageVisible = detections.filter(
-    (d) =>
-      d.page === pageNumber &&
-      (d.posW > 0 || d.posH > 0) &&
-      rightOverlayClass(d.status) !== null,
+  const pageVisible = overlays.filter(
+    (o) =>
+      o.page === pageNumber &&
+      (o.posW > 0 || o.posH > 0) &&
+      rightOverlayClass(o.status) !== null,
   );
 
   if (pageVisible.length === 0) return null;
@@ -123,15 +122,16 @@ export default function PdfRedactionPreviewOverlay({
       aria-hidden="true"
       data-redaction-preview="true"
     >
-      {pageVisible.map((d) => {
-        const className = rightOverlayClass(d.status);
+      {pageVisible.map((merged) => {
+        const className = rightOverlayClass(merged.status);
         if (!className) return null;
         return (
           <div
-            key={d.id}
+            key={merged.primaryId}
             className={className}
-            data-overlay-status={d.status}
-            style={rightOverlayStyle(d.status, d.posX, d.posY, d.posW, d.posH)}
+            data-overlay-status={merged.status}
+            data-overlay-merged-count={merged.detectionIds.length}
+            style={rightOverlayStyle(merged.status, merged.posX, merged.posY, merged.posW, merged.posH)}
           />
         );
       })}

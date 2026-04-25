@@ -7,6 +7,7 @@ import "react-pdf/dist/Page/TextLayer.css";
 import PdfDetectionOverlay from "./pdf-detection-overlay";
 import PdfRedactionPreviewOverlay from "./pdf-redaction-preview-overlay";
 import PdfToolbar from "./pdf-toolbar";
+import { mergeByBbox } from "@/lib/review/overlay-grouping";
 
 // Same-origin worker — copied into public/ by scripts/copy-pdfjs-worker.ts
 // (postinstall). Third-party CDN removed for data-sovereignty + CSP.
@@ -209,11 +210,15 @@ export default function PdfViewer({
     setShowPreview((v) => !v);
   }, []);
 
-  // Map detections once for both overlays — same shape the existing
-  // PdfDetectionOverlay expects, plus the preview overlay filters on
-  // status internally.
-  const overlayDetections = useMemo(() => {
-    return detections.map((d) => ({
+  // Map detections to a flat overlay-shape, then merge by exact bbox
+  // (Slice B2 — fixes the doubled-translucent-fill shading bug). Both
+  // overlay components receive the merged groups; the sidebar continues
+  // to consume the raw `detections` prop directly so individual rows
+  // remain enumerable. See `lib/review/overlay-grouping.ts` for the
+  // priority rule (accepted > rejected > pending) and primary-id
+  // selection logic.
+  const overlays = useMemo(() => {
+    const flat = detections.map((d) => ({
       id: d.id,
       type: d.type,
       text: d.text,
@@ -225,6 +230,7 @@ export default function PdfViewer({
       posH: d.position.h,
       status: detectionStates[d.id]?.status ?? d.status,
     }));
+    return mergeByBbox(flat);
   }, [detections, detectionStates]);
 
   // Scroll to a page when a sidebar detection is selected. Scrolls the
@@ -345,7 +351,7 @@ export default function PdfViewer({
                   />
                   <PdfDetectionOverlay
                     pageNumber={pageNum}
-                    detections={overlayDetections}
+                    overlays={overlays}
                     selectedDetectionId={selectedDetectionId}
                     onDetectionClick={onDetectionClick}
                   />
@@ -391,7 +397,7 @@ export default function PdfViewer({
                   />
                   <PdfRedactionPreviewOverlay
                     pageNumber={pageNum}
-                    detections={overlayDetections}
+                    overlays={overlays}
                   />
                 </div>
               </div>
