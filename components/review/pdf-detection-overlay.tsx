@@ -25,14 +25,22 @@ interface PdfDetectionOverlayProps {
   onDetectionClick: (detectionId: string) => void;
 }
 
+// All three states render as translucent /25 fills so the underlying
+// document text remains readable on the LEFT (interactive) panel. The
+// previous accepted-state colour was bg-gray-900/80 — opaque enough to
+// obscure text, conflating the review surface with the RIGHT pane's
+// redaction preview. The previous rejected-state /15 fill was so faint
+// it read as "no overlay" alongside the /25 amber pending fill, so it
+// was bumped to /25 for visual parity. Borders are the saturated
+// /500 hue per state for a clear edge against the fill.
 function statusColor(status: string): string {
   switch (status) {
     case "accepted":
-      return "border-gray-900 bg-gray-900/80";   // Black bar = redacted
+      return "border-red-500 bg-red-500/25";          // Red = will redact
     case "rejected":
-      return "border-emerald-400 bg-emerald-400/15"; // Green = cleared
+      return "border-emerald-500 bg-emerald-500/25";  // Green = will keep
     default:
-      return "border-amber-500 bg-amber-500/25";     // Yellow = pending
+      return "border-amber-500 bg-amber-500/25";      // Yellow = pending
   }
 }
 
