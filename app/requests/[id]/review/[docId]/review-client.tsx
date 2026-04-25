@@ -906,6 +906,12 @@ export default function ReviewClient({
           }
           break;
         case "ArrowDown": {
+          // Slice B2 fix: when Shift is held the user is extending a
+          // text selection downward on the PDF (browser default). Yield
+          // to the browser instead of advancing the sidebar — without
+          // this short-circuit, `e.preventDefault()` cancelled the
+          // selection-extension and stole focus to the sidebar.
+          if (e.shiftKey) return;
           e.preventDefault();
           const currentIdx = selectedDetectionId
             ? sortedDetections.findIndex((d) => d.id === selectedDetectionId)
@@ -925,6 +931,9 @@ export default function ReviewClient({
           break;
         }
         case "ArrowUp": {
+          // Slice B2 fix: same Shift-extends-selection rationale as
+          // ArrowDown above — yield to the browser when Shift is held.
+          if (e.shiftKey) return;
           e.preventDefault();
           const currentIdx = selectedDetectionId
             ? sortedDetections.findIndex((d) => d.id === selectedDetectionId)
@@ -1395,7 +1404,15 @@ export default function ReviewClient({
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-surface-bg">
       {/* ===== TOP NAV BAR ===== */}
-      <header className="shrink-0 bg-surface-card border-b border-border px-5 py-2.5 flex items-center justify-between gap-4">
+      {/* Slice B2 follow-up — `select-none` on the review-page chrome
+          (header, banners, bottom detection panel). Without it, a
+          Shift+Arrow selection that extends past the PDF viewer's
+          text layer keeps walking the DOM in tree order and bleeds
+          into the surrounding chrome. PDF viewer text layers stay
+          selectable (default `user-select: text` inherits from the
+          main-content wrapper which has no override). Same containment
+          pattern used on the right-pane preview in PR #49. */}
+      <header className="shrink-0 select-none bg-surface-card border-b border-border px-5 py-2.5 flex items-center justify-between gap-4">
         {/* Left: back + doc info */}
         <div className="flex items-center gap-3 min-w-0">
           <Link
@@ -1679,7 +1696,7 @@ export default function ReviewClient({
 
       {/* ===== Accept Remaining alert banner ===== */}
       {acceptRemainingAlert && (
-        <div className="shrink-0 bg-amber-50 border-b border-amber-200 px-5 py-2 flex items-start gap-2">
+        <div className="shrink-0 select-none bg-amber-50 border-b border-amber-200 px-5 py-2 flex items-start gap-2">
           <AlertCircle size={14} className="text-amber-600 mt-0.5 shrink-0" />
           <div className="flex-1">
             <p className="text-xs text-amber-800 font-medium">
@@ -1708,7 +1725,7 @@ export default function ReviewClient({
           <div
             role="status"
             aria-live="polite"
-            className="flex items-start gap-2 px-4 py-2 bg-blue-50 border-b border-blue-200 text-xs text-blue-900"
+            className="select-none flex items-start gap-2 px-4 py-2 bg-blue-50 border-b border-blue-200 text-xs text-blue-900"
             data-option-c-banner="true"
           >
             <Info size={13} className="mt-0.5 shrink-0 text-blue-700" aria-hidden="true" />
@@ -1841,7 +1858,17 @@ export default function ReviewClient({
         </div>
 
         {/* --- Bottom Detection Panel --- */}
-        <div style={{ height: panelHeight }} className="shrink-0 border-t border-border bg-surface-card flex flex-col">
+        {/* Slice B2 follow-up — `select-none` here is the primary
+            target of the chrome-scoping fix. A Shift+ArrowDown that
+            walks past the PDF viewer's bottom DOM-extends into this
+            panel's table cells; without `user-select: none` the
+            selection would visually highlight the table text.
+            Trade-off: right-click → copy on individual cells is also
+            disabled by `user-select: none` (browsers couple selection
+            and copy here). Acceptable because the typical workflow is
+            click-to-select rather than copy-to-clipboard from these
+            cells; flagged in the PR body for review. */}
+        <div style={{ height: panelHeight }} className="shrink-0 select-none border-t border-border bg-surface-card flex flex-col">
           {/* Tab bar */}
           <div className="shrink-0 flex items-center gap-0 border-b border-border px-4">
             {(

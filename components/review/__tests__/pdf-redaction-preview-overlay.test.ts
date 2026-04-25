@@ -32,7 +32,8 @@ describe("PdfRedactionPreviewOverlay source — Slice B display-only contract", 
   it("is NOT a button — rectangles are <div>s (no click targets)", () => {
     expect(src).not.toMatch(/<button\b/);
     // Rectangles themselves; the container is a <div> which is fine.
-    const rectMatch = src.match(/key=\{d\.id\}[\s\S]*?\/>/);
+    // Slice B2 keys by primaryId (merged groups) instead of d.id.
+    const rectMatch = src.match(/key=\{merged\.primaryId\}[\s\S]*?\/>/);
     expect(rectMatch).not.toBeNull();
     expect(rectMatch![0]).not.toContain("<button");
   });
@@ -80,7 +81,18 @@ describe("PdfRedactionPreviewOverlay source — Slice B display-only contract", 
   });
 
   it("filters out zero-bbox detections (posW === 0 AND posH === 0)", () => {
-    expect(src).toMatch(/d\.posW > 0 \|\| d\.posH > 0/);
+    // Slice B2: input is now MergedOverlay[] (overlays.posW / posH);
+    // pre-Slice-B2 the field was on raw detections (d.posW / d.posH).
+    expect(src).toMatch(/o\.posW > 0 \|\| o\.posH > 0/);
+  });
+
+  it("renders one element per merged-bbox group, keyed by primaryId (Slice B2 visual dedup)", () => {
+    // The map iterates over `pageVisible` (already-merged groups);
+    // each rendered element is keyed by the group's primary id and
+    // tagged with `data-overlay-merged-count` for DOM inspection.
+    expect(src).toMatch(/pageVisible\.map\(\(merged\)/);
+    expect(src).toMatch(/key=\{merged\.primaryId\}/);
+    expect(src).toMatch(/data-overlay-merged-count/);
   });
 
   it("uses the veil-redaction-black tailwind colour token for accepted (not a bare hex)", () => {

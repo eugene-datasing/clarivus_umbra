@@ -74,8 +74,14 @@ describe("PdfDetectionOverlay source — a11y structural shape", () => {
     expect(src).toMatch(/type="button"/);
   });
 
-  it("sets aria-label to `<type>: <text>` via a template literal", () => {
-    expect(src).toMatch(/aria-label=\{`\$\{det\.type\}: \$\{det\.text\}`\}/);
+  it("sets aria-label to `<types>: <text>` — joining all types in a merged group (Slice B2)", () => {
+    // Slice B2: when overlapping detections at the same bbox are
+    // merged into one group, the ARIA label lists every distinct
+    // type joined by ", " — e.g. "phone, bank-account: 12-3056-…".
+    // For a single-detection group the label collapses to the same
+    // shape as pre-merge ("phone: 021 544 908").
+    expect(src).toMatch(/const\s+ariaLabel\s*=\s*`\$\{merged\.types\.join\(", "\)\}: \$\{merged\.text\}`/);
+    expect(src).toMatch(/aria-label=\{ariaLabel\}/);
   });
 
   it("sets aria-pressed to the selected-state boolean", () => {
@@ -103,12 +109,25 @@ describe("PdfDetectionOverlay source — a11y structural shape", () => {
     // Slice-B1 follow-up: each highlight grows past the glyph bbox by
     // a constant pixel value (HIGHLIGHT_GROW_PX) on each side. The
     // percentage-driven anchor stays in calc() so the position scales
-    // with the canvas's rendered size.
+    // with the canvas's rendered size. Slice B2 also passes
+    // merged.posX/posY/posW/posH via a `highlightStyle()` helper.
     expect(src).toMatch(/HIGHLIGHT_GROW_PX/);
     expect(src).toMatch(/left:\s+`calc\(\$\{posX\}% - \$\{HIGHLIGHT_GROW_PX\}px\)`/);
     expect(src).toMatch(/top:\s+`calc\(\$\{posY\}% - \$\{HIGHLIGHT_GROW_PX\}px\)`/);
     expect(src).toMatch(/width:\s+`calc\(\$\{posW\}% \+ \$\{HIGHLIGHT_GROW_PX \* 2\}px\)`/);
     expect(src).toMatch(/height:\s+`calc\(\$\{posH\}% \+ \$\{HIGHLIGHT_GROW_PX \* 2\}px\)`/);
+    expect(src).toMatch(/highlightStyle\(merged\.posX, merged\.posY, merged\.posW, merged\.posH\)/);
+  });
+
+  it("renders one button per merged-bbox group, keyed by primaryId (Slice B2 visual dedup)", () => {
+    // The map iterates over `pageOverlays` (already-merged groups),
+    // not raw detections. Click targets the primary id; selection
+    // membership uses detectionIds.includes(...) so non-primary
+    // sidebar selections still highlight the merged overlay.
+    expect(src).toMatch(/pageOverlays\.map\(\(merged\)/);
+    expect(src).toMatch(/key=\{merged\.primaryId\}/);
+    expect(src).toMatch(/onDetectionClick\(merged\.primaryId\)/);
+    expect(src).toMatch(/merged\.detectionIds\.includes\(selectedDetectionId\)/);
   });
 
   it("status-driven className composes only the fill (no border) — Slice-B1 follow-up", () => {

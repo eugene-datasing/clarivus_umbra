@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X, Plus, AlertCircle } from "lucide-react";
 import { detectionTypeConfig } from "@/lib/db/mappers";
 import { lgoimaGrounds } from "@/lib/lgoima-grounds";
@@ -32,6 +32,18 @@ const DETECTION_TYPES = [
   "confidential",
 ] as const;
 
+// Position delta (px in either axis) above which the popover treats
+// a new (selectedText, position) prop pair as a "fresh selection"
+// rather than an in-progress Shift+Arrow extension. Below this
+// threshold the popover preserves any user-edits to the textarea;
+// above it (or on remount), edits are reset so the user sees the
+// new selection's text. The close-and-reopen path remounts the
+// component naturally via the conditional render in the parent
+// (`{manualPopover && <ManualDetectionPopover ... />}`), so this
+// heuristic only matters for the rare case where the popover
+// stays mounted across a brand-new selection without unmounting.
+const FRESH_SELECTION_DELTA_PX = 50;
+
 export default function ManualDetectionPopover({
   selectedText,
   page,
@@ -44,6 +56,48 @@ export default function ManualDetectionPopover({
   const [ground, setGround] = useState<string>("");
   const [reasoning, setReasoning] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Track whether the user has manually edited the textarea (e.g.
+  // OCR correction). Once they have, we stop syncing the textarea's
+  // value from `selectedText` so their edits aren't clobbered by
+  // continued keyboard-selection extension. Stored as a ref because
+  // the flag drives effect logic but doesn't need to trigger renders.
+  const userEditedTextRef = useRef(false);
+
+  // Track the last position prop so we can detect a "fresh selection"
+  // (large jump) versus an in-progress extension (small delta).
+  const lastPositionRef = useRef(position);
+
+  // Slice B2 fix: prop-driven sync of `selectedText` into local
+  // textarea state. Without this, `useState(selectedText)`'s lazy
+  // initialiser only fires on first mount; subsequent prop updates
+  // (each Shift+Arrow keyup re-fires `setManualPopover` in the parent
+  // with a new selection) are ignored and the textarea stays stale.
+  //
+  // We sync only when the user hasn't manually edited the textarea —
+  // OCR correction is one of the explicit affordances of this popover
+  // (see the helper text below the textarea), so an edit must
+  // survive subsequent keyup events.
+  //
+  // On a "fresh selection" (large position jump), reset the edit flag
+  // so future syncs resume — covers the case where the popover stays
+  // mounted while the user starts a new selection elsewhere.
+  useEffect(() => {
+    const dx = Math.abs(position.x - lastPositionRef.current.x);
+    const dy = Math.abs(position.y - lastPositionRef.current.y);
+    const isFreshSelection =
+      dx > FRESH_SELECTION_DELTA_PX || dy > FRESH_SELECTION_DELTA_PX;
+    lastPositionRef.current = position;
+
+    if (isFreshSelection) {
+      userEditedTextRef.current = false;
+      setText(selectedText);
+      return;
+    }
+    if (!userEditedTextRef.current) {
+      setText(selectedText);
+    }
+  }, [selectedText, position]);
 
   const commonGrounds = lgoimaGrounds.filter((g) => g.common);
 
@@ -105,7 +159,10 @@ export default function ManualDetectionPopover({
             </label>
             <textarea
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => {
+                setText(e.target.value);
+                userEditedTextRef.current = true;
+              }}
               className="input-field text-xs min-h-[48px] resize-none"
               placeholder="Selected text..."
             />
