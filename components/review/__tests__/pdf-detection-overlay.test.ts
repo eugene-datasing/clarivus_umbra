@@ -99,10 +99,29 @@ describe("PdfDetectionOverlay source — a11y structural shape", () => {
     expect(src).toMatch(/pointer-events-auto/);
   });
 
-  it("preserves percentage positioning via style.left/top/width/height", () => {
-    expect(src).toMatch(/left:\s*`\$\{det\.posX\}%`/);
-    expect(src).toMatch(/top:\s*`\$\{det\.posY\}%`/);
-    expect(src).toMatch(/width:\s*`\$\{det\.posW\}%`/);
-    expect(src).toMatch(/height:\s*`\$\{det\.posH\}%`/);
+  it("preserves percentage positioning, with a small px grow for visual breathing room", () => {
+    // Slice-B1 follow-up: each highlight grows past the glyph bbox by
+    // a constant pixel value (HIGHLIGHT_GROW_PX) on each side. The
+    // percentage-driven anchor stays in calc() so the position scales
+    // with the canvas's rendered size.
+    expect(src).toMatch(/HIGHLIGHT_GROW_PX/);
+    expect(src).toMatch(/left:\s+`calc\(\$\{posX\}% - \$\{HIGHLIGHT_GROW_PX\}px\)`/);
+    expect(src).toMatch(/top:\s+`calc\(\$\{posY\}% - \$\{HIGHLIGHT_GROW_PX\}px\)`/);
+    expect(src).toMatch(/width:\s+`calc\(\$\{posW\}% \+ \$\{HIGHLIGHT_GROW_PX \* 2\}px\)`/);
+    expect(src).toMatch(/height:\s+`calc\(\$\{posH\}% \+ \$\{HIGHLIGHT_GROW_PX \* 2\}px\)`/);
+  });
+
+  it("status-driven className composes only the fill (no border) — Slice-B1 follow-up", () => {
+    // Borders were dropped on the LEFT pane in the Slice-B1 colour-
+    // scheme work; the fill alone is sufficient signal and the border
+    // was competing with the underlying text. Matches the RIGHT pane.
+    const statusFn = src.match(/function statusColor[\s\S]*?\n\}/);
+    expect(statusFn).not.toBeNull();
+    expect(statusFn![0]).not.toMatch(/border-2/);
+    expect(statusFn![0]).not.toMatch(/border-(amber|red|emerald)-/);
+    // Each branch still returns a /25 fill colour.
+    expect(statusFn![0]).toMatch(/bg-amber-500\/25/);
+    expect(statusFn![0]).toMatch(/bg-red-500\/25/);
+    expect(statusFn![0]).toMatch(/bg-emerald-500\/25/);
   });
 });

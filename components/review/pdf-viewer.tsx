@@ -357,9 +357,21 @@ export default function PdfViewer({
                   toolbar toggle is off OR the viewport is too narrow
                   for dual-panel; kept mounted so toggling back on is
                   instant (no canvas re-render). Same fit-content
-                  wrapper rationale as the left panel. */}
+                  wrapper rationale as the left panel.
+
+                  `select-none` makes the right pane's pdf.js text
+                  layer non-selectable. Without it, a drag-select
+                  starting on this pane (or extending across pages
+                  on the LEFT pane) reaches into the right pane via
+                  DOM order — page rows are paired siblings under one
+                  `<Document>` (L1 R1 L2 R2 …) and native browser
+                  selection extends through DOM order. The right
+                  pane is display-only (no manual-detection popover
+                  anchored here), so making it non-selectable
+                  completes the display-only contract started by
+                  `aria-hidden` and `pointer-events: none`. */}
               <div
-                className={`relative shadow-md bg-white${showRightPanel ? "" : " hidden"}`}
+                className={`relative shadow-md bg-white select-none${showRightPanel ? "" : " hidden"}`}
                 style={{ width: rightPanelWidth > 0 ? `${rightPanelWidth}px` : undefined }}
                 data-panel="redacted-preview"
               >

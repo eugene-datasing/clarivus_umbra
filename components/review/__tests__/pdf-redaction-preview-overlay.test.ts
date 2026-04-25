@@ -47,40 +47,72 @@ describe("PdfRedactionPreviewOverlay source — Slice B display-only contract", 
     expect(src).toMatch(/aria-hidden="true"/);
   });
 
-  it("sets pointer-events-none on both the container AND each rectangle", () => {
+  it("sets pointer-events-none on the container AND every per-status rectangle class", () => {
     const container = src.match(/className="absolute inset-0[^"]*"/);
     expect(container).not.toBeNull();
     expect(container![0]).toContain("pointer-events-none");
 
-    const rect = src.match(/className="absolute bg-veil-redaction-black[^"]*"/);
-    expect(rect).not.toBeNull();
-    expect(rect![0]).toContain("pointer-events-none");
+    // Slice-B1 follow-up: rectangles now have status-driven classes
+    // (accepted = veil-redaction-black, pending = amber-500/25 +
+    // border). Every non-null branch of `rightOverlayClass` must
+    // include `pointer-events-none`.
+    const switchBlock = src.match(/function rightOverlayClass[\s\S]*?\n\}/);
+    expect(switchBlock).not.toBeNull();
+    const returnLines = (switchBlock![0].match(/return\s+"[^"]*"/g) ?? []);
+    expect(returnLines.length).toBeGreaterThanOrEqual(2);
+    for (const ret of returnLines) {
+      expect(ret).toContain("pointer-events-none");
+    }
   });
 
   it("applies z-[3] so the overlay stacks above the pdf.js text layer (z-index 2)", () => {
     expect(src).toMatch(/z-\[3\]/);
   });
 
-  it("filters rectangles to detections with status === 'accepted'", () => {
-    expect(src).toMatch(/status === "accepted"/);
+  it("renders BOTH pending and accepted rectangles; rejected returns null (Slice-B1 follow-up)", () => {
+    // The rightOverlayClass switch keys: accepted → black, pending →
+    // yellow translucent (matching LEFT pane), rejected → null.
+    expect(src).toMatch(/case\s+"accepted":/);
+    expect(src).toMatch(/case\s+"rejected":\s*\n?\s*return\s+null/);
+    // Default branch covers "pending" and any unknown status, mirroring
+    // PdfDetectionOverlay's default-as-pending convention.
+    expect(src).toMatch(/default:\s*\n?\s*return\s+"absolute bg-amber-500\/25/);
   });
 
   it("filters out zero-bbox detections (posW === 0 AND posH === 0)", () => {
     expect(src).toMatch(/d\.posW > 0 \|\| d\.posH > 0/);
   });
 
-  it("uses the veil-redaction-black tailwind colour token (not a bare hex)", () => {
+  it("uses the veil-redaction-black tailwind colour token for accepted (not a bare hex)", () => {
     expect(src).toMatch(/bg-veil-redaction-black/);
   });
 
-  it("positions rectangles via percentage style props (posX/posY/posW/posH)", () => {
-    expect(src).toMatch(/left:\s*`\$\{d\.posX\}%`/);
-    expect(src).toMatch(/top:\s*`\$\{d\.posY\}%`/);
-    expect(src).toMatch(/width:\s*`\$\{d\.posW\}%`/);
-    expect(src).toMatch(/height:\s*`\$\{d\.posH\}%`/);
+  it("uses bg-amber-500/25 for pending — the same token PdfDetectionOverlay uses on the LEFT pane", () => {
+    // Visual consistency: same yellow on both panes for the same
+    // detection, so reviewer reads pending-state identically across
+    // panels. Borders were dropped in the Slice-B1 follow-up.
+    expect(src).toMatch(/bg-amber-500\/25/);
+    expect(src).not.toMatch(/border-amber-500/);
   });
 
-  it("renders nothing (returns null) when the page has no accepted detections", () => {
-    expect(src).toMatch(/if \(pageAccepted\.length === 0\) return null;/);
+  it("positions rectangles via percentage style props with a px grow for pending; tight for accepted", () => {
+    // Pending and rejected branches grow by HIGHLIGHT_GROW_PX on each
+    // side (visual breathing room around the glyph). Accepted stays
+    // tight to the bbox so the redaction preview obscures only what
+    // would actually be redacted in the export.
+    expect(src).toMatch(/HIGHLIGHT_GROW_PX/);
+    const styleFn = src.match(/function rightOverlayStyle[\s\S]*?\n\}/);
+    expect(styleFn).not.toBeNull();
+    // accepted branch: tight
+    expect(styleFn![0]).toMatch(/status === "accepted"/);
+    expect(styleFn![0]).toMatch(/left:\s+`\$\{posX\}%`/);
+    expect(styleFn![0]).toMatch(/width:\s+`\$\{posW\}%`/);
+    // grown branch (default — pending)
+    expect(styleFn![0]).toMatch(/left:\s+`calc\(\$\{posX\}% - \$\{HIGHLIGHT_GROW_PX\}px\)`/);
+    expect(styleFn![0]).toMatch(/width:\s+`calc\(\$\{posW\}% \+ \$\{HIGHLIGHT_GROW_PX \* 2\}px\)`/);
+  });
+
+  it("renders nothing (returns null) when the page has no visible (pending+accepted) detections", () => {
+    expect(src).toMatch(/if \(pageVisible\.length === 0\) return null;/);
   });
 });
