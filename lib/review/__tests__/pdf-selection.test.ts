@@ -140,6 +140,83 @@ describe("computePdfSelectionBbox", () => {
     expect(out).not.toBeNull();
     expect(out!.posW).toBe(62.5);
     expect(out!.posH).toBe(4);
+    // Slice B2 follow-up — embedded \n from layout-preserved
+    // pdf.js extraction is normalised to a single space; the popover
+    // receives single-line text suitable for rule authoring.
+    expect(out!.text).toBe("line one continues into line two");
+  });
+
+  describe("whitespace normalisation (Slice B2 follow-up)", () => {
+    const baseInput = {
+      anchorPage: 1 as const,
+      focusPage: 1 as const,
+      selectionRect: rect(150, 250, 200, 20),
+      wrapperRect: wrapper,
+    };
+
+    it("single-line selection passes through unchanged (no spurious whitespace)", () => {
+      // Drag-select a phrase entirely within one visible line — no
+      // newlines, no extra spaces. Output text reads exactly as input
+      // post-trim.
+      const out = computePdfSelectionBbox({
+        ...baseInput,
+        text: "Maia Rangi",
+      });
+      expect(out).not.toBeNull();
+      expect(out!.text).toBe("Maia Rangi");
+    });
+
+    it("collapses a single embedded \\n from a 2-line selection", () => {
+      const out = computePdfSelectionBbox({
+        ...baseInput,
+        text: "Counsel's view, expressed candidly\nin our Tuesday meeting",
+      });
+      expect(out).not.toBeNull();
+      expect(out!.text).toBe("Counsel's view, expressed candidly in our Tuesday meeting");
+    });
+
+    it("collapses multiple consecutive whitespace chars (CRLF, tabs, mixed)", () => {
+      const out = computePdfSelectionBbox({
+        ...baseInput,
+        // Mixed: \r\n + tabs + multiple spaces, all between two words.
+        text: "first\r\n\t  second",
+      });
+      expect(out).not.toBeNull();
+      expect(out!.text).toBe("first second");
+    });
+
+    it("collapses multi-page-wide line wraps into single spaces (3+ lines)", () => {
+      const out = computePdfSelectionBbox({
+        ...baseInput,
+        text: "alpha\nbeta\ngamma\ndelta",
+      });
+      expect(out).not.toBeNull();
+      expect(out!.text).toBe("alpha beta gamma delta");
+    });
+
+    it("hyphenation edge case — wrap mid-token leaves a space after the hyphen (acceptable)", () => {
+      // The text-selection spike flagged this: pdf.js extracts
+      // "account 12-3056-\n0789123-00" with the linebreak after the
+      // hyphen. After normalisation the popover receives
+      // "12-3056- 0789123-00" with an inserted space. Documented as
+      // an edge case in the helper's docstring; the popover textarea
+      // is editable so the reviewer can remove the space if needed.
+      const out = computePdfSelectionBbox({
+        ...baseInput,
+        text: "12-3056-\n0789123-00",
+      });
+      expect(out).not.toBeNull();
+      expect(out!.text).toBe("12-3056- 0789123-00");
+    });
+
+    it("normalisation runs AFTER trim so leading/trailing whitespace doesn't leave a stray space", () => {
+      const out = computePdfSelectionBbox({
+        ...baseInput,
+        text: "  hello\n\nworld  ",
+      });
+      expect(out).not.toBeNull();
+      expect(out!.text).toBe("hello world");
+    });
   });
 });
 

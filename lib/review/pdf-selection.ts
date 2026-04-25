@@ -62,11 +62,23 @@ const MIN_PERCENT = 0.1;
  *   - anchorPage !== focusPage (cross-page selection)
  *   - wrapperRect has zero width/height (layout race; try again next tick)
  *   - computed posW/posH falls below MIN_PERCENT (degenerate)
+ *
+ * Whitespace normalisation: pdf.js extracts text in layout-preserved
+ * order, so a multi-line selection in the text layer arrives with
+ * embedded `\n` characters reflecting visual line wraps rather than
+ * logical text flow. After trimming, collapse every run of whitespace
+ * (newlines, tabs, multiple spaces) to a single space so the popover
+ * receives a single-line normalised string. Edge case: hyphenated
+ * tokens that wrap across a line — e.g. extracted as `"12-3056-\n0789123-00"`
+ * — become `"12-3056- 0789123-00"`. The reviewer can edit the popover
+ * textarea to remove the inserted space; the userEditedText flag in
+ * `manual-detection-popover.tsx` (Slice B2) protects that edit from
+ * being clobbered by subsequent prop updates.
  */
 export function computePdfSelectionBbox(
   input: PdfSelectionInput,
 ): PdfSelectionBbox | null {
-  const text = input.text.trim();
+  const text = input.text.trim().replace(/\s+/g, " ");
   if (text.length < MIN_TEXT_LENGTH) return null;
   if (input.anchorPage !== input.focusPage) return null;
 
