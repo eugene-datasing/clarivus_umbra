@@ -10,16 +10,16 @@ test.describe("Screenshot Audit", () => {
     { name: "dashboard", url: "/" },
     { name: "case-list", url: "/requests" },
     { name: "case-create", url: "/requests/new" },
-    { name: "case-detail", url: `/requests/${SEED.cases.coastalWalkway.id}` },
-    { name: "case-pipeline", url: `/requests/${SEED.cases.coastalWalkway.id}/pipeline` },
-    { name: "case-ingest", url: `/requests/${SEED.cases.coastalWalkway.id}/ingest` },
-    { name: "case-review-doc", url: `/requests/${SEED.cases.coastalWalkway.id}/review/${SEED.documents.councilReport.id}` },
-    { name: "case-review-compare", url: `/requests/${SEED.cases.coastalWalkway.id}/review/${SEED.documents.councilReport.id}/compare` },
-    { name: "case-bulk-review", url: `/requests/${SEED.cases.coastalWalkway.id}/bulk-review` },
-    { name: "case-qa", url: `/requests/${SEED.cases.coastalWalkway.id}/qa` },
-    { name: "case-schedule", url: `/requests/${SEED.cases.coastalWalkway.id}/schedule` },
-    { name: "case-audit", url: `/requests/${SEED.cases.coastalWalkway.id}/audit` },
-    { name: "case-export", url: `/requests/${SEED.cases.coastalWalkway.id}/export` },
+    { name: "case-detail", url: `/requests/${SEED.cases.featherstonStreet.id}` },
+    { name: "case-pipeline", url: `/requests/${SEED.cases.featherstonStreet.id}/pipeline` },
+    { name: "case-ingest", url: `/requests/${SEED.cases.featherstonStreet.id}/ingest` },
+    { name: "case-review-doc", url: `/requests/${SEED.cases.featherstonStreet.id}/review/${SEED.documents.mainCaseFile.id}` },
+    { name: "case-review-compare", url: `/requests/${SEED.cases.featherstonStreet.id}/review/${SEED.documents.mainCaseFile.id}/compare` },
+    { name: "case-bulk-review", url: `/requests/${SEED.cases.featherstonStreet.id}/bulk-review` },
+    { name: "case-qa", url: `/requests/${SEED.cases.featherstonStreet.id}/qa` },
+    { name: "case-schedule", url: `/requests/${SEED.cases.featherstonStreet.id}/schedule` },
+    { name: "case-audit", url: `/requests/${SEED.cases.featherstonStreet.id}/audit` },
+    { name: "case-export", url: `/requests/${SEED.cases.featherstonStreet.id}/export` },
     { name: "profile", url: "/profile" },
     { name: "queue", url: "/queue" },
     { name: "reports", url: "/reports" },
@@ -40,33 +40,40 @@ test.describe("Screenshot Audit", () => {
     });
   }
 
-  // Admin settings tabs need separate captures
-  const settingsTabs = [
-    "Departments",
-    "Users & Roles",
-    "Detection Settings",
-    "Workflow",
-    "Notifications",
-    "Integrations",
-    "Backup & Recovery",
-    "System Health",
+  // Admin settings tabs — Slice D1 mapping reflects the current
+  // two-tier nav: top-level tabs (Organisation, Detection, Workflow,
+  // Integrations, Backup, System Health) with org-sub-tabs below
+  // them (Departments, Users & Roles). Notifications now live under
+  // the Workflow top-tab (see settings-client.tsx:596 + 655).
+  const settingsTabs: Array<{ slug: string; topTab: string; subTab?: string }> = [
+    { slug: "departments",       topTab: "Organisation",  subTab: "Departments" },
+    { slug: "users-roles",       topTab: "Organisation",  subTab: "Users & Roles" },
+    { slug: "detection-settings", topTab: "Detection" },
+    { slug: "workflow",          topTab: "Workflow" },
+    { slug: "notifications",     topTab: "Workflow" }, // section within Workflow
+    { slug: "integrations",      topTab: "Integrations" },
+    { slug: "backup-recovery",   topTab: "Backup" },
+    { slug: "system-health",     topTab: "System Health" },
   ];
 
-  for (const tabName of settingsTabs) {
-    const slug = tabName.toLowerCase().replace(/[^a-z]+/g, "-");
-    test(`capture admin-settings-${slug}`, async ({ page }) => {
+  for (const tab of settingsTabs) {
+    test(`capture admin-settings-${tab.slug}`, async ({ page }) => {
       await page.goto("/admin/settings");
       await page.waitForLoadState("networkidle");
-      // For Notifications tab, scope to main content to avoid sidebar match
-      if (tabName === "Notifications") {
-        const mainContent = page.locator("[role='main'], #main-content, main").first();
-        await mainContent.getByRole("button", { name: tabName, exact: true }).click();
-      } else {
-        await page.getByRole("button", { name: tabName, exact: true }).click();
+      // Click the top-level tab.
+      await page.getByRole("button", { name: tab.topTab, exact: true }).click();
+      await page.waitForTimeout(300);
+      // If a sub-tab was specified, click it now. Sub-tab buttons
+      // render with a count badge inside, so the accessible name is
+      // "Departments 8" / "Users & Roles 11" — use a regex prefix
+      // match rather than exact.
+      if (tab.subTab) {
+        const subTabRe = new RegExp(`^${tab.subTab.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}\\s*\\d*$`);
+        await page.getByRole("button", { name: subTabRe }).click();
+        await page.waitForTimeout(300);
       }
-      await page.waitForTimeout(500);
       await page.screenshot({
-        path: `e2e/screenshots/admin-settings-${slug}.png`,
+        path: `e2e/screenshots/admin-settings-${tab.slug}.png`,
         fullPage: true,
       });
     });
@@ -79,7 +86,7 @@ test.describe("Screenshot Audit", () => {
       storageState: "e2e/.auth/reviewer.json",
     });
     const reviewerPage = await reviewerCtx.newPage();
-    await reviewerPage.goto(`/requests/${SEED.cases.communityTrust.id}`);
+    await reviewerPage.goto(`/requests/${SEED.cases.waterQuality.id}`);
     await reviewerPage.waitForLoadState("networkidle");
     await reviewerPage.screenshot({
       path: "e2e/screenshots/error-boundary.png",

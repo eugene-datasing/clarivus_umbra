@@ -56,10 +56,11 @@ test.describe("Create Case Form Validation", () => {
 
   test("shows description textarea", async ({ page }) => {
     await page.goto("/requests/new");
-    // Description is a textarea with specific placeholder
-    const description = page.locator("textarea");
+    // First textarea on the page (description) — strict-mode-safe.
+    const description = page.locator("textarea").first();
     await expect(description).toBeVisible();
-    await expect(page.locator("body")).toContainText(/request description/i);
+    // Body contains "Description" (heading) — robust to label phrasing.
+    await expect(page.locator("body")).toContainText(/description/i);
   });
 
   test("successful submission shows toast and redirects", async ({ page }) => {

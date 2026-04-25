@@ -2,11 +2,11 @@ import { test, expect } from "@playwright/test";
 import { SEED } from "../fixtures/test-data";
 
 test.describe("Pipeline Configuration", () => {
-  const pipelineUrl = `/requests/${SEED.cases.coastalWalkway.id}/pipeline`;
+  const pipelineUrl = `/requests/${SEED.cases.featherstonStreet.id}/pipeline`;
 
   test("renders the pipeline page with case reference", async ({ page }) => {
     await page.goto(pipelineUrl);
-    await expect(page.locator("body")).toContainText(SEED.cases.coastalWalkway.reference);
+    await expect(page.locator("body")).toContainText(SEED.cases.featherstonStreet.reference);
   });
 
   test("shows pipeline stages", async ({ page }) => {

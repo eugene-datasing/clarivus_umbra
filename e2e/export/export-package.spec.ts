@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { SEED } from "../fixtures/test-data";
 
 test.describe("Export Package", () => {
-  const exportUrl = `/requests/${SEED.cases.coastalWalkway.id}/export`;
+  const exportUrl = `/requests/${SEED.cases.featherstonStreet.id}/export`;
 
   test("renders the export page with heading", async ({ page }) => {
     await page.goto(exportUrl);
@@ -25,7 +25,7 @@ test.describe("Export Package", () => {
 
   test("lists seeded documents in the export table", async ({ page }) => {
     await page.goto(exportUrl);
-    await expect(page.locator("body")).toContainText(SEED.documents.councilReport.name);
+    await expect(page.locator("body")).toContainText(SEED.documents.mainCaseFile.name);
   });
 
   test("shows export history section", async ({ page }) => {

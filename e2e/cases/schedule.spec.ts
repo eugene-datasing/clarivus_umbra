@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { SEED } from "../fixtures/test-data";
 
 test.describe("Withholding Schedule", () => {
-  const scheduleUrl = `/requests/${SEED.cases.coastalWalkway.id}/schedule`;
+  const scheduleUrl = `/requests/${SEED.cases.featherstonStreet.id}/schedule`;
 
   test("renders the withholding schedule page", async ({ page }) => {
     await page.goto(scheduleUrl);
@@ -11,7 +11,7 @@ test.describe("Withholding Schedule", () => {
 
   test("shows the case reference", async ({ page }) => {
     await page.goto(scheduleUrl);
-    await expect(page.locator("body")).toContainText(SEED.cases.coastalWalkway.reference);
+    await expect(page.locator("body")).toContainText(SEED.cases.featherstonStreet.reference);
   });
 
   test("shows the schedule items table with grounds", async ({ page }) => {
