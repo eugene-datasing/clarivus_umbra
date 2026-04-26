@@ -1,58 +1,231 @@
 name: Docker Build
 
+# PRs run a build-only verification pass to catch Docker-layering
+# regressions pre-merge (the gate that PR #44's Slice A postinstall
+# hook bug should have hit). Pushes to main run the full deploy
+# chain: migration → ACR build → App Service config update → restart
+# → verify.
+#
+# Pre-Option-B (cr19 and earlier) this workflow pushed to ghcr.io as
+# a parallel image; ghcr.io was never wired into App Service's pull
+# path so the push was never consumed and main → live had to be done
+# manually via `az acr build` + `az webapp config container set` +
+# `az webapp restart`. Option B (this workflow's deploy lane, post
+# Slice D2) drops the ghcr.io push entirely and replaces it with
+# `az acr build` against acrveilprototype, which IS what App Service
+# pulls from. The veil-deploy-sp service principal (provisioned
+# 2026-04-26) authenticates the deploy lane via the AZURE_CREDENTIALS
+# repo secret — AcrPush on ACR, Website Contributor on
+# app-veil-prototype, Key Vault Secrets User on kv-veil-prototype.
+
 on:
   push:
     branches: [main]
-    tags: ["v*"]
-  # PRs trigger a build-only pass (push: false below) so we catch Docker-
-  # layering regressions pre-merge rather than on main after the fact.
-  # See PR #44 — Slice A's postinstall hook broke Stage 1 only under Docker
-  # and was invisible to dev-box + "npm run build" smoke checks.
   pull_request:
     branches: [main]
 
+# Workflow-level concurrency uses a dynamic group key so deploys on
+# main serialise (one cr-tag at a time; two PRs merging in quick
+# succession produce two deploys in order, never in parallel) while
+# PR builds run independently — each PR uses its own group key, and
+# in-flight PR builds don't queue behind a deploy.
+# `cancel-in-progress: false` is critical for the deploy lane: never
+# cancel a deploy mid-restart even if a newer push lands.
+concurrency:
+  group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'deploy-prod' || format('docker-pr-{0}', github.event.pull_request.number) }}
+  cancel-in-progress: false
+
 jobs:
-  docker:
+  # ---------------------------------------------------------------------------
+  # PR-only build verification.
+  # Pre-merge build of the Dockerfile to catch layering bugs without
+  # touching any registry. Same job name as the pre-Option-B docker.yml
+  # so existing branch-protection rules keyed on
+  # "Build & Push Docker Image" continue to match.
+  # ---------------------------------------------------------------------------
+  verify-build:
     name: Build & Push Docker Image
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v4
 
       - uses: docker/setup-buildx-action@v3
 
-      # Registry login is only needed when we're about to push. Skipping
-      # on pull_request keeps PR builds from touching ghcr.io credentials
-      # at all.
-      - name: Log in to GitHub Container Registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix=
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push
+      - name: Build (verification only — no push)
         uses: docker/build-push-action@v5
         with:
           context: .
-          # push only on non-PR events — PRs get a build-only verification pass.
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          push: false
+          tags: veil-prototype:pr-${{ github.event.pull_request.number }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # ---------------------------------------------------------------------------
+  # Main-push-only deploy chain.
+  # Migration first (running new image against old schema is the bad
+  # state — Prisma queries for as-yet-unmigrated columns throw and the
+  # container goes into a crash loop), then ACR build with auto-
+  # incrementing cr-tag, App Service config update, restart, and
+  # verification. Failure at any pre-restart step halts the workflow
+  # without mutating App Service, leaving prod on the prior cr-tag.
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: Build & Push Docker Image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Prisma CLI deps (for migrate deploy)
+        # The migrate step calls `npx prisma migrate deploy` which
+        # needs @prisma/client and prisma generated. Full `npm ci` is
+        # the cheapest path that exercises the same dependency graph
+        # the built image uses — keeps migrations consistent with the
+        # image runtime.
+        run: |
+          npm ci
+          npx prisma generate
+
+      - name: Azure login (veil-deploy-sp)
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Compute next cr-tag
+        # Query ACR for the highest existing `cr<N>` tag and emit
+        # `cr<N+1>`. Edge case: no existing tags → start at cr1 (in
+        # practice we're at cr19+, but the fallback keeps the workflow
+        # bootstrap-safe). `--orderby time_desc --top 50` reads back
+        # plenty of history; the grep + sort tolerates non-cr tags
+        # (`latest`, `vN`, etc.) without the parser breaking.
+        id: tag
+        run: |
+          set -euo pipefail
+          existing=$(az acr repository show-tags \
+            --name acrveilprototype \
+            --repository veil-prototype \
+            --orderby time_desc --top 50 -o tsv 2>/dev/null || echo "")
+          highest=$(echo "$existing" | grep -oE '^cr[0-9]+$' | sed 's/^cr//' | sort -n | tail -1 || true)
+          if [ -z "$highest" ]; then
+            next=1
+          else
+            next=$((highest + 1))
+          fi
+          echo "next_tag=cr${next}" >> "$GITHUB_OUTPUT"
+          echo "Computed next cr-tag: cr${next} (highest existing: ${highest:-<none>})"
+
+      - name: Run Prisma migrations against prod
+        # Migration MUST land before the new image starts serving.
+        # Failure here halts the workflow before any App Service
+        # mutation, leaving prod on the prior cr-tag.
+        run: |
+          set -euo pipefail
+          db_url=$(az keyvault secret show \
+            --vault-name kv-veil-prototype \
+            --name db-connection-string \
+            --query value -o tsv)
+          # Mask the value for defense-in-depth — secrets in env vars
+          # can leak via verbose error traces from any subsequent step.
+          echo "::add-mask::$db_url"
+          DATABASE_URL="$db_url" npx prisma migrate deploy
+          echo "migration step complete"
+
+      - name: Build & push image to ACR
+        # `az acr build` runs the Docker build server-side in ACR's
+        # build service — no local Docker daemon, no buildx setup, no
+        # GHA-cache pull cycle. Slower per-build than the pre-Option-B
+        # ghcr push (cache-from gha was warm) but consistent with the
+        # manual `cr<N>` flow used since cr16. ~6–8 min wall time.
+        run: |
+          set -euo pipefail
+          az acr build \
+            --registry acrveilprototype \
+            --image veil-prototype:${{ steps.tag.outputs.next_tag }} \
+            --file Dockerfile \
+            .
+          echo "Pushed acrveilprototype.azurecr.io/veil-prototype:${{ steps.tag.outputs.next_tag }}"
+
+      - name: Update App Service container image
+        run: |
+          set -euo pipefail
+          az webapp config container set \
+            --name app-veil-prototype \
+            --resource-group rg-veil-prototype \
+            --container-image-name acrveilprototype.azurecr.io/veil-prototype:${{ steps.tag.outputs.next_tag }}
+          echo "linuxFxVersion now: $(az webapp show \
+            --name app-veil-prototype \
+            --resource-group rg-veil-prototype \
+            --query 'siteConfig.linuxFxVersion' -o tsv)"
+
+      - name: Restart App Service
+        run: |
+          set -euo pipefail
+          az webapp restart --name app-veil-prototype --resource-group rg-veil-prototype
+          echo "Restart issued at $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+
+      - name: Wait for App Service to come back
+        # App Service container restart with a fresh image takes ~2
+        # min on observed deploys (cr19 went from `restart` to
+        # `Site started.` in 2m18s). Poll every 5s for HTTP 200 with
+        # a 5-min cap; fail loudly if not back in time so the
+        # workflow run page makes the regression visible rather than
+        # silently succeeding while prod is down.
+        run: |
+          set -euo pipefail
+          echo "Polling https://veil.datasing.nz/ for HTTP 200..."
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 10 https://veil.datasing.nz/ || echo "000")
+            if [ "$code" = "200" ]; then
+              echo "ready after ${i} polls (~$((i * 5))s)"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::App Service did not return HTTP 200 within 5 minutes"
+          exit 1
+
+      - name: Verify deploy
+        # Cross-check that App Service config and image state both
+        # reflect the new tag. Fails the workflow if either drifts —
+        # forces visible failure rather than silent partial deploy.
+        run: |
+          set -euo pipefail
+          state=$(az webapp show --name app-veil-prototype --resource-group rg-veil-prototype --query state -o tsv)
+          fxv=$(az webapp show --name app-veil-prototype --resource-group rg-veil-prototype --query 'siteConfig.linuxFxVersion' -o tsv)
+          expected="DOCKER|acrveilprototype.azurecr.io/veil-prototype:${{ steps.tag.outputs.next_tag }}"
+          echo "state=${state}"
+          echo "linuxFxVersion=${fxv}"
+          echo "expected=${expected}"
+          if [ "$state" != "Running" ]; then
+            echo "::error::App Service state is '$state' (expected 'Running')"
+            exit 1
+          fi
+          if [ "$fxv" != "$expected" ]; then
+            echo "::error::linuxFxVersion='$fxv' does not match expected"
+            exit 1
+          fi
+          echo "deploy verified: ${{ steps.tag.outputs.next_tag }} live on app-veil-prototype"
+
+      - name: Tail App Service logs (~30s sanity)
+        # Quick post-restart log tail. We don't gate the workflow on
+        # log content — the HTTP-200 wait already gates startup
+        # health. This is an audit trail for the workflow run page so
+        # reviewers can spot pg / Next.js startup warnings without
+        # running `az webapp log tail` manually.
+        run: |
+          set +e
+          (az webapp log tail \
+            --name app-veil-prototype \
+            --resource-group rg-veil-prototype 2>&1 & \
+            PID=$!; sleep 30; kill $PID 2>/dev/null || true) | tail -100
+          exit 0
