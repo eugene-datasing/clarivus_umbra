@@ -51,11 +51,25 @@ export interface MergeableDetection {
    * Stored LGOIMA ground id (e.g. `s7_2a`) chosen by the reviewer when
    * accepting the detection. Null/undefined for pending or rejected
    * detections, and may also be null for accepted detections where the
-   * reviewer accepted-without-ground (legacy data, manual annotations).
-   * Plumbed through so the right-pane overlay can render the citation
-   * label on accepted redactions.
+   * reviewer accepted-without-ground (legacy data, bulk-accept paths
+   * that pre-date 2026-04-27's per-row normalisation, manual
+   * annotations). Plumbed through so the right-pane overlay can render
+   * the citation label on accepted redactions.
    */
   appliedGround?: string | null;
+  /**
+   * AI-suggested ground in reference format (e.g. `s7(2)(a)`). Used as
+   * the citation-label fallback when `appliedGround` is null — mirrors
+   * the `appliedGround || suggestedGround` pattern already established
+   * in `lib/pipeline/redact-pdf.ts:214` (PDF burn-in label),
+   * `lib/pipeline/schedule.ts:134` (withholding schedule grouping),
+   * `lib/data/detections.ts:114` (case withholding items), and
+   * `app/requests/[id]/review/[docId]/review-client.tsx:2103` (sidebar
+   * accepted-row footer). The overlay was the lone hold-out using
+   * `appliedGround` only, which suppressed citations on every
+   * accepted-without-explicit-ground detection in prod.
+   */
+  suggestedGround?: string | null;
 }
 
 export interface MergedOverlay {
@@ -84,6 +98,14 @@ export interface MergedOverlay {
    * primary's value wins by the same rule as `text` and `confidence`.
    */
   appliedGround?: string | null;
+  /**
+   * Primary detection's `suggestedGround` (same lowest-id rule as
+   * `appliedGround`). Used as the fallback for the right-pane citation
+   * label when `appliedGround` is null — see the field-level comment
+   * on `MergeableDetection.suggestedGround` for the established
+   * `appliedGround || suggestedGround` pattern this aligns with.
+   */
+  suggestedGround?: string | null;
 }
 
 const STATUS_PRIORITY: Readonly<Record<string, number>> = {
@@ -168,6 +190,7 @@ export function mergeByBbox(detections: MergeableDetection[]): MergedOverlay[] {
       posH: primary.posH,
       status: dominantStatus(group),
       appliedGround: primary.appliedGround ?? null,
+      suggestedGround: primary.suggestedGround ?? null,
     };
   });
 }

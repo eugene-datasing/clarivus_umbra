@@ -67,6 +67,16 @@ interface DetectionForOverlay {
   position: { x: number; y: number; w: number; h: number };
   status: string;
   appliedGround?: string | null;
+  /**
+   * AI-suggested ground (reference format, e.g. `s7(2)(a)`). Drives
+   * the right-pane citation fallback when `appliedGround` is null —
+   * see `lib/review/overlay-grouping.ts` for the pattern this aligns
+   * with. The reviewer-state in-flight value is NOT mirrored for
+   * `suggestedGround` because the UI never edits it; it's a
+   * pipeline-set field that only changes via reprocess. So the flat
+   * map below reads it straight from the prop, no `stateRow` lookup.
+   */
+  suggestedGround?: string | null;
 }
 
 interface PdfViewerProps {
@@ -231,6 +241,8 @@ export default function PdfViewer({
       // else in this component for the status field. `appliedGround`
       // can be `null` to mean "explicitly unset" (e.g. reject clears
       // the ground), so the nullish-fallback is `??` not `||`.
+      // `suggestedGround` is pipeline-set and never edited in-flight,
+      // so it reads straight from the prop with no state lookup.
       const stateRow = detectionStates[d.id];
       return {
         id: d.id,
@@ -244,6 +256,7 @@ export default function PdfViewer({
         posH: d.position.h,
         status: stateRow?.status ?? d.status,
         appliedGround: stateRow?.appliedGround ?? d.appliedGround ?? null,
+        suggestedGround: d.suggestedGround ?? null,
       };
     });
     return mergeByBbox(flat);

@@ -81,17 +81,30 @@ export function getGroundByReference(ref: string): LGOIMAGround | undefined {
 }
 
 /**
- * Format a stored ground id (`s7_2a`) as the human-readable
- * reference (`s7(2)(a)`). Falls back to the input verbatim when no
+ * Format a stored ground value as the human-readable reference
+ * (`s7(2)(a)`). Accepts either the stored-ID format (`s7_2a`, used
+ * by `appliedGround`) OR the reference format (`s7(2)(a)`, used by
+ * `suggestedGround`). Falls back to the input verbatim when no
  * matching ground row is found, and to the em-dash placeholder for
- * null/empty input. Shared between the sidebar's accepted-row footer
+ * null/empty input.
+ *
+ * Pre-2026-04-27 this matched only by `.id` — reference-format inputs
+ * fell through to the `return groundId` fallback and produced the
+ * right output by coincidence (the raw `s7(2)(a)` string IS the
+ * canonical reference). Adding the `.reference` match-arm makes the
+ * behaviour explicit and equivalent for both input formats; future
+ * refactors of the fallback path can't silently break either caller.
+ *
+ * Shared between the sidebar's accepted-row footer
  * (review-client.tsx) and the right-pane redaction citation
  * (pdf-redaction-preview-overlay.tsx) so both surfaces format
- * applied-ground identically.
+ * applied-ground OR suggested-ground identically.
  */
 export function groundLabel(groundId: string | null | undefined): string {
   if (!groundId) return "\u2014";
-  const g = lgoimaGrounds.find((x) => x.id === groundId);
+  const g = lgoimaGrounds.find(
+    (x) => x.id === groundId || x.reference === groundId,
+  );
   return g ? g.reference : groundId;
 }
 
