@@ -66,21 +66,32 @@ export async function createManualDetection(input: CreateManualDetectionInput) {
     // calculateBBoxAll matches the detection text against the page's
     // stored word polygons (Azure DI output, persisted in
     // DocumentPage.layoutJson during the processing pipeline). The
-    // returned `BBox[]` is one box per visual line of match. Manual
-    // detections are point-and-click on a single occurrence, so we
-    // store the FIRST box; export-time PyMuPDF Tier-2 text-search
-    // catches any additional occurrences of the same text.
+    // returned `BBox[]` is one box per visual line of match.
+    //
+    // `skipLongTextGuard: true` opts out of the 80-char short-circuit
+    // that the helper applies for AI "long narrative summary"
+    // detections. Manual selections come from literal user-dragged
+    // text on the rendered page, so a polygon match is meaningful at
+    // any length — see Bug 5 from cr25 verification (2026-04-27).
+    //
+    // Multi-line handling mirrors `process.ts:782-784` — the AI
+    // pipeline writes ONE Detection row per visual-line bbox so each
+    // line's redaction renders independently. The first bbox patches
+    // the existing row (the one we just created above); each
+    // additional bbox spawns a sibling Detection row sharing every
+    // metadata field except the bbox itself. Counters bump per
+    // sibling so detectionCount / redactionCount stay honest. A
+    // single FeedbackExample covers the whole reviewer action — one
+    // physical drag-and-click is one logical training signal,
+    // regardless of how many visual lines the selection wraps onto.
     //
     // Edge cases left at zero bbox (visible in sidebar, invisible on
-    // canvas, redacted at export via text-search):
+    // canvas, redacted at export via PyMuPDF Tier-2 text-search):
     //   - The page has no layoutJson (legacy document, ingest issue,
     //     non-OCR'd image-only PDF).
     //   - The detection text doesn't match any word polygon (OCR
     //     misread, user edited the textarea so the visible text and
     //     the typed text diverge).
-    //   - calculateBBoxAll's 80-char guard kicks in (long-narrative
-    //     detections — same convention as the AI pipeline at
-    //     process.ts:776).
     const page = await tx.documentPage.findUnique({
       where: {
         documentId_pageNumber: {
@@ -92,10 +103,27 @@ export async function createManualDetection(input: CreateManualDetectionInput) {
     });
     const words = (page?.layoutJson ?? null) as unknown as WordLayout[] | null;
     const bboxes = words
-      ? calculateBBoxAll(validated.text, words, page?.width ?? undefined, page?.height ?? undefined)
+      ? calculateBBoxAll(
+          validated.text,
+          words,
+          page?.width ?? undefined,
+          page?.height ?? undefined,
+          { skipLongTextGuard: true },
+        )
       : [];
-    const firstBbox = bboxes[0];
-    if (firstBbox) {
+    let extraSiblingCount = 0;
+    if (bboxes.length === 0) {
+      // Warn-only — the detection still exports correctly via Tier-2
+      // text-search; only the in-app preview misses the visual.
+      console.warn(
+        `[createManualDetection] no bbox match for text=${JSON.stringify(
+          validated.text.slice(0, 60),
+        )} on documentId=${validated.documentId} page=${validated.page} ` +
+          `(words=${words?.length ?? "no-layoutJson"})`,
+      );
+    } else {
+      const [firstBbox, ...extraBboxes] = bboxes;
+      // Patch the just-created row with the FIRST bbox.
       await tx.detection.update({
         where: { id: det.id },
         data: {
@@ -112,18 +140,40 @@ export async function createManualDetection(input: CreateManualDetectionInput) {
       det.posY = firstBbox.posY;
       det.posW = firstBbox.posW;
       det.posH = firstBbox.posH;
-    } else {
-      // Warn-only — the detection still exports correctly via Tier-2
-      // text-search; only the in-app preview misses the visual.
-      console.warn(
-        `[createManualDetection] no bbox match for text=${JSON.stringify(
-          validated.text.slice(0, 60),
-        )} on documentId=${validated.documentId} page=${validated.page} ` +
-          `(words=${words?.length ?? "no-layoutJson"})`,
-      );
+
+      // Spawn sibling rows for additional visual lines. Each sibling
+      // gets its own Detection.id and its own line-specific bbox but
+      // shares every other field with the original. Same pattern as
+      // the AI pipeline's enrichedDetections loop.
+      for (const extra of extraBboxes) {
+        await tx.detection.create({
+          data: {
+            documentId: validated.documentId,
+            type: validated.type,
+            text: validated.text,
+            confidence: 100,
+            page: validated.page,
+            suggestedGround: validated.ground || null,
+            appliedGround: validated.ground || null,
+            status: "accepted",
+            reasoning: validated.reasoning || "Manually identified by reviewer",
+            piConsideration: "",
+            aiExplanation: "Manually added by reviewer — this item was not detected by AI.",
+            source: "manual",
+            reviewedBy: user.name,
+            reviewedAt: new Date(),
+            posX: extra.posX,
+            posY: extra.posY,
+            posW: extra.posW,
+            posH: extra.posH,
+          },
+        });
+        extraSiblingCount += 1;
+      }
     }
 
-    // Create feedback example (for AI learning)
+    // Create feedback example (for AI learning). One per reviewer
+    // action — siblings share the same training signal.
     await tx.feedbackExample.create({
       data: {
         caseId: doc.caseId,
@@ -137,16 +187,20 @@ export async function createManualDetection(input: CreateManualDetectionInput) {
       },
     });
 
-    // Increment document detection count
+    // Increment document detection count by 1 (original row) plus
+    // however many sibling rows we created above.
+    const totalNewRows = 1 + extraSiblingCount;
     await tx.document.update({
       where: { id: validated.documentId },
-      data: { detectionCount: { increment: 1 } },
+      data: { detectionCount: { increment: totalNewRows } },
     });
 
-    // Increment case redaction count
+    // Increment case redaction count — same total. detectionCount and
+    // redactionCount on Case track the same thing post-2026-04-27 fix
+    // (one row = one redaction).
     await tx.case.update({
       where: { id: doc.caseId },
-      data: { redactionCount: { increment: 1 } },
+      data: { redactionCount: { increment: totalNewRows } },
     });
 
     return det;

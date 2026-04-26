@@ -11,17 +11,37 @@ export interface WordLayout {
   polygon?: number[];
 }
 
+/**
+ * Optional behaviour switches for the bbox helper.
+ *
+ * `skipLongTextGuard` was added 2026-04-27 for the manual-detection
+ * path (Bug 5). The default 80-char guard exists to short-circuit AI
+ * "long narrative summary" detections — text the model paraphrased,
+ * not literal page text — where a polygon match isn't meaningful.
+ * Manual detections come from a literal user selection on the
+ * rendered page, so the guard's rationale doesn't apply: a 200-char
+ * sentence the reviewer dragged over should still match its own
+ * word polygons. The flag is opt-in so the AI pipeline (process.ts
+ * still applies its own LONG_NARRATIVE_THRESHOLD before calling
+ * this function and never sets the flag) stays untouched.
+ */
+export interface CalculateBBoxOptions {
+  skipLongTextGuard?: boolean;
+}
+
 export function calculateBBoxAll(
   detectionText: string,
   words: WordLayout[],
   pageWidth?: number,
   pageHeight?: number,
+  options?: CalculateBBoxOptions,
 ): BBox[] {
   const empty: BBox[] = [];
   if (!words || words.length === 0 || !detectionText) return empty;
 
   const target = detectionText.toLowerCase().replace(/\s+/g, " ").trim();
-  if (!target || target.length > 80) return empty;
+  if (!target) return empty;
+  if (!options?.skipLongTextGuard && target.length > 80) return empty;
 
   const targetWords = target.split(/\s+/);
   const results: BBox[] = [];
