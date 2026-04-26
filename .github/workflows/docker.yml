@@ -216,16 +216,76 @@ jobs:
           fi
           echo "deploy verified: ${{ steps.tag.outputs.next_tag }} live on app-veil-prototype"
 
+      - name: Settle re-check (warning-only)
+        # cr20 deploy (2026-04-26) revealed a verify blind spot: the
+        # MSI sidecar container terminated 1s AFTER the verify step
+        # passed, cascading the whole site into a 22-min outage that
+        # auto-recovered. The verify step's API call returned
+        # `state=Running` because Azure's state machine lags container
+        # termination by several seconds. This re-check sleeps 30s and
+        # re-reads the same three signals (state, linuxFxVersion,
+        # HTTP 200). Mismatches are reported as workflow warnings —
+        # NOT failures — because:
+        #   - One observation isn't a recurring pattern; an aggressive
+        #     fail-the-workflow response to a transient Azure glitch
+        #     would noisily flag healthy deploys.
+        #   - When the cascade DID recur, prod auto-recovered without
+        #     intervention. Surfacing the cascade in the workflow run
+        #     page (via `::warning::`) gives operational awareness
+        #     without forcing a manual recovery action.
+        #   - The cr19 manual deploy didn't show this pattern, so it's
+        #     not deterministically reproducible — likely B1 SKU
+        #     pressure or a transient Azure infra hiccup.
+        # If we see the cascade repeat across multiple deploys, the
+        # right next move is an infra-tier conversation (B1 → P1V3) or
+        # adding a longer settle period before declaring success, not
+        # making this step blocking.
+        run: |
+          set -euo pipefail
+          echo "Settling 30s before re-checking deploy state..."
+          sleep 30
+          state=$(az webapp show --name app-veil-prototype --resource-group rg-veil-prototype --query state -o tsv)
+          fxv=$(az webapp show --name app-veil-prototype --resource-group rg-veil-prototype --query 'siteConfig.linuxFxVersion' -o tsv)
+          expected="DOCKER|acrveilprototype.azurecr.io/veil-prototype:${{ steps.tag.outputs.next_tag }}"
+          http_code=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 15 https://veil.datasing.nz/ || echo "000")
+          echo "post-30s state=${state}"
+          echo "post-30s linuxFxVersion=${fxv}"
+          echo "post-30s HTTP=${http_code}"
+          ok=true
+          if [ "$state" != "Running" ]; then
+            echo "::warning::settle re-check: state drifted to '$state' (expected 'Running') — may indicate Azure-side container cascade post-restart"
+            ok=false
+          fi
+          if [ "$fxv" != "$expected" ]; then
+            echo "::warning::settle re-check: linuxFxVersion='$fxv' (expected '$expected')"
+            ok=false
+          fi
+          if [ "$http_code" != "200" ]; then
+            echo "::warning::settle re-check: HTTP=${http_code} from veil.datasing.nz (expected 200) — site may have stopped responding after the verify step"
+            ok=false
+          fi
+          if [ "$ok" = "true" ]; then
+            echo "settle re-check OK — deploy still healthy 30s after verify"
+          fi
+          # Warning-only: don't fail the workflow on transient glitches.
+          exit 0
+
       - name: Tail App Service logs (~30s sanity)
         # Quick post-restart log tail. We don't gate the workflow on
         # log content — the HTTP-200 wait already gates startup
         # health. This is an audit trail for the workflow run page so
         # reviewers can spot pg / Next.js startup warnings without
         # running `az webapp log tail` manually.
+        #
+        # `timeout 30s` bounds the command directly. The previous
+        # `(cmd & sleep 30; kill $PID) | tail -100` form hung on the
+        # cr20 deploy — SIGTERM didn't propagate through the pipeline
+        # to `tail -100`, leaving the workflow's job runner stuck
+        # indefinitely on this step until manual cancellation. The
+        # `timeout` builtin sends SIGTERM directly to az; `|| true`
+        # neutralises timeout's exit-124-on-elapsed since reaching
+        # the 30s mark is the expected outcome here, not a failure.
         run: |
-          set +e
-          (az webapp log tail \
+          timeout 30s az webapp log tail \
             --name app-veil-prototype \
-            --resource-group rg-veil-prototype 2>&1 & \
-            PID=$!; sleep 30; kill $PID 2>/dev/null || true) | tail -100
-          exit 0
+            --resource-group rg-veil-prototype 2>&1 | tail -100 || true
