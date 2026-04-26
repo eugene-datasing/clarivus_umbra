@@ -140,7 +140,21 @@ export default function PdfRedactionPreviewOverlay({
         // typical detection bboxes. `overflow-hidden` on the parent
         // clips the label silently on narrow rectangles. Single-string
         // citation per detection — the data model is single-ground.
-        const showCitation = merged.status === "accepted" && !!merged.appliedGround;
+        //
+        // Falls back to `suggestedGround` when `appliedGround` is null
+        // — same `appliedGround || suggestedGround` pattern used by
+        // `lib/pipeline/redact-pdf.ts:214`, `lib/pipeline/schedule.ts:134`,
+        // `lib/data/detections.ts:114`, and the sidebar accepted-row
+        // footer at `review-client.tsx:2103`. Pre-2026-04-27 the
+        // overlay was the lone hold-out using `appliedGround` only,
+        // which suppressed the citation on every detection that took
+        // the `bulkAcceptDetections` path (which prior to the same
+        // 2026-04-27 fix didn't normalise `suggestedGround` →
+        // `appliedGround` per row). Existing prod rows with
+        // `appliedGround=null` start showing citations the moment this
+        // ships — no backfill needed.
+        const groundForCitation = merged.appliedGround ?? merged.suggestedGround;
+        const showCitation = merged.status === "accepted" && !!groundForCitation;
         return (
           <div
             key={merged.primaryId}
@@ -154,7 +168,7 @@ export default function PdfRedactionPreviewOverlay({
                 className="absolute right-0.5 top-0 text-[7px] leading-none font-mono font-semibold text-white/85 select-none whitespace-nowrap pointer-events-none"
                 data-redaction-citation="true"
               >
-                {groundLabel(merged.appliedGround)}
+                {groundLabel(groundForCitation)}
               </span>
             )}
           </div>

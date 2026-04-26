@@ -388,10 +388,19 @@ export async function bulkAcceptDetections(detectionIds: string[], ground?: stri
   const { detectionIds: validIds, ground: validGround } = bulkDetectionSchema.parse({ detectionIds, ground });
   const user = await requireUser();
 
-  // Fetch all detections and verify they belong to the same authorized case
+  // Fetch all detections and verify they belong to the same authorized
+  // case. `appliedGround` and `suggestedGround` are pulled in the same
+  // query so we can resolve the per-row ground without a second
+  // round-trip.
   const detections = await prisma.detection.findMany({
     where: { id: { in: validIds } },
-    select: { id: true, documentId: true, document: { select: { caseId: true } } },
+    select: {
+      id: true,
+      documentId: true,
+      document: { select: { caseId: true } },
+      appliedGround: true,
+      suggestedGround: true,
+    },
   });
 
   if (detections.length === 0) return { count: 0 };
@@ -404,16 +413,58 @@ export async function bulkAcceptDetections(detectionIds: string[], ground?: stri
   const caseId = detections[0].document.caseId;
   await authorizeForCase(user, caseId);
 
-  // Only update IDs that were actually found (prevents updating phantom IDs)
-  const authorizedIds = detections.map((d) => d.id);
-  const result = await prisma.detection.updateMany({
-    where: { id: { in: authorizedIds } },
-    data: {
-      status: "accepted",
-      appliedGround: validGround || undefined,
-      reviewedAt: new Date(),
-    },
+  // Resolve the ground each row should be accepted with.
+  //
+  // Priority (matches `acceptRemainingDetections` and `acceptDetection`):
+  //   1. Explicit `validGround` argument (the bulk caller said
+  //      "apply this ground to all of them") — overrides anything on
+  //      the row.
+  //   2. Row's existing `appliedGround` — preserved so a partial bulk
+  //      doesn't clobber a previous reviewer's per-row ground.
+  //   3. Row's `suggestedGround`, normalised to ID format. This is
+  //      the post-2026-04-27 fix: pre-fix the bulk path used
+  //      `updateMany` with `appliedGround: validGround || undefined`,
+  //      which left the field unchanged when no explicit ground was
+  //      passed and produced the prod-state `appliedGround=null,
+  //      suggestedGround=non-null` shape that suppressed the right-
+  //      pane citation (Bug 2 from PR #54 verification). Now every
+  //      row gets a normalised ID written, matching the per-row paths
+  //      that already had this logic.
+  //   4. None of the above → leave `appliedGround` untouched
+  //      (`undefined` in the Prisma update). Rare — only happens if
+  //      the row has no `suggestedGround` either (e.g. a manual
+  //      detection inserted without a ground).
+  const validGroundId = validGround ? normaliseGroundToId(validGround) : null;
+  const updates = detections.map((d) => {
+    const resolvedGround =
+      validGroundId ??
+      d.appliedGround ??
+      (d.suggestedGround ? normaliseGroundToId(d.suggestedGround) : null);
+    return { id: d.id, ground: resolvedGround };
   });
+
+  // Single transaction so concurrent bulk-accepts can't interleave —
+  // either every row in this call commits with its resolved ground or
+  // none do. Pre-fix the `updateMany` was already a single statement
+  // (atomic by Prisma's contract); the per-row loop in a `$transaction`
+  // gives the same guarantee for the new per-row logic.
+  await prisma.$transaction(
+    updates.map((u) =>
+      prisma.detection.update({
+        where: { id: u.id },
+        data: {
+          status: "accepted",
+          // `undefined` (not `null`) means "leave the field unchanged"
+          // in Prisma — preserves any pre-existing appliedGround on
+          // rows that resolved to no-ground (priority 4 above).
+          appliedGround: u.ground ?? undefined,
+          reviewedAt: new Date(),
+        },
+      }),
+    ),
+  );
+
+  const acceptedCount = updates.length;
 
   // Recompute status for all affected documents
   const docIds = [...new Set(detections.map((d) => d.documentId))];
@@ -425,13 +476,13 @@ export async function bulkAcceptDetections(detectionIds: string[], ground?: stri
     userName: user.name,
     userRole: user.role,
     type: "review",
-    description: `Bulk accepted ${result.count} detection(s)`,
+    description: `Bulk accepted ${acceptedCount} detection(s)`,
     target: "Bulk Review",
     caseId,
-    detail: `${result.count} detection(s)${validGround ? `, Ground: ${validGround}` : ""}`,
+    detail: `${acceptedCount} detection(s)${validGround ? `, Ground: ${validGround}` : ""}`,
   });
 
-  return { count: result.count };
+  return { count: acceptedCount };
 }
 
 export async function bulkRejectDetections(detectionIds: string[]) {

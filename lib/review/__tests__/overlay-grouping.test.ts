@@ -220,6 +220,7 @@ describe("mergeByBbox", () => {
       posH: 1.52,
       status: "accepted",
       appliedGround: null,
+      suggestedGround: null,
     });
   });
 
@@ -275,5 +276,56 @@ describe("mergeByBbox", () => {
     expect(out[0].primaryId).toBe("a");
     expect(out[0].status).toBe("accepted");
     expect(out[0].appliedGround).toBeNull();
+  });
+
+  // ---------------------------------------------------------------------
+  // suggestedGround propagation — added 2026-04-27 alongside the
+  // bulk-accept normalisation fix. The right-pane citation falls back
+  // to suggestedGround when appliedGround is null, so suggestedGround
+  // must flow through mergeByBbox the same way appliedGround does.
+  // ---------------------------------------------------------------------
+
+  it("carries suggestedGround through to MergedOverlay when present", () => {
+    const det = makeDetection({ id: "a", status: "accepted" });
+    det.suggestedGround = "s7(2)(a)";
+    const out = mergeByBbox([det]);
+    expect(out[0].suggestedGround).toBe("s7(2)(a)");
+  });
+
+  it("normalises missing suggestedGround to null on MergedOverlay", () => {
+    const det = makeDetection({ id: "a", status: "accepted" });
+    const out = mergeByBbox([det]);
+    expect(out[0].suggestedGround).toBeNull();
+  });
+
+  it("uses the primary's (lowest-id) suggestedGround on multi-detection merges", () => {
+    const a = makeDetection({ id: "a" });
+    a.suggestedGround = "s7(2)(a)";
+    const b = makeDetection({ id: "b" });
+    b.suggestedGround = "s7(2)(ba)";
+    const c = makeDetection({ id: "c" });
+    c.suggestedGround = "s6(a)";
+    const out = mergeByBbox([c, b, a]);
+    expect(out).toHaveLength(1);
+    expect(out[0].primaryId).toBe("a");
+    expect(out[0].suggestedGround).toBe("s7(2)(a)");
+  });
+
+  it("flows appliedGround AND suggestedGround independently — the citation fallback works", () => {
+    // The post-2026-04-27 right-pane citation does:
+    //   `merged.appliedGround ?? merged.suggestedGround`
+    // So a row with only suggestedGround populated (the dominant prod
+    // shape pre-bulk-accept-normalisation) should still light up the
+    // citation. Verify both fields land independently on the merged
+    // overlay.
+    const det = makeDetection({ id: "a", status: "accepted" });
+    det.appliedGround = null;
+    det.suggestedGround = "s7(2)(a)";
+    const out = mergeByBbox([det]);
+    expect(out[0].appliedGround).toBeNull();
+    expect(out[0].suggestedGround).toBe("s7(2)(a)");
+    // Caller's effective citation value:
+    const citationGround = out[0].appliedGround ?? out[0].suggestedGround;
+    expect(citationGround).toBe("s7(2)(a)");
   });
 });
