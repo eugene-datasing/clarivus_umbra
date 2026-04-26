@@ -219,6 +219,61 @@ describe("mergeByBbox", () => {
       posW: 8.31,
       posH: 1.52,
       status: "accepted",
+      appliedGround: null,
     });
+  });
+
+  // ---------------------------------------------------------------------
+  // appliedGround propagation — added 2026-04-25 for ground-citation
+  // rendering on accepted right-pane redactions.
+  // ---------------------------------------------------------------------
+
+  it("carries appliedGround through to MergedOverlay when present on a single detection", () => {
+    const det = makeDetection({ id: "a", status: "accepted" });
+    det.appliedGround = "s7_2a";
+    const out = mergeByBbox([det]);
+    expect(out[0].appliedGround).toBe("s7_2a");
+  });
+
+  it("normalises missing appliedGround to null on MergedOverlay", () => {
+    // makeDetection doesn't set appliedGround, so it's undefined on
+    // the input — the merged overlay should expose it as null so
+    // downstream truthiness checks (right-pane citation, etc) get a
+    // single shape to test against.
+    const det = makeDetection({ id: "a", status: "accepted" });
+    const out = mergeByBbox([det]);
+    expect(out[0].appliedGround).toBeNull();
+  });
+
+  it("uses the primary's (lowest-id) appliedGround on multi-detection merges", () => {
+    const a = makeDetection({ id: "a" });
+    a.appliedGround = "s7_2a";
+    const b = makeDetection({ id: "b" });
+    b.appliedGround = "s7_2ba";
+    const c = makeDetection({ id: "c" });
+    c.appliedGround = "s6_a";
+    // Insert in non-id order to verify the sort still picks 'a'.
+    const out = mergeByBbox([c, b, a]);
+    expect(out).toHaveLength(1);
+    expect(out[0].primaryId).toBe("a");
+    expect(out[0].appliedGround).toBe("s7_2a");
+  });
+
+  it("preserves a null appliedGround on the primary even if a sibling has one set", () => {
+    // Common case: pending + accepted at same bbox. Primary 'a' is
+    // pending with no ground; sibling 'b' is accepted with a ground.
+    // dominantStatus picks accepted (priority), but the primary-wins
+    // rule still applies for the citation — so the right-pane label
+    // doesn't render for this overlay (no ground on primary), even
+    // though dominantStatus is "accepted". This is the conservative
+    // choice: the sidebar still lists b's ground separately.
+    const a = makeDetection({ id: "a", status: "pending" });
+    const b = makeDetection({ id: "b", status: "accepted" });
+    b.appliedGround = "s7_2a";
+    const out = mergeByBbox([a, b]);
+    expect(out).toHaveLength(1);
+    expect(out[0].primaryId).toBe("a");
+    expect(out[0].status).toBe("accepted");
+    expect(out[0].appliedGround).toBeNull();
   });
 });

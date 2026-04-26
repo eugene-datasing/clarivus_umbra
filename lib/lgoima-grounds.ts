@@ -81,6 +81,21 @@ export function getGroundByReference(ref: string): LGOIMAGround | undefined {
 }
 
 /**
+ * Format a stored ground id (`s7_2a`) as the human-readable
+ * reference (`s7(2)(a)`). Falls back to the input verbatim when no
+ * matching ground row is found, and to the em-dash placeholder for
+ * null/empty input. Shared between the sidebar's accepted-row footer
+ * (review-client.tsx) and the right-pane redaction citation
+ * (pdf-redaction-preview-overlay.tsx) so both surfaces format
+ * applied-ground identically.
+ */
+export function groundLabel(groundId: string | null | undefined): string {
+  if (!groundId) return "\u2014";
+  const g = lgoimaGrounds.find((x) => x.id === groundId);
+  return g ? g.reference : groundId;
+}
+
+/**
  * Normalise a ground value to ID format.
  * Accepts either ID (s7_2a) or reference (s7(2)(a)) format.
  * Returns the ID format, or the original string if not recognised.

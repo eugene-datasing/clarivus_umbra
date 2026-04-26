@@ -33,7 +33,10 @@ describe("PdfRedactionPreviewOverlay source — Slice B display-only contract", 
     expect(src).not.toMatch(/<button\b/);
     // Rectangles themselves; the container is a <div> which is fine.
     // Slice B2 keys by primaryId (merged groups) instead of d.id.
-    const rectMatch = src.match(/key=\{merged\.primaryId\}[\s\S]*?\/>/);
+    // The 2026-04-25 citation work converted the rectangle from
+    // self-closing `/>` to a paired `<div>...</div>` so a citation
+    // span can render inside on accepted overlays — match either form.
+    const rectMatch = src.match(/key=\{merged\.primaryId\}[\s\S]*?(?:\/>|<\/div>)/);
     expect(rectMatch).not.toBeNull();
     expect(rectMatch![0]).not.toContain("<button");
   });
@@ -126,5 +129,48 @@ describe("PdfRedactionPreviewOverlay source — Slice B display-only contract", 
 
   it("renders nothing (returns null) when the page has no visible (pending+accepted) detections", () => {
     expect(src).toMatch(/if \(pageVisible\.length === 0\) return null;/);
+  });
+
+  it("renders a ground citation span on accepted overlays only (post-2026-04-25 dual-panel-ux PR)", () => {
+    // The citation is conditional on `accepted` AND a non-null
+    // appliedGround — pending and rejected don't get the label, and
+    // accepted-without-ground (legacy / manual annotations) also
+    // skip it.
+    expect(src).toMatch(/merged\.status === "accepted"[\s\S]*?merged\.appliedGround/);
+    // The span itself uses the exact Tailwind classes Eugene specced:
+    // top-right anchored, white-on-black, 7px font-mono.
+    expect(src).toMatch(/right-0\.5/);
+    expect(src).toMatch(/top-0/);
+    expect(src).toMatch(/text-\[7px\]/);
+    expect(src).toMatch(/font-mono/);
+    expect(src).toMatch(/text-white\/85/);
+    // pointer-events-none + select-none + whitespace-nowrap so the
+    // citation neither blocks clicks nor selects with the canvas
+    // text and never wraps onto a second line inside the rectangle.
+    expect(src).toMatch(/pointer-events-none/);
+    expect(src).toMatch(/select-none/);
+    expect(src).toMatch(/whitespace-nowrap/);
+    // data-attr for e2e / DOM-inspection grep.
+    expect(src).toMatch(/data-redaction-citation="true"/);
+  });
+
+  it("formats the citation via the shared groundLabel helper, not a local copy", () => {
+    // groundLabel is defined in `lib/lgoima-grounds.ts` and shared
+    // with the sidebar's accepted-row footer in review-client.tsx —
+    // both surfaces format applied-ground identically.
+    expect(src).toMatch(/import\s*\{\s*groundLabel\s*\}\s*from\s*"@\/lib\/lgoima-grounds"/);
+    expect(src).toMatch(/groundLabel\(merged\.appliedGround\)/);
+  });
+
+  it("clips the citation silently inside narrow rectangles via overflow-hidden on the parent", () => {
+    // Parent rectangle div applies overflow-hidden when status is
+    // accepted; without this the white citation text could leak past
+    // the right edge of a narrow black rectangle and visibly bleed
+    // onto the canvas.
+    const switchBlock = src.match(/function rightOverlayClass[\s\S]*?\n\}/);
+    expect(switchBlock).not.toBeNull();
+    const acceptedReturn = switchBlock![0].match(/case\s+"accepted":\s*\n?\s*return\s+"[^"]*"/);
+    expect(acceptedReturn).not.toBeNull();
+    expect(acceptedReturn![0]).toContain("overflow-hidden");
   });
 });

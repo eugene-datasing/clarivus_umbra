@@ -44,8 +44,11 @@ describe("PdfViewer source — Slice B dual-panel contract", () => {
     expect(pageOpens.length).toBe(2);
   });
 
-  it("defines DUAL_PANEL_MIN_WIDTH as 1280 and uses it to gate dual-panel", () => {
-    expect(src).toMatch(/const\s+DUAL_PANEL_MIN_WIDTH\s*=\s*1280/);
+  it("defines DUAL_PANEL_MIN_WIDTH as 1152 and uses it to gate dual-panel", () => {
+    // Lowered 1280→1152 on 2026-04-25 so MacBook-Pro-14" reviewers
+    // (~1252px content area with the nav sidebar expanded) hit
+    // dual-panel by default. Per-panel width at the threshold ≈ 568px.
+    expect(src).toMatch(/const\s+DUAL_PANEL_MIN_WIDTH\s*=\s*1152/);
     expect(src).toMatch(/containerWidth\s*>=\s*DUAL_PANEL_MIN_WIDTH/);
   });
 
