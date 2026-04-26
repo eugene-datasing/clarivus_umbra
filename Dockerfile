@@ -15,6 +15,18 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
+# Server-action hash stability across deploys (see next.config.ts).
+# Both vars are passed in by .github/workflows/docker.yml — the
+# encryption key from kv-veil-prototype, the build ID from the commit
+# SHA. Empty defaults keep local `docker build` working without args
+# (Next falls back to per-build random key + default hash). They are
+# build-time only — no runtime ENV in the runner stage.
+ARG NEXT_BUILD_ID=""
+ARG NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=""
+ENV NEXT_BUILD_ID=$NEXT_BUILD_ID
+ENV NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=$NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
+
 RUN npx prisma generate
 RUN npm run build
 

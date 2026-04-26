@@ -10,13 +10,20 @@ interface ManualDetectionPopoverProps {
   selectedText: string;
   page: number;
   position: { x: number; y: number };
+  /**
+   * Submit handler. May throw on failure — the popover catches and
+   * surfaces an inline error rather than relying on the parent to
+   * close the popover (which it only does on success). On error the
+   * popover stays mounted with the error visible and submitting reset
+   * so the user can retry, refresh, or cancel.
+   */
   onSubmit: (data: {
     text: string;
     type: string;
     page: number;
     ground?: string;
     reasoning?: string;
-  }) => void;
+  }) => Promise<void> | void;
   onCancel: () => void;
 }
 
@@ -56,6 +63,10 @@ export default function ManualDetectionPopover({
   const [ground, setGround] = useState<string>("");
   const [reasoning, setReasoning] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<{
+    kind: "stale-deploy" | "generic";
+    message: string;
+  } | null>(null);
 
   // Track whether the user has manually edited the textarea (e.g.
   // OCR correction). Once they have, we stop syncing the textarea's
@@ -104,6 +115,7 @@ export default function ManualDetectionPopover({
   const handleSubmit = async () => {
     if (!text.trim()) return;
     setSubmitting(true);
+    setSubmitError(null);
     try {
       await onSubmit({
         text: text.trim(),
@@ -111,6 +123,44 @@ export default function ManualDetectionPopover({
         page,
         ground: ground || undefined,
         reasoning: reasoning || undefined,
+      });
+      // Success path: parent closes the popover via setManualPopover(null),
+      // which unmounts this component. No state cleanup needed here.
+    } catch (err) {
+      // Stale-deploy error pattern: any open client tab that loaded a
+      // previous deploy hits "Failed to find Server Action" on the
+      // first action call to the new deploy. Detect from any of:
+      //   - `err.message` literal (works in dev where Next forwards
+      //     the raw error string; works in prod when the server
+      //     action wrapper doesn't mask),
+      //   - `err.cause?.message` (some serialisation paths nest),
+      //   - `err.digest` matching `NEXT_ERROR_CODE` E787 / E788
+      //     (Next 15.5.13's action-handler.js:472,608,822 — the codes
+      //     for the not-found and decode-failure cases). Production
+      //     RSC error formatting often masks the message but exposes
+      //     the digest, so this is the more reliable prod signal.
+      // Other errors get a generic retry message that ALSO suggests
+      // refreshing as a fallback recovery — covers prod's worst case
+      // where the digest is suppressed and we can't positively
+      // identify the stale-deploy path.
+      const message = err instanceof Error ? err.message : String(err);
+      const causeMessage =
+        err instanceof Error && err.cause instanceof Error
+          ? err.cause.message
+          : "";
+      const digest =
+        err instanceof Error && typeof (err as { digest?: unknown }).digest === "string"
+          ? ((err as { digest?: string }).digest ?? "")
+          : "";
+      const haystack = `${message}\n${causeMessage}\n${digest}`;
+      const isStaleDeploy =
+        /Failed to find Server Action/i.test(haystack) ||
+        /\bE7(87|88)\b/.test(digest);
+      setSubmitError({
+        kind: isStaleDeploy ? "stale-deploy" : "generic",
+        message: isStaleDeploy
+          ? "This page needs to refresh \u2014 the app was updated. Press Ctrl/Cmd+Shift+R to reload."
+          : "Couldn't add detection. Please try again, or refresh (Ctrl/Cmd+Shift+R) if you've had this page open a while.",
       });
     } finally {
       setSubmitting(false);
@@ -229,6 +279,22 @@ export default function ManualDetectionPopover({
             <AlertCircle size={10} />
             <span>Page {page}</span>
           </div>
+
+          {/* Error banner — shown when onSubmit throws. Stale-deploy
+              errors get a refresh prompt; other errors get a retry
+              message. The banner stays until the user retries (which
+              clears it via setSubmitError(null) in handleSubmit) or
+              cancels. */}
+          {submitError && (
+            <div
+              role="alert"
+              data-error-kind={submitError.kind}
+              className="rounded-input border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 flex items-start gap-2"
+            >
+              <AlertCircle size={12} className="mt-0.5 shrink-0" aria-hidden="true" />
+              <span>{submitError.message}</span>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex gap-2 justify-end pt-1">

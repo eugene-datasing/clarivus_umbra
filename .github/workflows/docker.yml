@@ -140,18 +140,52 @@ jobs:
           DATABASE_URL="$db_url" npx prisma migrate deploy
           echo "migration step complete"
 
+      - name: Fetch server actions encryption key
+        # Stabilises the AES key Next.js uses to encrypt server-action
+        # IDs (see next.config.ts header). Without this, every build
+        # mints fresh action IDs and any open client tab loaded from the
+        # previous deploy hits "Failed to find Server Action" on its
+        # next action call (Eugene's cr21→cr22 manual-detection hang
+        # was the symptom that uncovered this). The secret was provisioned
+        # 2026-04-26 in kv-veil-prototype/secrets/next-server-actions-key
+        # and the deploy SP has Key Vault Secrets User on the vault.
+        # `::add-mask::` registers the value as a workflow secret so it
+        # is redacted from any subsequent step's logs.
+        id: actions-key
+        run: |
+          set -euo pipefail
+          key=$(az keyvault secret show \
+            --vault-name kv-veil-prototype \
+            --name next-server-actions-key \
+            --query value -o tsv)
+          echo "::add-mask::$key"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          echo "fetched encryption key (length=${#key})"
+
       - name: Build & push image to ACR
         # `az acr build` runs the Docker build server-side in ACR's
         # build service — no local Docker daemon, no buildx setup, no
         # GHA-cache pull cycle. Slower per-build than the pre-Option-B
         # ghcr push (cache-from gha was warm) but consistent with the
         # manual `cr<N>` flow used since cr16. ~6–8 min wall time.
+        #
+        # `--build-arg` passes:
+        #   - NEXT_BUILD_ID = the commit SHA, used by next.config.ts
+        #     `generateBuildId` to stabilise __NEXT_BUILD_ID across
+        #     replicas of the same release.
+        #   - NEXT_SERVER_ACTIONS_ENCRYPTION_KEY = the stable AES key
+        #     from Key Vault, embedded into the build via webpack
+        #     DefinePlugin so action IDs minted by this build can be
+        #     decrypted by any other build with the same key.
+        # Both are build-time only (no ENV in the runner stage).
         run: |
           set -euo pipefail
           az acr build \
             --registry acrveilprototype \
             --image veil-prototype:${{ steps.tag.outputs.next_tag }} \
             --file Dockerfile \
+            --build-arg "NEXT_BUILD_ID=${{ github.sha }}" \
+            --build-arg "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=${{ steps.actions-key.outputs.key }}" \
             .
           echo "Pushed acrveilprototype.azurecr.io/veil-prototype:${{ steps.tag.outputs.next_tag }}"
 
