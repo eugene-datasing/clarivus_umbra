@@ -110,7 +110,27 @@ export default function ManualDetectionPopover({
     }
   }, [selectedText, position]);
 
-  const commonGrounds = lgoimaGrounds.filter((g) => g.common);
+  // Variant-C dropdown shape (chosen 2026-04-27 after Bug 1 from
+  // cr24 verification). The pre-2026-04-27 dropdown showed only the
+  // 5 grounds flagged `common: true`, hiding the other 22 entirely.
+  // The brief now requires every withholding ground to be reachable
+  // from this popover.
+  //
+  // Shape:
+  //   [optgroup "Common"]                  — 5 frequently-used grounds, top-of-list shortcut
+  //   [optgroup "Section 6 — Conclusive…"] — 4 s6 grounds (must withhold)
+  //   [optgroup "Section 7 — Other…"]      — 14 s7 grounds (public-interest test)
+  //   [optgroup "Section 17 — Refusal…"]   — 9 s17 grounds (refusal of request)
+  // = 4 optgroups, 32 <option> elements (5 commons appear twice — once
+  // in Common, once in their section), 27 unique ground values. Browser
+  // <select> handles duplicate option values fine — the form value is
+  // the same regardless of which entry the user picks.
+  const groundGroups = [
+    { label: "Common", grounds: lgoimaGrounds.filter((g) => g.common) },
+    { label: "Section 6 — Conclusive reasons", grounds: lgoimaGrounds.filter((g) => g.section === "s6") },
+    { label: "Section 7 — Other reasons", grounds: lgoimaGrounds.filter((g) => g.section === "s7") },
+    { label: "Section 17 — Refusal grounds", grounds: lgoimaGrounds.filter((g) => g.section === "s17") },
+  ];
 
   const handleSubmit = async () => {
     if (!text.trim()) return;
@@ -251,12 +271,20 @@ export default function ManualDetectionPopover({
               value={ground}
               onChange={(e) => setGround(e.target.value)}
               className="input-field text-xs"
+              data-grounds-select="true"
             >
               <option value="">Select ground (optional)</option>
-              {commonGrounds.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.reference} — {g.label}
-                </option>
+              {groundGroups.map((grp) => (
+                <optgroup key={grp.label} label={grp.label}>
+                  {grp.grounds.map((g) => (
+                    // Keys must be unique per <optgroup> not per <select>;
+                    // group.label-prefix keeps React happy when a ground
+                    // appears in both Common and its section optgroup.
+                    <option key={`${grp.label}::${g.id}`} value={g.id}>
+                      {g.reference} — {g.label}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </div>
