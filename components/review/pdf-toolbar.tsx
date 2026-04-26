@@ -7,7 +7,10 @@ import {
   Download,
   PanelRightClose,
   PanelRightOpen,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
+import { useNavSidebarCollapse } from "@/components/layout/nav-sidebar-collapse-context";
 
 interface PdfToolbarProps {
   currentPage: number;
@@ -19,7 +22,7 @@ interface PdfToolbarProps {
   downloadUrl?: string;
 
   // Dual-panel toggle (Slice B). When `dualPanelAvailable` is false
-  // (e.g. content area narrower than the 1280px collapse breakpoint),
+  // (e.g. content area narrower than the 1152px collapse breakpoint),
   // the toggle is not rendered at all — there's no dual panel to
   // toggle off of. `showPreview` controls the RIGHT (redaction-preview)
   // panel; the LEFT (interactive primary) panel is always visible.
@@ -40,8 +43,26 @@ export default function PdfToolbar({
   showPreview = true,
   onToggleShowPreview,
 }: PdfToolbarProps) {
+  // Nav-sidebar toggle (added 2026-04-25). Mirrors the chevron at the
+  // bottom of `Sidebar`; surfacing it in the document toolbar lets
+  // reviewers free up horizontal space for dual-panel without leaving
+  // the review pane. Hook returns a noop fallback outside the
+  // provider so storybook / tests don't need to wrap.
+  const { collapsed: navCollapsed, toggleCollapse: toggleNavCollapse } = useNavSidebarCollapse();
+
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 bg-surface-card border-b border-border">
+      <button
+        onClick={toggleNavCollapse}
+        className="btn-ghost p-1"
+        title={navCollapsed ? "Expand navigation" : "Collapse navigation"}
+        aria-pressed={!navCollapsed}
+        aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"}
+      >
+        {navCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
+      </button>
+      <div className="h-4 w-px bg-border mx-1" />
+
       <button
         onClick={onZoomOut}
         className="btn-ghost p-1"

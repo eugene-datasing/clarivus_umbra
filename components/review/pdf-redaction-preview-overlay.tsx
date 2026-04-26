@@ -1,6 +1,7 @@
 "use client";
 
 import type { MergedOverlay } from "@/lib/review/overlay-grouping";
+import { groundLabel } from "@/lib/lgoima-grounds";
 
 /**
  * Slice B redaction preview overlay — display-only companion to the
@@ -66,13 +67,19 @@ interface PdfRedactionPreviewOverlayProps {
 // the opaque redaction-preview black. Rejected returns null so the
 // text shows through unobscured.
 //
+// `overflow-hidden` is applied on accepted rectangles so the citation
+// label clips silently inside the redaction box on narrow rectangles
+// (single-character names, tight bbox detections) — overflowing white
+// text outside a black rectangle would defeat the purpose of the
+// redaction preview by leaking the citation into the canvas margin.
+//
 // Borders removed in the Slice-B1 follow-up (matches LEFT pane
 // rationale — fill alone is sufficient signal, less competition with
 // the underlying text).
 function rightOverlayClass(status: string): string | null {
   switch (status) {
     case "accepted":
-      return "absolute bg-veil-redaction-black pointer-events-none";
+      return "absolute bg-veil-redaction-black pointer-events-none overflow-hidden";
     case "rejected":
       return null;
     default:
@@ -125,6 +132,15 @@ export default function PdfRedactionPreviewOverlay({
       {pageVisible.map((merged) => {
         const className = rightOverlayClass(merged.status);
         if (!className) return null;
+        // Render the LGOIMA-ground citation in the top-right of accepted
+        // rectangles — recovers the affordance the HTML branch had via
+        // `renderRedactedSegments` (above-the-rectangle gray label) but
+        // adapted to a black-rectangle context: white text inside the
+        // box, top-right anchored, monospace 7px so it fits tightly on
+        // typical detection bboxes. `overflow-hidden` on the parent
+        // clips the label silently on narrow rectangles. Single-string
+        // citation per detection — the data model is single-ground.
+        const showCitation = merged.status === "accepted" && !!merged.appliedGround;
         return (
           <div
             key={merged.primaryId}
@@ -132,7 +148,16 @@ export default function PdfRedactionPreviewOverlay({
             data-overlay-status={merged.status}
             data-overlay-merged-count={merged.detectionIds.length}
             style={rightOverlayStyle(merged.status, merged.posX, merged.posY, merged.posW, merged.posH)}
-          />
+          >
+            {showCitation && (
+              <span
+                className="absolute right-0.5 top-0 text-[7px] leading-none font-mono font-semibold text-white/85 select-none whitespace-nowrap pointer-events-none"
+                data-redaction-citation="true"
+              >
+                {groundLabel(merged.appliedGround)}
+              </span>
+            )}
+          </div>
         );
       })}
     </div>

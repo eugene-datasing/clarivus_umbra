@@ -53,7 +53,7 @@ const PdfViewer = dynamic(() => import("@/components/review/pdf-viewer"), {
     </div>
   ),
 });
-import { lgoimaGrounds } from "@/lib/lgoima-grounds";
+import { lgoimaGrounds, groundLabel } from "@/lib/lgoima-grounds";
 import { cn } from "@/lib/utils";
 import { compareDetectionsByPosition } from "@/lib/review/sort-detections";
 import { computePdfSelectionBbox, findPdfPageWrapper } from "@/lib/review/pdf-selection";
@@ -1019,13 +1019,6 @@ export default function ReviewClient({
       default:
         return source;
     }
-  }
-
-  // ----- Ground lookup -----
-  function groundLabel(groundId: string | null): string {
-    if (!groundId) return "\u2014";
-    const g = lgoimaGrounds.find((x) => x.id === groundId);
-    return g ? g.reference : groundId;
   }
 
   // ----- Build detection lookup by id for highlighting -----

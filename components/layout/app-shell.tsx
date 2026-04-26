@@ -5,6 +5,10 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { Sidebar } from "@/components/layout/sidebar";
+import {
+  NavSidebarCollapseProvider,
+  useNavSidebarCollapse,
+} from "@/components/layout/nav-sidebar-collapse-context";
 import { AlertCircle } from "lucide-react";
 
 /**
@@ -70,7 +74,6 @@ interface AppShellProps {
 export function AppShell({ children, pathname: serverPathname, isAuthenticated: serverAuth }: AppShellProps) {
   const clientPathname = usePathname();
   const { status } = useSession();
-  const [collapsed, setCollapsed] = useState(false);
 
   // Use server-provided values for the initial render; client values take over
   // once hydration completes (they'll match in practice).
@@ -86,9 +89,28 @@ export function AppShell({ children, pathname: serverPathname, isAuthenticated: 
     );
   }
 
+  // Wrap the sidebar+main pair in the collapse-state provider so the
+  // PdfToolbar (rendered deep inside `children`) can toggle the same
+  // state the sidebar chevron toggles. The provider also handles the
+  // localStorage persistence (key `veil:nav-sidebar-collapsed`).
+  return (
+    <NavSidebarCollapseProvider>
+      <AppShellWithSidebar>{children}</AppShellWithSidebar>
+    </NavSidebarCollapseProvider>
+  );
+}
+
+/**
+ * Inner shell that consumes the nav-sidebar collapse context. Split
+ * out from AppShell so the provider can wrap a single child rather
+ * than fragments — and so the hook call lives below the provider.
+ */
+function AppShellWithSidebar({ children }: { children: React.ReactNode }) {
+  const { collapsed, toggleCollapse } = useNavSidebarCollapse();
+
   return (
     <>
-      <Sidebar collapsed={collapsed} onToggleCollapse={() => setCollapsed((c) => !c)} />
+      <Sidebar collapsed={collapsed} onToggleCollapse={toggleCollapse} />
       <main
         id="main-content"
         role="main"

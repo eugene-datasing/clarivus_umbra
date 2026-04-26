@@ -24,7 +24,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
  * explicitly recommends against it (worker contention, scroll-sync
  * bugs, memory cost, no user win at this stage).
  *
- * Responsive collapse — below 1280px content-area width the RIGHT
+ * Responsive collapse — below 1152px content-area width the RIGHT
  * (redaction-preview) panel is hidden, leaving the LEFT (interactive
  * primary view with detection overlay) at full width. `DUAL_PANEL_MIN_WIDTH`
  * is the threshold, measured against the ResizeObserver-watched
@@ -34,7 +34,9 @@ pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
  * keeps the dependency surface thin (no `@tailwindcss/container-queries`
  * plugin needed). Pre-fix this was inverted (hid the LEFT, kept the
  * display-only RIGHT alone) which left the reviewer without an
- * interactive surface at narrow viewports.
+ * interactive surface at narrow viewports. Threshold lowered from
+ * 1280→1152 (2026-04-25) so MacBook-Pro-14" reviewers (~1252px content
+ * area with the nav sidebar expanded) get dual-panel by default.
  *
  * `showPreview` — session-local toggle on the toolbar. When off AND
  * dual-panel is otherwise available, the right panel is hidden via
@@ -53,7 +55,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
  * canvas.
  */
 
-const DUAL_PANEL_MIN_WIDTH = 1280;
+const DUAL_PANEL_MIN_WIDTH = 1152;
 const PANEL_GAP_PX = 16;
 
 interface DetectionForOverlay {
@@ -64,6 +66,7 @@ interface DetectionForOverlay {
   page: number;
   position: { x: number; y: number; w: number; h: number };
   status: string;
+  appliedGround?: string | null;
 }
 
 interface PdfViewerProps {
@@ -71,7 +74,7 @@ interface PdfViewerProps {
   detections: DetectionForOverlay[];
   selectedDetectionId: string | null;
   onDetectionClick: (detectionId: string) => void;
-  detectionStates: Record<string, { status: string }>;
+  detectionStates: Record<string, { status: string; appliedGround?: string | null }>;
   /**
    * Manual-detection hook — fired on mouseup AND keyup inside the
    * viewer so Shift+Arrow keyboard selection also triggers the
@@ -111,14 +114,18 @@ export default function PdfViewer({
     return () => observer.disconnect();
   }, []);
 
-  // Dual-panel only when the content area is ≥1280px wide. Below that
+  // Dual-panel only when the content area is ≥1152px wide. Below that
   // the right (redaction-preview) panel is hidden — leaving the left
   // (interactive primary view with detection overlay) at full width.
-  // Design call documented in the 2026-04-24 spike: at <1280 the halved
-  // panel width puts body text below readable size even on a zoomed
-  // canonical, so collapsing to one panel is the right move; the LEFT
-  // is the panel to keep because it's where reviewers interact with
-  // detections (the right panel is display-only).
+  // Design call documented in the 2026-04-24 spike: below the threshold
+  // the halved panel width puts body text below readable size even on a
+  // zoomed canonical, so collapsing to one panel is the right move; the
+  // LEFT is the panel to keep because it's where reviewers interact
+  // with detections (the right panel is display-only). Threshold
+  // lowered from 1280→1152 (2026-04-25) so MacBook-Pro-14" reviewers
+  // hit dual-panel by default; per-panel ≈ 568px at the threshold,
+  // which holds line lengths a touch tighter than 1280→640px but is
+  // still comfortably above the unreadable floor.
   const dualPanelAvailable = containerWidth >= DUAL_PANEL_MIN_WIDTH;
   const showRightPanel = dualPanelAvailable && showPreview;
 
@@ -218,18 +225,27 @@ export default function PdfViewer({
   // priority rule (accepted > rejected > pending) and primary-id
   // selection logic.
   const overlays = useMemo(() => {
-    const flat = detections.map((d) => ({
-      id: d.id,
-      type: d.type,
-      text: d.text,
-      confidence: d.confidence,
-      page: d.page,
-      posX: d.position.x,
-      posY: d.position.y,
-      posW: d.position.w,
-      posH: d.position.h,
-      status: detectionStates[d.id]?.status ?? d.status,
-    }));
+    const flat = detections.map((d) => {
+      // In-flight reviewer state wins over the row's saved state for
+      // both status and appliedGround — same priority used everywhere
+      // else in this component for the status field. `appliedGround`
+      // can be `null` to mean "explicitly unset" (e.g. reject clears
+      // the ground), so the nullish-fallback is `??` not `||`.
+      const stateRow = detectionStates[d.id];
+      return {
+        id: d.id,
+        type: d.type,
+        text: d.text,
+        confidence: d.confidence,
+        page: d.page,
+        posX: d.position.x,
+        posY: d.position.y,
+        posW: d.position.w,
+        posH: d.position.h,
+        status: stateRow?.status ?? d.status,
+        appliedGround: stateRow?.appliedGround ?? d.appliedGround ?? null,
+      };
+    });
     return mergeByBbox(flat);
   }, [detections, detectionStates]);
 

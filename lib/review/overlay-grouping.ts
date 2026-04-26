@@ -47,6 +47,15 @@ export interface MergeableDetection {
   posH: number;
   /** "pending" / "accepted" / "rejected" — anything else falls through to "pending". */
   status: string;
+  /**
+   * Stored LGOIMA ground id (e.g. `s7_2a`) chosen by the reviewer when
+   * accepting the detection. Null/undefined for pending or rejected
+   * detections, and may also be null for accepted detections where the
+   * reviewer accepted-without-ground (legacy data, manual annotations).
+   * Plumbed through so the right-pane overlay can render the citation
+   * label on accepted redactions.
+   */
+  appliedGround?: string | null;
 }
 
 export interface MergedOverlay {
@@ -67,6 +76,14 @@ export interface MergedOverlay {
   posH: number;
   /** Priority-resolved status. */
   status: "accepted" | "rejected" | "pending";
+  /**
+   * Primary detection's `appliedGround` (the lowest-id detection in
+   * the group). Null/undefined when the primary is unaccepted or has
+   * no ground recorded. Members with differing grounds keep their own
+   * sidebar rows; the right-pane citation is per-overlay so the
+   * primary's value wins by the same rule as `text` and `confidence`.
+   */
+  appliedGround?: string | null;
 }
 
 const STATUS_PRIORITY: Readonly<Record<string, number>> = {
@@ -150,6 +167,7 @@ export function mergeByBbox(detections: MergeableDetection[]): MergedOverlay[] {
       posW: primary.posW,
       posH: primary.posH,
       status: dominantStatus(group),
+      appliedGround: primary.appliedGround ?? null,
     };
   });
 }
