@@ -714,7 +714,17 @@ export default function ReviewClient({
         // Refresh page to show new detection
         router.refresh();
       } catch (err) {
+        // Log for the workflow's audit trail, then re-throw so the
+        // popover can surface an inline error message and reset its
+        // submitting state. Pre-fix this swallowed silently and the
+        // popover sat with submitting=false (after its own finally)
+        // but no visual feedback — Eugene's "manual detection hangs
+        // on Add" report (Bug 4 from the cr21→cr22 verification) was
+        // exactly this path: the action POST returned a stale-hash
+        // error, console.error fired, the popover stayed mounted,
+        // and nothing told the user to refresh.
         console.error("Failed to create manual detection:", err);
+        throw err;
       }
     },
     [docId, router],
