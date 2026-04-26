@@ -6,6 +6,7 @@ import { rebuildContentJson } from "@/lib/pipeline/rebuild-content";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeForDocument, authorizeForDetection, authorizeForCase } from "@/lib/auth/authorize";
 import { createManualDetectionSchema } from "@/lib/validation/schemas";
+import { calculateBBoxAll, type WordLayout } from "@/lib/pipeline/bbox";
 
 // ---------------------------------------------------------------------------
 // Create a manual detection
@@ -33,7 +34,15 @@ export async function createManualDetection(input: CreateManualDetectionInput) {
 
   // Wrap all DB writes in a transaction for atomicity
   const detection = await prisma.$transaction(async (tx) => {
-    // Create the detection record
+    // Create the detection record. Bbox fields default to 0 in the
+    // schema; we resolve and patch them in immediately below so the
+    // canvas overlays render the new detection without waiting for a
+    // separate bbox-rebuild pass. Pre-2026-04-27 the bbox stayed at
+    // 0 indefinitely, which the PDF-mode overlay filtered out and
+    // the reviewer saw as "Add Detection didn't redact anything"
+    // (Bug 2 from cr24 verification). The HTML branch never showed
+    // this gap because it renders detections by text-search rather
+    // than bbox.
     const det = await tx.detection.create({
       data: {
         documentId: validated.documentId,
@@ -52,6 +61,67 @@ export async function createManualDetection(input: CreateManualDetectionInput) {
         reviewedAt: new Date(),
       },
     });
+
+    // Resolve bbox via the same pipeline helper AI detections use —
+    // calculateBBoxAll matches the detection text against the page's
+    // stored word polygons (Azure DI output, persisted in
+    // DocumentPage.layoutJson during the processing pipeline). The
+    // returned `BBox[]` is one box per visual line of match. Manual
+    // detections are point-and-click on a single occurrence, so we
+    // store the FIRST box; export-time PyMuPDF Tier-2 text-search
+    // catches any additional occurrences of the same text.
+    //
+    // Edge cases left at zero bbox (visible in sidebar, invisible on
+    // canvas, redacted at export via text-search):
+    //   - The page has no layoutJson (legacy document, ingest issue,
+    //     non-OCR'd image-only PDF).
+    //   - The detection text doesn't match any word polygon (OCR
+    //     misread, user edited the textarea so the visible text and
+    //     the typed text diverge).
+    //   - calculateBBoxAll's 80-char guard kicks in (long-narrative
+    //     detections — same convention as the AI pipeline at
+    //     process.ts:776).
+    const page = await tx.documentPage.findUnique({
+      where: {
+        documentId_pageNumber: {
+          documentId: validated.documentId,
+          pageNumber: validated.page,
+        },
+      },
+      select: { layoutJson: true, width: true, height: true },
+    });
+    const words = (page?.layoutJson ?? null) as unknown as WordLayout[] | null;
+    const bboxes = words
+      ? calculateBBoxAll(validated.text, words, page?.width ?? undefined, page?.height ?? undefined)
+      : [];
+    const firstBbox = bboxes[0];
+    if (firstBbox) {
+      await tx.detection.update({
+        where: { id: det.id },
+        data: {
+          posX: firstBbox.posX,
+          posY: firstBbox.posY,
+          posW: firstBbox.posW,
+          posH: firstBbox.posH,
+        },
+      });
+      // Mirror the patched bbox onto the in-memory return so the
+      // post-transaction logic (rebuildContentJson, audit) sees the
+      // resolved coordinates without a re-read.
+      det.posX = firstBbox.posX;
+      det.posY = firstBbox.posY;
+      det.posW = firstBbox.posW;
+      det.posH = firstBbox.posH;
+    } else {
+      // Warn-only — the detection still exports correctly via Tier-2
+      // text-search; only the in-app preview misses the visual.
+      console.warn(
+        `[createManualDetection] no bbox match for text=${JSON.stringify(
+          validated.text.slice(0, 60),
+        )} on documentId=${validated.documentId} page=${validated.page} ` +
+          `(words=${words?.length ?? "no-layoutJson"})`,
+      );
+    }
 
     // Create feedback example (for AI learning)
     await tx.feedbackExample.create({
