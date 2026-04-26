@@ -7,23 +7,30 @@
 
 ---
 
-## Status as of 2026-04-23
+## Status as of 2026-04-26
 
-**Paused; can resume independently.** The detection-coverage Phase 3 PR B (PR #29) and Phase 4 entity propagation (PR #31) that previously blocked this plan have both shipped. Detection-coverage work still has Phase 3.5 (harassment-risk seeding, issue #32) and Phase 5 (label-adjacent detection) queued, but neither has a hard dependency with this plan — viewer-rework Phase 3 can start at any time, or wait for Phase 3.5 / Phase 5 to complete depending on priority of the moment. Phase-by-phase state:
+**Phase 3 complete; cutover landed via Slice D2.** The full slice sequence (A → B → B1 → B2 → C → D1 → D2) merged across PRs #43 → #50 plus this Slice D2 PR. Default `VIEWER_MODE` is now `"pdf"`; the HTML branch is retained indefinitely as the Option C fallback for canonicals where pdf.js can't extract selectable text.
 
-- **Phase 1 — canonical PDF persistence + schema:** **shipped.** Migration applied, `canonical_pdf_*` columns populated on new documents, `buildCanonicalPdf` + `email-to-pdf` modules landed (`lib/pipeline/canonical-pdf.ts`, `lib/pipeline/email-to-pdf.ts`), backfill script committed at `scripts/backfill-canonical-pdfs.ts`. Dockerfile now includes `fonts-noto-core` for macron rendering. Live on veil.datasing.nz via cr17+.
-- **Phase 2 — Azure DI against canonical + bbox population:** **shipped.** DI-on-canonical routing in `process.ts` is production. DOCX / XLSX / EML / MSG uploads now produce word-polygon data and non-empty per-detection bboxes. Phase 1 plus Phase 2 together are what unlocked the Phase-1.75 bbox-stripping bug's visibility — detection-coverage side caught it first.
-- **Phase 3 — viewer rework (pdf.js primary, HTML removed from UI path):** **not started, paused.** Can resume at the reviewer's discretion. Scope per the plan body below: demolish HTML reconstruction branch, bundle pdf.js worker locally, enable text layer, promote overlay to `<button role="button">` with ARIA, re-implement manual-detection against pdf.js text layer, fix the latent `fileType === "pdf"` lowercase/uppercase bug surfaced in the 2026-04-20 recon (see Implementation log — Phase 3). Estimate 5–7 engineer-days.
-- **Phase 4 — QA signoff hardening:** queued, not started. Depends on Phase 3.
-- **Phase 5 — content-builder cleanup / HTML code path removal:** queued, not started. Depends on Phase 3 + 4 being live long enough to confirm no rollback is needed.
+**Phase-by-phase state:**
 
-**Priority ordering for a fresh session:** this plan is independent of the remaining detection-coverage work. A fresh session picking this up can go straight to viewer-rework Phase 3; the detection-coverage CI regression guard (active on every PR touching `lib/pipeline/**`) keeps viewer-rework changes from accidentally regressing detection quality. See `docs/detection-coverage-plan-2026-04.md` for the current state of the sibling plan — post-Phase-4 suite F1 is 0.616, governance is anchored at 0.337 pending Phase 3.5, canonical is `baseline-2026-04-23-post-phase-4-median-N10`.
+- **Phase 1 — canonical PDF persistence + schema:** **shipped.** Live on veil.datasing.nz via cr17+. Migration applied, `canonical_pdf_*` columns populated on new documents, `buildCanonicalPdf` + `email-to-pdf` modules landed (`lib/pipeline/canonical-pdf.ts`, `lib/pipeline/email-to-pdf.ts`), backfill script committed at `scripts/backfill-canonical-pdfs.ts`. Dockerfile now includes `fonts-noto-core` for macron rendering.
+- **Phase 2 — Azure DI against canonical + bbox population:** **shipped.** DI-on-canonical routing in `process.ts` is production. DOCX / XLSX / EML / MSG uploads now produce word-polygon data and non-empty per-detection bboxes. Phase 1 plus Phase 2 together unlocked the Phase-1.75 bbox-stripping bug's visibility.
+- **Phase 3 — viewer rework (pdf.js primary, HTML retained as Option C fallback):** **shipped via slices A → D2.** Per-slice landing:
+  - **Slice A** — infrastructure + flag plumbing (PR #43, merged earlier April). pdf.js worker bundled locally; same-origin worker URL; `VIEWER_MODE` `SystemSetting` key + `DEFAULT_VIEWER_MODE` constant + `ViewerMode` type added to `lib/data/settings.ts`; routing gate in `app/requests/[id]/review/[docId]/page.tsx`. Default `"html"` so the slice was invisible to reviewers until D2.
+  - **Slice B** — dual-panel PDF view (merged into main pre-#48). Single `<Document>` with paired `<Page>` siblings per page number; one scroll container; shared zoom; left pane is interactive (detection overlay), right pane is display-only (redaction preview overlay).
+  - **Slice B1** — render-bug follow-up (PR #48, PR #49). Inverted narrow-viewport collapse, fit-content wrapper for canvas-coordinate binding, colour scheme correction (red translucent for accepted instead of opaque gray), border removal, ~2px highlight grow, `select-none` on right pane to prevent cross-pane selection bleed, `showOriginal` → `showPreview` semantic rename.
+  - **Slice B2** — overlay dedup + keyboard selection (PR #50). Bbox-identical detections merge to one rendered overlay with status priority `accepted > rejected > pending`; manual-detection popover prop-sync useEffect; `e.shiftKey` short-circuit on `ArrowDown`/`ArrowUp` so Shift+Arrow extends selection rather than navigating the sidebar; `select-none` extended to non-PDF chrome (header, banners, bottom detection panel); newline normalisation (`\s+` collapse) on PDF-handler selection text.
+  - **Slice C** — Option C routing + manual detection on pdf.js text layer (PR #46). `canonicalPdfTextSelectable` schema field + backfill probe; three-way routing (PDF / Option C HTML+banner / legacy HTML); `handlePdfTextSelection` handler reading `data-page-number` from the per-page wrapper and computing percentage-space bboxes from `Range.getBoundingClientRect()`; `lib/review/pdf-selection.ts` pure helper.
+  - **Slice D1** — e2e test-infrastructure migration (PR #47). PNCC seed alignment, dedicated `chromium-admin-pdf-review` Playwright project that flips `VIEWER_MODE='pdf'` via setup/teardown, webServer switched from `next dev` to `next build && next start` (dev webpack crashes pdfjs-dist module init).
+  - **Slice D2** — cutover (this PR). `DEFAULT_VIEWER_MODE` flipped from `"html"` to `"pdf"`; plan-doc amendments. No other code changes.
+- **Phase 4 — QA signoff hardening:** queued, not started. Depends on Phase 3 cutover bedding in (Slice D2 just landed).
+- **Phase 5 — content-builder cleanup / HTML code path removal:** scope changed (see Phase 5 below). Original "remove HTML view entirely" plan is no longer accurate — the HTML view stays alive indefinitely as the Option C fallback for text-less canonicals (scanned / image-only PDFs). Phase 5 now scopes only to trimming `contentJson` to the minimum AI-detection-feed shape; the HTML render path is retained.
 
-**Operational notes carried forward from Phase 1/2 that still apply to Phase 3:**
+**Operational notes that remain in force post-cutover:**
 
-- All current documents on veil.datasing.nz are test / dummy data (Eugene confirmed 2026-04-20). Phase 3 assumes `canonicalPdfPath` is never null at reviewer-render time; pre-cutover operational step is `scripts/backfill-canonical-pdfs.ts` + purge/reprocess residual nulls. No in-app fallback branch — this is a deliberate scope call.
-- `VIEWER_MODE` SystemSetting key is already present in `lib/data/settings.ts`. Flipping to `"html"` is the rollback lever only, not a user-facing preference (Decision h, v2).
-- The pdf.js worker is still loaded from `unpkg.com` (`components/review/pdf-viewer.tsx:11`). First item in Phase 3 is bundling locally via `next.config.js` `webpack()` copy or `postinstall`. One-file change.
+- Production documents on veil.datasing.nz are still demo / dummy data. Slice D2's flag-flip changes the default for all reviewers; a stuck rollback path remains via `INSERT INTO system_settings (key, value) VALUES ('VIEWER_MODE', '"html"')`.
+- The pdf.js worker is bundled locally per Slice A — no external CDN dependency at runtime.
+- Live deploy gap: GHA pushes to ghcr.io on merge; App Service is pinned to `acrveilprototype.azurecr.io/veil-prototype:cr18` and updates manually via `az acr build && az webapp config container set`. Slice D2 lands the flag-flip in main but **does not propagate to veil.datasing.nz until the next manual `cr<N>` deploy**. Out of scope for Slice D2; tracked as a follow-up.
 
 ---
 
@@ -281,7 +288,7 @@ model SystemSetting {
 }
 ```
 
-Row shape for the viewer flag: `key = "VIEWER_MODE"`, `value = { mode: "html" | "pdf" }`. Add one entry to `SETTING_KEYS` (`lib/data/settings.ts:9–22`) plus a `DEFAULT_VIEWER_MODE` constant matching the existing `ConfidenceThresholds` shape. Same pattern applies to `QA_REQUIRE_PDF_INSPECT` in Phase 4. Read via the existing `getSetting<T>()` helper. Write via `setSetting()` — admin-only settings UI is out of scope here; admins can set directly via `npx prisma studio` for initial rollout.
+Row shape for the viewer flag: `key = "VIEWER_MODE"`, `value` is a **bare JSON string** — `"html"` or `"pdf"` — not an object wrapper. (The original plan draft showed `{ mode: "..." }`; the actual implementation in Slice A landed as the bare string for parity with how `getSetting<ViewerMode>()` consumes it. SQL example: `INSERT INTO system_settings (key, value) VALUES ('VIEWER_MODE', '"pdf"')`.) Slice A added one entry to `SETTING_KEYS` plus a `DEFAULT_VIEWER_MODE` constant; Slice D2 flips that constant from `"html"` to `"pdf"`. Same pattern applies to `QA_REQUIRE_PDF_INSPECT` in Phase 4. Read via the existing `getSetting<T>()` helper. Write via `setSetting()` — admin-only settings UI is out of scope here; admins flip directly via `npx prisma studio` or a SQL upsert for rollback.
 
 The flag exists as a rollback lever only, not as a user-facing preference (see Decision h). It is read once per page render in the server component and passed as a prop to the client.
 
@@ -443,10 +450,19 @@ Sum: **9–10 days nominal, 8 days if contingency is small.**
 
 ---
 
-## Phase 5 — content-builder cleanup (contentJson becomes AI-only)
+## Phase 5 — content-builder cleanup (contentJson trimmed; HTML branch retained as Option C fallback)
 
 ### 1. Scope and success criteria
-`Document.contentJson` is no longer rendered to any user-facing component. It lives only to feed the AI detection pipeline (`lib/pipeline/ai-detect.ts`) and can be trimmed to the minimum shape that pipeline needs. No regressions in AI detection precision/recall.
+
+**Scope changed mid-plan (Slice C, 2026-04).** Original Phase 5 brief was "remove the HTML view entirely". That's no longer accurate. Slice C of Phase 3 introduced **Option C routing**: when a canonical PDF lacks a selectable text layer (`canonicalPdfTextSelectable === false` — scanned PDFs, image-only originals, OCR-only DOCX exports), the review page falls back to the HTML reconstruction branch with a banner explaining why. The HTML view is therefore retained **indefinitely** as the fallback render surface, not deprecated for removal.
+
+Phase 5's effective scope post-Slice-C:
+
+- `Document.contentJson` is still rendered when Option C routes to it. It does **not** disappear from the UI path.
+- Phase 5 trims `contentJson` to the minimum shape that satisfies both the AI-detection pipeline (`lib/pipeline/ai-detect.ts`) AND the Option C HTML fallback (`renderOriginalParagraph` / `renderRedactedParagraph` in `review-client.tsx`).
+- No HTML render code is deleted. The legacy `handleTextSelection` (mouse-only on reconstructed paragraphs) stays alongside `handlePdfTextSelection` (text-layer-aware, mouse + keyboard) — the former serves Option C, the latter serves the PDF branch.
+
+Success: `contentJson` shape is trimmed without regressing AI detection precision/recall and without breaking the Option C visual.
 
 ### 2. Schema changes
 **Optional migration** (defer to a later cleanup pass): drop `Document.contentJson` if AI pipeline can be refactored to consume the canonical PDF's DI output directly. Complex — out of scope for Phase 5. Instead:
@@ -457,13 +473,12 @@ No migration required.
 ### 3. File-level change list
 
 **Modified files:**
-- `lib/pipeline/content-builder.ts:167–228` — trim `buildContent` / `buildContentFromBlocks` to output only what AI detection consumes (no styling attempts, no tables-as-text, just paragraph-per-page text runs). Net reduction ~100 lines.
-- `lib/data/documents.ts` (or wherever `getDocumentContent` lives) — remove from server-component imports once Phase 3 is live. Keep for tests of the AI pipeline.
-- `app/requests/[id]/review/[docId]/page.tsx` — confirm `getDocumentContent` is no longer imported.
+- `lib/pipeline/content-builder.ts:167–228` — trim `buildContent` / `buildContentFromBlocks` to output the minimum shape that satisfies BOTH the AI detection pipeline AND the Option C HTML fallback render. Net reduction less than the original ~100 lines because the renderer-side fields (`heading`, `segments`, `data-page`) must stay populated for paragraphs that hit the HTML view.
+- `lib/data/documents.ts` — `getDocumentContent` stays. Slice C still imports it for the Option C path.
+- `app/requests/[id]/review/[docId]/page.tsx` — `getDocumentContent` import stays (post-Slice-C the HTML branch is reachable via Option C).
 
-**Deleted:**
-- `components/review/paragraph-renderer.tsx` (if not already deleted in Phase 3).
-- Any `DocParagraph`, `DocTableRow`, `DocTableCell` rendering utilities no longer referenced. Grep to confirm before deletion.
+**Retained (was: deleted):**
+- `components/review/paragraph-renderer.tsx` and any `DocParagraph` / `DocTableRow` / `DocTableCell` utilities — kept. Slice C's HTML fallback still consumes them.
 
 ### 4. API routes
 **None.** No route change; `getDocumentContent` was a server function, not an HTTP route.
@@ -582,6 +597,8 @@ Accessibility concerns that might otherwise argue for retaining HTML (screen rea
 
 ## Implementation log — Phase 3
 
+### Pre-Slice recon (2026-04-20)
+
 - **Recon (2026-04-20).** Claude Code recon against the live `review-client.tsx` (2,401 lines) and `components/review/` directory found that `pdf-viewer.tsx` (react-pdf 10.4.1, fit-to-width, zoom, scroll-to-page) and `pdf-detection-overlay.tsx` (percentage-positioned, status-driven colour, selected-state ring, bidirectional sidebar selection via `handleHighlightClick`) are already implemented and wired into the current review UI behind the `isPdf && pdfUrl` gate at line 1655. SystemSetting flag machinery (`getSetting`/`setSetting`, `SETTING_KEYS` well-known key registry) is also already present in `lib/data/settings.ts`. Phase 3 estimate revised from 8–10 engineer-days to 5–7, reclassified as demolition-plus-thin-feature-layer rather than greenfield build.
 - **Latent `fileType` case bug** surfaced during recon. `page.tsx:52` compares `doc.type === "pdf"` lowercase; the upload route stores `fileType: "PDF"` uppercase. Freshly-uploaded PDFs in production are currently routed through the HTML reconstruction branch, not the PdfViewer. Seeded demo PDFs use lowercase which is why this hasn't been noticed. Phase 3's branch-flattening (remove the gate entirely) incidentally fixes this. Flag in Phase 3 PR description so reviewers understand they're seeing the PDF viewer for the first time on many existing documents, not migrating between two views.
 - **pdf.js worker currently loaded from `unpkg.com`** (`pdf-viewer.tsx:11`). Hard external dependency; any CSP tightening or Azure egress policy change breaks the review surface instantly. Phase 3 bundles the worker locally via `postinstall` or `next.config.js` `webpack()` copy. One-file change, no downside.
@@ -590,6 +607,32 @@ Accessibility concerns that might otherwise argue for retaining HTML (screen rea
 - **Manual detection reimplementation required.** Current `handleTextSelection` reads `dataset.page` from paragraph nodes — HTML-specific. Eugene's call (2026-04-20): reimplement against the pdf.js text layer, don't disable. ~80 lines of net new selection → page → percentage-bbox code in `review-client.tsx`.
 - **Legacy / null-`canonicalPdfPath` handling out of scope.** Eugene's call (2026-04-20): all current documents are test/dummy data. Phase 3 assumes `canonicalPdfPath` is never null at reviewer-render time. Pre-cutover operational step: run `scripts/backfill-canonical-pdfs.ts`, purge or reprocess any residual nulls. No in-app fallback branch.
 - **Sort comparator** — existing `sortedDetections` walks `documentContent` (line 457). When `documentContent` goes away, Phase 3 replaces with a `(page ASC, posY ASC)` comparator over detections. Trivial, but must not be missed or keyboard arrow-down navigation will feel random.
+
+### Slice-by-slice landing notes (2026-04 build-out)
+
+What actually shipped, deviations from the original Phase 3 plan, and details that future maintainers will want.
+
+- **Option C scope addition** (Slice C, PR #46). Original plan assumed `canonicalPdfPath` and a usable text layer for every document. Recon turned up scanned PDFs / image-only DOCX exports where the canonical exists but pdf.js can't extract a selectable text layer — pdf.js renders pixel-faithful but no `<span role="presentation">` text spans. Slice C added a `Document.canonicalPdfTextSelectable` boolean (probed at canonical-build time) and a three-way routing gate in `page.tsx`: `viewerMode === "pdf" && canonicalPdfPath && canonicalPdfTextSelectable !== false` → PdfViewer; `=== false` → HTML branch with a "scanned or image-only" banner; otherwise → legacy HTML path. Documented separately at `docs/scanned-handwritten-handling-gap-2026-04.md`. Implication: the HTML branch stays alive indefinitely (see Phase 5 scope change).
+
+- **Detection overlay z-index** (Slice A, refined Slice B). Overlay container is `position: absolute; inset: 0; z-index: 3`. pdf.js's text layer defaults to `z-index: 2`. Overlay must sit *above* the text layer so detection-button clicks capture cleanly; the text layer must remain selectable in the gaps between overlay rectangles (achieved via `pointer-events: none` on the overlay container, `pointer-events: auto` on individual button children). Get the z-stacking wrong and either text selection breaks (overlay above with pointer-events all-on) or detection buttons stop responding to clicks (overlay below the text layer).
+
+- **Keyboard-selection support** (Slice C wired the handler, Slice B2 made it work end-to-end). Shift+Arrow extends a text selection in the pdf.js text layer; the popover updates on each `keyup` via a listener attached imperatively to the scroll container (not a React `onKeyUp` prop — React's synthetic-event delivery for keyup on non-focused elements is unreliable). The popover's textarea state syncs from the `selectedText` prop via a `useEffect` gated on a `userEditedTextRef` flag — once the user edits the textarea for OCR correction, the sync stops. Critically, the global `keydown` handler in `review-client.tsx` short-circuits the `ArrowDown`/`ArrowUp` cases on `e.shiftKey` so the browser's default selection-extension isn't cancelled by the sidebar-navigation `e.preventDefault()` — without that short-circuit, Shift+ArrowDown jumped the sidebar selection instead of extending the text selection.
+
+- **`showOriginal` → `showPreview` rename** (Slice B1, PR #49). Original Slice B mental model: "show the original alongside the redaction preview" → `showOriginal` boolean controlling the LEFT pane visibility. PR #49 inverted the responsive collapse (LEFT pane is always visible at every viewport width; RIGHT pane is the dependent one), at which point `showOriginal` had inverted semantics and was renamed `showPreview`. Toolbar button label flipped from "Hide Original" to "Hide Preview". Note that HTML-mode `review-client.tsx` retains its own `showOriginal` state for the legacy HTML dual-panel; that one is unrelated to PdfViewer's `showPreview` and was deliberately left alone.
+
+- **Dev-mode webpack incompatibility** (Slice A, formalised Slice D1). `next dev` (webpack dev server) crashes pdfjs-dist's module init with `TypeError: Object.defineProperty called on non-object` when the PdfViewer mounts. Production webpack (`next build && next start`) handles the same module graph cleanly. The `dev` npm script was switched to `next dev --turbo`; Slice D1's Playwright `webServer` config was switched from `next dev` to `next build && next start` so the e2e suite can exercise the PDF branch at all. `transpilePackages: ["pdfjs-dist"]` is kept in `next.config.js` to signal intent for future bundler tweaks but is not on its own sufficient on Next 15.5 + pdfjs-dist 5.4.
+
+- **Overlay grouping for stacked detections** (Slice B2, PR #50). Two regex passes can produce bbox-identical detections (e.g. phone regex emits both `021 544 908` and `021 544\n908` text variants on the same DI line; bank-account + phone regex both match the same digit string). Pre-Slice-B2, both rendered as separate translucent overlays at the same coords — `bg-{colour}/25` fills compositing to a visibly darker shade. Slice B2 introduced render-time grouping via `lib/review/overlay-grouping.ts:mergeByBbox`: detections with identical `(page, posX, posY, posW, posH)` collapse to one rendered overlay with status priority `accepted > rejected > pending`. The lowest-id detection in the group is the click target ("primary"); the sidebar continues to enumerate all detections individually. Pipeline-level dedup gaps that produce the bbox-identical inputs (whitespace-variant detections, sub-string regex overlaps) are a separate architectural follow-up; Slice B2 is render-time-only.
+
+- **`user-select: none` scoped to PDF viewer** (Slice B1 right pane, Slice B2 chrome). pdf.js text-layer spans are natively selectable; native browser selection extends through DOM order, so a Shift+Arrow gesture that walked past the PDF viewer's bottom or top would visually highlight text in the right pane (which is display-only) or the bottom detection panel. Slice B1 added `select-none` to the right-pane wrapper; Slice B2 extended it to the four review-page chrome wrappers (top header, Option C banner, accept-remaining alert banner, bottom detection panel). PDF text layer (left pane) inherits the default `user-select: text` from the main-content wrapper. Trade-off: `user-select: none` also disables right-click → "Copy" on the affected regions (browsers couple the two); accepted because click-to-select is the dominant review interaction, not copy-from-cell.
+
+- **Newline normalisation in popover text** (Slice B2). Multi-line PDF selections arrive with embedded `\n` characters reflecting visual line wraps (pdf.js extracts in layout-preserved order, not logical flow). `computePdfSelectionBbox` in `lib/review/pdf-selection.ts` collapses every run of whitespace to a single space after the existing `.trim()`. The popover textarea receives a single-line normalised string suitable for rule authoring. Edge case: hyphenated tokens that wrap mid-line — `"12-3056-\n0789123-00"` becomes `"12-3056- 0789123-00"` with an inserted space; the textarea is editable so reviewers can remove the space, and the userEditedTextRef from the popover sync logic preserves that edit.
+
+### Cutover (Slice D2, this PR)
+
+- **Default flag flipped.** `DEFAULT_VIEWER_MODE` in `lib/data/settings.ts` changed from `"html"` to `"pdf"`. One-line code change. All other infrastructure (the routing gate, the helpers, the e2e setup/teardown that flips the flag for the PDF-review project, the rollback lever via `system_settings` row insert) was already in place from Slices A → D1.
+- **Rollback lever preserved.** Inserting a row `('VIEWER_MODE', '"html"')` into `system_settings` restores the HTML branch globally. Slice D2 changes the default but does not remove the lever.
+- **Live deploy gap (out of scope).** Slice D2's flag flip lands in main but doesn't propagate to veil.datasing.nz until the next manual `cr<N>` ACR build + App Service config update. The GHA Docker workflow pushes to ghcr.io but App Service is pinned to ACR. Tracked as a separate operational follow-up.
 
 ---
 

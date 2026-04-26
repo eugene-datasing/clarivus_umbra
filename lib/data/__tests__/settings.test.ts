@@ -149,8 +149,8 @@ describe("VIEWER_MODE", () => {
     vi.clearAllMocks();
   });
 
-  it("DEFAULT_VIEWER_MODE is 'html'", () => {
-    expect(DEFAULT_VIEWER_MODE).toBe("html");
+  it("DEFAULT_VIEWER_MODE is 'pdf' (Slice D2 cutover; was 'html' through Slices A → D1)", () => {
+    expect(DEFAULT_VIEWER_MODE).toBe("pdf");
   });
 
   it("isViewerMode accepts 'html' and 'pdf', rejects anything else", () => {
@@ -164,10 +164,10 @@ describe("VIEWER_MODE", () => {
     expect(isViewerMode(42)).toBe(false);
   });
 
-  it("getSetting returns 'html' when VIEWER_MODE row is absent", async () => {
+  it("getSetting returns the default ('pdf' post-Slice-D2) when VIEWER_MODE row is absent", async () => {
     mockFindUnique.mockResolvedValue(null);
     const result = await getSetting(SETTING_KEYS.VIEWER_MODE, DEFAULT_VIEWER_MODE);
-    expect(result).toBe("html");
+    expect(result).toBe("pdf");
     expect(mockFindUnique).toHaveBeenCalledWith({ where: { key: "VIEWER_MODE" } });
   });
 
@@ -190,9 +190,9 @@ describe("VIEWER_MODE", () => {
     mockFindUnique.mockResolvedValue({ key: "VIEWER_MODE", value: { mode: "pdf" } });
     const raw = await getSetting<unknown>(SETTING_KEYS.VIEWER_MODE, DEFAULT_VIEWER_MODE);
     expect(isViewerMode(raw)).toBe(false);
-    // Caller falls back to default
+    // Caller falls back to default — post-Slice-D2 the default is 'pdf'.
     const resolved = isViewerMode(raw) ? raw : DEFAULT_VIEWER_MODE;
-    expect(resolved).toBe("html");
+    expect(resolved).toBe("pdf");
   });
 });
 
