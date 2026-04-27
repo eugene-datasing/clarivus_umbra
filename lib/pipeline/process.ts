@@ -828,14 +828,30 @@ export async function processDocument(docId: string): Promise<void> {
       }
     }
 
-    // Deduplicate by (page, type, text, posY_rounded). Keep the entry with highest confidence.
+    // Deduplicate by (page, type, text, posY_rounded). Keep the entry
+    // with highest confidence.
+    //
+    // Section-marker source uses (page, type, text) without posY —
+    // logical-sentence emission combined with calculateBBoxAll's
+    // per-visual-line bbox return produces N rows of identical text
+    // for an N-line wrapped sentence. The bench scorer's first-match-
+    // wins semantics counts those duplicates as FPs (only one row per
+    // expected entry can be claimed). Collapsing the dupes here means
+    // one Detection row per logical sentence; the canvas overlay
+    // shows a single black rectangle on the first visual line, and
+    // the export-time PyMuPDF Tier-2 text-search redacts every
+    // occurrence of the sentence text in the produced PDF.
     const beforeDedup = enrichedDetections.length;
     const seen = new Map<string, number>();
     const dedupedDetections: (UnifiedDetection & { posX: number; posY: number; posW: number; posH: number })[] = [];
 
     for (const det of enrichedDetections) {
       const posYRounded = Math.round(det.posY * 10) / 10;
-      const key = `${det.page}|${det.type}|${det.text.toLowerCase().trim()}|${posYRounded}`;
+      const normalisedText = det.text.toLowerCase().trim();
+      const key =
+        det.source === "section-marker"
+          ? `${det.page}|${det.type}|${normalisedText}|section-marker`
+          : `${det.page}|${det.type}|${normalisedText}|${posYRounded}`;
       const existingIdx = seen.get(key);
       if (existingIdx !== undefined) {
         if (det.confidence > dedupedDetections[existingIdx].confidence) {

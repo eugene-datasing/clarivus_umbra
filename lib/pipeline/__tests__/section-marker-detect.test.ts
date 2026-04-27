@@ -98,6 +98,263 @@ describe("detectSectionMarkers — header patterns (Phase 1 §2)", () => {
     expect(result.every((m) => m.markerMatched === "(candid)")).toBe(true);
   });
 
+  // ---------------------------------------------------------------------
+  // Fix 1 — sub-section header terminators (post-bench-regression).
+  // ---------------------------------------------------------------------
+
+  it("Fix 1 — terminates on `Privileged legal advice - s7(2)(g)` sub-section header", () => {
+    // A's regression scenario: an outer (free and frank) section
+    // containing nested sub-sections labelled with non-free-frank
+    // ground citations. Pre-fix every body sentence in the
+    // sub-section was typed `free-frank`; post-fix the sub-section
+    // header terminates the section before any of its body lines
+    // become candidates.
+    const result = detectSectionMarkers([
+      page(
+        1,
+        [
+          "Candid policy advice (free and frank)",
+          "Officers' candid view is that the current bylaw is unenforceable.",
+          "Recommend the committee be briefed on the enforcement reality.",
+          "Privileged legal advice - s7(2)(g)",
+          "We have obtained privileged legal opinion from external counsel.",
+          "Counsel's settlement range is $25,000 to $55,000 inclusive of legal costs.",
+          "8. Recommendations",
+        ].join("\n"),
+      ),
+    ]);
+    // Only the two pre-sub-section lines fire as free-frank.
+    // The legal-privilege body lines must NOT be flagged.
+    expect(result.length).toBe(2);
+    expect(result.every((m) => m.text.startsWith("Officers'") || m.text.startsWith("Recommend"))).toBe(true);
+    expect(result.some((m) => m.text.includes("privileged legal opinion"))).toBe(false);
+    expect(result.some((m) => m.text.includes("settlement range"))).toBe(false);
+  });
+
+  it("Fix 1 — terminates on `Confidential account - s7(2)(c)(i)` sub-section header", () => {
+    const result = detectSectionMarkers([
+      page(
+        1,
+        [
+          "Candid policy advice (free and frank)",
+          "Officers' candid view is that this matter is genuinely contested.",
+          "Recommend the committee be briefed on the policy options.",
+          "Confidential account - s7(2)(c)(i)",
+          "A former officer has provided a written account on condition of anonymity.",
+          "The account describes systematic favouritism in enforcement decisions.",
+          "8. Recommendations",
+        ].join("\n"),
+      ),
+    ]);
+    expect(result.length).toBe(2);
+    expect(result.some((m) => m.text.includes("written account"))).toBe(false);
+    expect(result.some((m) => m.text.includes("favouritism"))).toBe(false);
+  });
+
+  it("Fix 1 — terminates on bare ground citation in a header position", () => {
+    // Some templates use just the statutory ground as the sub-section
+    // header. Should still terminate even without a keyword phrase.
+    const result = detectSectionMarkers([
+      page(
+        1,
+        [
+          "(free and frank)",
+          "Officer's candid opinion is that the application should be declined.",
+          "The cost-benefit balance does not favour escalation at this time.",
+          "s7(2)(g)",
+          "Counsel's view, expressed candidly, is that we should settle.",
+          "Settlement range is $40,000 to $70,000 plus costs.",
+          "Conclusion",
+        ].join("\n"),
+      ),
+    ]);
+    expect(result.length).toBe(2);
+    expect(result.some((m) => m.text.includes("Counsel's view"))).toBe(false);
+    expect(result.some((m) => m.text.includes("Settlement range"))).toBe(false);
+  });
+
+  it("Fix 1 — does NOT terminate on s7(2)(f)(i) or bare s7(2)(f) (the section's own ground)", () => {
+    // B1's self-justification line "...if it were released (s7(2)(f)):"
+    // contains the section's own ground citation in the middle of a
+    // body line. Pre-Fix-1 design (with pattern 5) wrongly treated
+    // this as a sub-section header; current behaviour leaves it as
+    // body content. The Fix 1 terminator regex deliberately excludes
+    // s7(2)(f) and s7(2)(f)(i) for this reason.
+    const result = detectSectionMarkers([
+      page(
+        1,
+        [
+          "6. Candid commentary (free and frank)",
+          "This section is provided for the Chief Executive only and is not part of the formal findings.",
+          "It would materially chill future investigator candour if it were released (s7(2)(f)):",
+          "In my assessment Mr Kellogg's conduct crosses the line of what is acceptable.",
+          "Both parties have credibility issues.",
+          "7. Recommendations",
+        ].join("\n"),
+      ),
+    ]);
+    // All four body lines stay inside the same section.
+    expect(result.length).toBeGreaterThanOrEqual(3);
+    expect(
+      result.some((m) =>
+        m.text.startsWith("This section is provided for the Chief Executive only"),
+      ),
+    ).toBe(true);
+    expect(result.some((m) => m.text.includes("Mr Kellogg's conduct crosses the line"))).toBe(true);
+  });
+
+  it("Fix 1 — does NOT terminate on a mid-prose ground mention (only header-shape lines do)", () => {
+    // A body line that mentions s7(2)(g) inline in a long sentence
+    // ending with a period is prose, not a header. Section continues.
+    const result = detectSectionMarkers([
+      page(
+        1,
+        [
+          "Candid commentary (free and frank)",
+          "Officer's candid view is that the matter touches on s7(2)(g) territory but the analysis is not yet complete.",
+          "Recommend further consultation before any decision is communicated externally.",
+          "Conclusion",
+        ].join("\n"),
+      ),
+    ]);
+    // Both body lines stay as candidates — neither is header-shaped.
+    expect(result.length).toBeGreaterThanOrEqual(2);
+    expect(result.some((m) => m.text.includes("touches on s7(2)(g) territory"))).toBe(true);
+  });
+
+  // ---------------------------------------------------------------------
+  // Fix 2 — logical-sentence emission (post-bench-regression).
+  // ---------------------------------------------------------------------
+
+  it("Fix 2 — multi-line wrap of one logical sentence emits ONE candidate", () => {
+    // A single sentence wrapped across 3 visual lines (typical PDF
+    // extraction shape) becomes ONE detector candidate, not three
+    // line-fragment candidates. Downstream calculateBBoxAll +
+    // process.ts per-bbox fan-out produces the per-visual-line
+    // Detection rows for canvas rendering.
+    const result = detectSectionMarkers([
+      page(
+        1,
+        [
+          "Officer commentary (free and frank)",
+          "Officer's candid opinion is that the proposed bylaw is structurally",
+          "unenforceable and that council should consider abandoning it before",
+          "the next committee meeting which is scheduled for the following week.",
+          "Recommend a workshop with elected members ahead of any public consultation.",
+          "Conclusion",
+        ].join("\n"),
+      ),
+    ]);
+    // 2 candidates: the 3-line wrap (one logical sentence) + the
+    // single-line "Recommend" sentence. Pre-Fix-2 this would have
+    // emitted 4 line-fragment candidates.
+    expect(result.length).toBe(2);
+    // The wrapped sentence's text should be the joined whole sentence,
+    // not a fragment.
+    expect(
+      result.some((m) =>
+        m.text.startsWith("Officer's candid opinion is that") &&
+        m.text.includes("scheduled for the following week"),
+      ),
+    ).toBe(true);
+  });
+
+  it("Fix 2 — multiple sentences on one visual line each emit their own candidate", () => {
+    // The inverse pattern: one extracted line containing multiple
+    // sentences (common in dense paragraph layouts). Each
+    // sentence-terminator-then-capital splits into its own
+    // candidate.
+    const result = detectSectionMarkers([
+      page(
+        1,
+        [
+          "Officer commentary (free and frank)",
+          "Officer's candid view is that this matter is contested. Both parties have credibility issues. Settlement would avoid significant costs.",
+          "Recommend a facilitated conversation rather than dismissal.",
+          "Conclusion",
+        ].join("\n"),
+      ),
+    ]);
+    // 4 candidates: 3 sentences from the dense line + the
+    // single-line "Recommend" sentence.
+    expect(result.length).toBe(4);
+    expect(result.some((m) => m.text === "Officer's candid view is that this matter is contested.")).toBe(true);
+    expect(result.some((m) => m.text === "Both parties have credibility issues.")).toBe(true);
+    expect(result.some((m) => m.text.startsWith("Settlement would avoid"))).toBe(true);
+  });
+
+  it("Fix 2 — closing-paren-colon `(s7(2)(f)):` is a sentence boundary", () => {
+    // Specific to B1's self-justification pattern. The buffer joining
+    // "...if it were released (s7(2)(f)):" with "In my assessment..."
+    // would otherwise produce one giant pseudo-sentence. The
+    // (?<=\):)\s+(?=[A-Z]) split rule covers this.
+    const result = detectSectionMarkers([
+      page(
+        3,
+        [
+          "Candid commentary (free and frank)",
+          "It would materially chill future investigator candour if it were released (s7(2)(f)):",
+          "In my assessment Mr Kellogg's conduct crosses the line of what is acceptable.",
+          "Both parties have credibility issues.",
+          "Conclusion",
+        ].join("\n"),
+      ),
+    ]);
+    // 3 candidates — the citation-tagged setup, the assessment, and
+    // the credibility statement. Without the close-paren-colon split
+    // the first two would merge into one long "released (s7(2)(f)): In
+    // my assessment..." pseudo-sentence.
+    expect(result.length).toBe(3);
+    expect(result.some((m) => m.text.endsWith("(s7(2)(f)):"))).toBe(true);
+    expect(result.some((m) => m.text.startsWith("In my assessment Mr Kellogg's conduct"))).toBe(true);
+  });
+
+  it("Fix 2 — bullet lines break the sentence-accumulation buffer", () => {
+    // A bullet appearing between two prose lines should NOT cause
+    // the two prose lines to merge into one buffered "sentence".
+    // The bullet flushes the buffer.
+    const result = detectSectionMarkers([
+      page(
+        1,
+        [
+          "Officer commentary (free and frank)",
+          "Officer's candid opinion paragraph one is short.",
+          "• A bullet point that should NOT merge the surrounding prose.",
+          "Officer's candid opinion paragraph two is also short.",
+          "Conclusion",
+        ].join("\n"),
+      ),
+    ]);
+    expect(result.length).toBe(2);
+    expect(
+      result.every(
+        (m) =>
+          m.text === "Officer's candid opinion paragraph one is short." ||
+          m.text === "Officer's candid opinion paragraph two is also short.",
+      ),
+    ).toBe(true);
+  });
+
+  it("Fix 2 — blank line inside a section flushes the buffer (paragraph break)", () => {
+    // Two consecutive blanks terminate the section; a single blank
+    // is just a paragraph break — flush buffer, keep section open.
+    const result = detectSectionMarkers([
+      page(
+        1,
+        [
+          "Officer commentary (free and frank)",
+          "Officer's candid opinion paragraph one is genuinely about a contested matter.",
+          "",
+          "Officer's candid opinion paragraph two is about a separate but related point.",
+          "Conclusion",
+        ].join("\n"),
+      ),
+    ]);
+    // Single blank between paragraphs — both candidates land in the
+    // same section.
+    expect(result.length).toBe(2);
+  });
+
   it("does NOT fire on parenthetical `(s7(2)(f))` mid-prose citations (Eugene clarification 2 fix)", () => {
     // The dropped statutory-ground pattern would have broken B1's
     // self-justification paragraph: the line "...if it were released
@@ -341,14 +598,18 @@ describe("detectSectionMarkers — FP-guards (Phase 1 §4)", () => {
     expect(result.every((m) => m.text.length >= 20)).toBe(true);
   });
 
-  it("drops lines above the 400-char ceiling", () => {
-    const longLine = "a".repeat(401);
+  it("drops sentences above the 800-char ceiling (post-Fix-2 sentence-level cap)", () => {
+    // Pathological synthetic single-token "sentence" with no internal
+    // boundary — would otherwise pass line guards but exceeds the
+    // sentence-level ceiling. Real council prose has periods every
+    // ~80 chars so this case is contrived; the cap is a backstop.
+    const longSentence = "a".repeat(801) + ".";
     const result = detectSectionMarkers([
       page(
         1,
         [
           "Officer commentary (free and frank)",
-          longLine,
+          longSentence,
           "Officer's candid opinion is that the application has merit but requires careful balancing.",
           "Recommend approval with conditions tailored to the unique circumstances of this case.",
           "Conclusion",
@@ -356,7 +617,7 @@ describe("detectSectionMarkers — FP-guards (Phase 1 §4)", () => {
       ),
     ]);
     expect(result.length).toBe(2);
-    expect(result.every((m) => m.text.length <= 400)).toBe(true);
+    expect(result.every((m) => m.text.length <= 800)).toBe(true);
   });
 
   it("body line matching a marker phrase opens a new (sub)section, not a candidate", () => {

@@ -133,22 +133,30 @@ const MARKER_DICTIONARY: MarkerEntry[] = [
 ];
 
 /**
- * Header-shape heuristic for weak markers: the line must be short
- * AND must not end with a sentence-terminating period followed by
- * end-of-line. Matches every header in the test fixtures (all under
- * 50 chars, none terminated by a period); rejects body sentences
- * which run 60+ chars and end with `.`.
+ * Header-shape heuristic for weak markers and sub-section terminators.
+ * A line passes the check when ALL of the following hold:
+ *   - non-empty after trim,
+ *   - ≤ HEADER_SHAPE_MAX_LENGTH characters (most council headers are
+ *     well under 50 chars; cap at 80 to leave room for ground-citation
+ *     suffixes like " - s7(2)(g)"),
+ *   - no terminal period / exclamation / question mark (sentence-shape
+ *     indicator),
+ *   - ≤ HEADER_SHAPE_MAX_WORDS words. Wrapped first lines of long
+ *     prose sentences often pass the length check ("Officer's candid
+ *     opinion is that the proposed bylaw is structurally" — 70 chars,
+ *     no terminal period, but 10 words — clearly mid-sentence). The
+ *     word-count check disambiguates header-shape from prose-wrap.
  */
 const HEADER_SHAPE_MAX_LENGTH = 80;
+const HEADER_SHAPE_MAX_WORDS = 8;
 
 function looksLikeHeader(line: string): boolean {
   const trimmed = line.trim();
   if (trimmed.length === 0) return false;
   if (trimmed.length > HEADER_SHAPE_MAX_LENGTH) return false;
-  // Sentence-terminating period (`.`, `?`, `!`) at the end of the
-  // trimmed line indicates prose, not a heading. Allow a trailing
-  // colon (`:`) — a common header punctuation in council documents.
   if (/[.?!]$/.test(trimmed)) return false;
+  const wordCount = trimmed.split(/\s+/).length;
+  if (wordCount > HEADER_SHAPE_MAX_WORDS) return false;
   return true;
 }
 
@@ -187,16 +195,70 @@ const SECTION_END_REGEX = new RegExp(
   ].join("|"),
 );
 
+/**
+ * Sub-section terminators (Fix 1, post-bench-regression diagnosis).
+ *
+ * A "(free and frank)" section's body often contains nested sub-sections
+ * that cite a DIFFERENT LGOIMA ground in their header — typical council
+ * memo structure puts a candid policy advice paragraph above sub-
+ * sections labelled "Privileged legal advice — s7(2)(g)" or
+ * "Confidential account — s7(2)(c)(i)". Without this terminator,
+ * every body sentence inside the sub-sections gets typed as free-frank
+ * even though the bench ground truth (and the document's own header)
+ * marks them as legal-privilege / confidential / harassment-risk.
+ *
+ * The two regexes below capture the two shapes these sub-section
+ * headers take in surveyed council documents:
+ *   - explicit ground citation (`s7(2)(g)`, `s6(c)`, etc.)
+ *   - keyword header ("Privileged legal advice", "In confidence", etc.)
+ *
+ * Both must additionally pass `looksLikeHeader` — a mid-prose
+ * mention of `(s7(2)(g))` inside an opinion sentence does NOT
+ * terminate the section. This mirrors the strong-vs-weak-marker
+ * design from the opening-side patterns above.
+ *
+ * Bare `s7(2)(f)` (no inner letter) and `s7(2)(f)(i)` are deliberately
+ * excluded — they are the section's OWN ground. B1's self-justification
+ * paragraph contains "(s7(2)(f))" in a body line; that line must NOT
+ * terminate the section. `s7(2)(f)(ii)` IS included — that's harassment-
+ * risk, a different ground.
+ */
+const NON_FREE_FRANK_GROUND_REGEX =
+  /\bs\s*6\s*\(\s*[a-d]\s*\)|\bs\s*7\s*\(\s*2\s*\)\s*\(\s*(?:[abcdeghij]|ba)\s*\)|\bs\s*7\s*\(\s*2\s*\)\s*\(\s*f\s*\)\s*\(\s*ii\s*\)/i;
+
+const NON_FREE_FRANK_KEYWORD_REGEX =
+  /\b(?:Privileged\s+legal\s+advice|Privileged\s+advice|Confidential\s+account|Commercial[\s-]+in[\s-]+confidence|In\s+confidence|Solicitor[\s-]?client(?:\s+privilege)?|Legal\s+privilege)\b/i;
+
 function isSectionEnd(line: string): boolean {
-  return SECTION_END_REGEX.test(line);
+  if (SECTION_END_REGEX.test(line)) return true;
+  // Sub-section transitions count only when the line ALSO looks like
+  // a header — avoids mid-prose mentions of other grounds opening
+  // a section-end transition.
+  if (looksLikeHeader(line)) {
+    if (NON_FREE_FRANK_GROUND_REGEX.test(line)) return true;
+    if (NON_FREE_FRANK_KEYWORD_REGEX.test(line)) return true;
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------
-// FP-guards on candidate sentences (Phase 1 §4)
+// FP-guards (Phase 1 §4 + Fix 2 sentence-vs-line split)
 // ---------------------------------------------------------------------------
+//
+// Two guard layers (Fix 2 split, post-bench-regression):
+//   - LINE guards: applied as each line is appended to the body
+//     buffer. Reject bullets / attribution-stubs / date-only / metadata-
+//     labels / very-short lines. Lines that fail are dropped (and
+//     act as a continuation break — flush the buffer).
+//   - SENTENCE guards: applied after the buffer is split into
+//     sentences. Length floor (20) and ceiling (800) gate the final
+//     emission. Multi-line wraps are tolerated — a single sentence
+//     spanning 3 visual lines might be 250 chars when joined, well
+//     under the ceiling.
 
-const MIN_CANDIDATE_LENGTH = 20;
-const MAX_CANDIDATE_LENGTH = 400;
+const MIN_LINE_LENGTH = 5;
+const MIN_SENTENCE_LENGTH = 20;
+const MAX_SENTENCE_LENGTH = 800;
 
 /** Lines starting with a list-item / bullet glyph or pipe-cell. */
 const LIST_OR_CELL_PREFIX = /^\s*(?:[•·●◦▪▫.\-–—*]|\d+\)|\|)/;
@@ -217,37 +279,55 @@ const DATE_OR_REF_LINE =
  * Metadata-label-line shape: a sequence of capitalised words followed
  * by a colon (and a value). Examples: `Investigator: Sarah Mitchell`,
  * `Classification: confidential`, `Reference: HR-INV-2026-018`. These
- * are form-style metadata, not opinion-prose, and would otherwise
- * sneak past the attribution / date / list guards.
- *
- * Why not just match `^[A-Z][a-z]+:`? Because some legitimate sentences
- * begin with a single capitalised word followed by a comma or period
- * but no colon (e.g. "Frankly, the proposed bylaw is unenforceable").
- * Anchoring on the colon is the disambiguator.
- *
- * The pattern allows multiple capital-cased words before the colon
- * to catch "Prepared by:", "Approved by:", etc. Single-capital words
- * with no following capital word are still caught (e.g. "Date:").
+ * are form-style metadata, not opinion-prose.
  */
 const METADATA_LABEL_LINE = /^\s*[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*\s*:\s/;
 
 /**
- * Decide whether a single line inside a section's body should be
- * emitted as a free-frank candidate. Conservative: rejects bullets,
- * attribution stubs, dates, metadata labels, and very short or empty
- * lines. Returns true for prose-shaped opinion sentences AND for the
- * section's own candour-justification framing paragraph (Eugene's
- * clarification 2 — explicitly a positive case).
+ * LINE-level guard: applied as each candidate body line is appended
+ * to the sentence-accumulation buffer. A line that fails this guard
+ * is dropped AND acts as a paragraph break (the buffer is flushed
+ * before the line is skipped). Length floor here is small (5 chars)
+ * — the tighter sentence-level floor at MIN_SENTENCE_LENGTH gates
+ * the final emission after sentence splitting.
  */
-function passesCandidateGuards(line: string): boolean {
+function passesLineGuards(line: string): boolean {
   const trimmed = line.trim();
-  if (trimmed.length < MIN_CANDIDATE_LENGTH) return false;
-  if (trimmed.length > MAX_CANDIDATE_LENGTH) return false;
+  if (trimmed.length < MIN_LINE_LENGTH) return false;
   if (LIST_OR_CELL_PREFIX.test(trimmed)) return false;
   if (ATTRIBUTION_PREFIX.test(trimmed)) return false;
   if (DATE_OR_REF_LINE.test(trimmed)) return false;
   if (METADATA_LABEL_LINE.test(trimmed)) return false;
   return true;
+}
+
+/**
+ * Split an accumulated body buffer into logical sentences (Fix 2).
+ *
+ * Two sentence-boundary patterns:
+ *   1. `(?<=[.!?])\s+(?=[A-Z])` — period / exclamation / question
+ *      followed by whitespace then a capital-letter sentence start.
+ *   2. `(?<=\):)\s+(?=[A-Z])` — close-paren-colon followed by
+ *      whitespace then capital. Handles "...released (s7(2)(f)): In
+ *      my assessment..." where the colon closes a citation-tagged
+ *      setup clause and the next capital starts the actual sentence.
+ *
+ * Sentence-shape guards (length floor 20 / ceiling 800) drop very
+ * short fragments (e.g. trailing "Conclusion." that survived an
+ * imperfect terminator) and runaway captures.
+ */
+function splitIntoSentences(buffer: string): string[] {
+  const text = buffer.replace(/\s+/g, " ").trim();
+  if (!text) return [];
+  const raw = text.split(/(?<=[.!?])\s+(?=[A-Z])|(?<=\):)\s+(?=[A-Z])/);
+  const out: string[] = [];
+  for (const s of raw) {
+    const trimmed = s.trim();
+    if (trimmed.length < MIN_SENTENCE_LENGTH) continue;
+    if (trimmed.length > MAX_SENTENCE_LENGTH) continue;
+    out.push(trimmed);
+  }
+  return out;
 }
 
 /**
@@ -313,24 +393,45 @@ export function detectSectionMarkers(
 
     // Track whether we are currently inside a section's body.
     // `markerLabel` records which pattern opened the section so the
-    // emitted match's audit trail can identify the trigger.
+    // emitted match's audit trail can identify the trigger. Body
+    // content accumulates in `buffer` (Fix 2 sentence-level emission)
+    // — the buffer is flushed via `flushBuffer` whenever the section
+    // closes, a paragraph break is detected, or a non-prose line
+    // interrupts the prose flow.
     let inSection = false;
     let markerLabel = "";
-    let bodyCandidates: Array<{
-      line: string;
-      offset: number;
-    }> = [];
+    let buffer = "";
+    let bufferStartOffset = 0;
+    let bodyCandidates: Array<{ text: string; offset: number }> = [];
     let blankRun = 0;
 
-    // Helper: flush the current section's accumulated candidates as
-    // matches if the candidate count meets the ≥2 threshold. Resets
-    // section state after flushing.
+    /**
+     * Split the accumulated buffer into sentences and append survivors
+     * to bodyCandidates. Resets the buffer.
+     */
+    const flushBuffer = () => {
+      if (!buffer.trim()) {
+        buffer = "";
+        return;
+      }
+      const sentences = splitIntoSentences(buffer);
+      for (const s of sentences) {
+        bodyCandidates.push({ text: s, offset: bufferStartOffset });
+      }
+      buffer = "";
+    };
+
+    /**
+     * Flush the buffer first, then emit matches if the candidate count
+     * meets the ≥2 threshold. Resets section state.
+     */
     const flushSection = () => {
+      flushBuffer();
       if (inSection && bodyCandidates.length >= 2) {
         for (const c of bodyCandidates) {
           matches.push({
             type: "free-frank",
-            text: c.line.trim(),
+            text: c.text,
             confidence: 75,
             page: page.pageNumber,
             suggestedGround: "s7_2fi",
@@ -376,6 +477,7 @@ export function detectSectionMarkers(
         inSection = true;
         markerLabel = markerMatch.label;
         bodyCandidates = [];
+        buffer = "";
         blankRun = 0;
         runningOffset = nextLineOffset;
         continue;
@@ -386,6 +488,10 @@ export function detectSectionMarkers(
       if (inSection) {
         if (trimmed.length === 0) {
           blankRun += 1;
+          // Blank line is a paragraph break: flush the buffer so any
+          // accumulated sentences become candidates, but stay in the
+          // section. Two consecutive blanks terminate the section.
+          flushBuffer();
           if (blankRun >= 2) {
             flushSection();
           }
@@ -400,9 +506,22 @@ export function detectSectionMarkers(
         }
 
         blankRun = 0;
-        if (passesCandidateGuards(line)) {
-          bodyCandidates.push({ line, offset: runningOffset });
+        if (!passesLineGuards(line)) {
+          // Line failed shape guards (bullet, attribution, etc.).
+          // Flush buffer (the prose flow is interrupted) and skip
+          // the line itself.
+          flushBuffer();
+          runningOffset = nextLineOffset;
+          continue;
         }
+
+        // Append the prose-shaped line to the sentence-accumulation
+        // buffer. Whitespace between lines becomes a single space at
+        // splitIntoSentences time.
+        if (buffer === "") {
+          bufferStartOffset = runningOffset;
+        }
+        buffer += (buffer ? " " : "") + trimmed;
       }
 
       runningOffset = nextLineOffset;
