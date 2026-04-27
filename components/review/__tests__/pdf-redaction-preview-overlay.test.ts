@@ -110,21 +110,65 @@ describe("PdfRedactionPreviewOverlay source — Slice B display-only contract", 
     expect(src).not.toMatch(/border-amber-500/);
   });
 
-  it("positions rectangles via percentage style props with a px grow for pending; tight for accepted", () => {
-    // Pending and rejected branches grow by HIGHLIGHT_GROW_PX on each
-    // side (visual breathing room around the glyph). Accepted stays
-    // tight to the bbox so the redaction preview obscures only what
-    // would actually be redacted in the export.
+  it("positions ALL status rectangles via percentage style props with a uniform px grow (Bug 3 fix)", () => {
+    // Pre-2026-04-27 the accepted branch was a special case that
+    // stayed tight to the bbox, with the rationale "the redaction
+    // preview must obscure only what would actually be redacted in
+    // the export". Bug 3 from PR #54 verification confirmed this
+    // logic was wrong: Azure DI's polygon `maxX` is the ink-bound
+    // right edge of the last glyph, but the browser renders text
+    // with full glyph advance — so 1-2px of the final character
+    // poked out the right side of the black rectangle. The export-
+    // tightness rationale only holds when the underlying text is
+    // gone (PyMuPDF redaction); in the in-app preview the text is
+    // still there and a tight rectangle visibly leaks the tail.
+    //
+    // Aligned with the LEFT pane's unconditional grow at
+    // pdf-detection-overlay.tsx — both panes, all statuses, same
+    // breathing room.
     expect(src).toMatch(/HIGHLIGHT_GROW_PX/);
     const styleFn = src.match(/function rightOverlayStyle[\s\S]*?\n\}/);
     expect(styleFn).not.toBeNull();
-    // accepted branch: tight
-    expect(styleFn![0]).toMatch(/status === "accepted"/);
-    expect(styleFn![0]).toMatch(/left:\s+`\$\{posX\}%`/);
-    expect(styleFn![0]).toMatch(/width:\s+`\$\{posW\}%`/);
-    // grown branch (default — pending)
+    // No more accepted special-case branch — guard against accidental
+    // reintroduction of the pre-fix shape.
+    expect(styleFn![0]).not.toMatch(/status === "accepted"/);
+    expect(styleFn![0]).not.toMatch(/left:\s+`\$\{posX\}%`/);
+    // Uniform grow expressions.
     expect(styleFn![0]).toMatch(/left:\s+`calc\(\$\{posX\}% - \$\{HIGHLIGHT_GROW_PX\}px\)`/);
+    expect(styleFn![0]).toMatch(/top:\s+`calc\(\$\{posY\}% - \$\{HIGHLIGHT_GROW_PX\}px\)`/);
     expect(styleFn![0]).toMatch(/width:\s+`calc\(\$\{posW\}% \+ \$\{HIGHLIGHT_GROW_PX \* 2\}px\)`/);
+    expect(styleFn![0]).toMatch(/height:\s+`calc\(\$\{posH\}% \+ \$\{HIGHLIGHT_GROW_PX \* 2\}px\)`/);
+  });
+
+  it("applies the same inset to accepted and pending rectangles (no per-status branch)", () => {
+    // Regression guard: the function must produce identical CSS
+    // shape for any status input, since per-status branching is
+    // exactly the bug we're closing. We can't easily render the
+    // component without jsdom, but a static pass over the function
+    // body asserts the structural property — only one return shape,
+    // shared across all statuses.
+    const styleFn = src.match(/function rightOverlayStyle[\s\S]*?\n\}/);
+    expect(styleFn).not.toBeNull();
+    // Exactly one `return` statement in rightOverlayStyle.
+    const returnCount = (styleFn![0].match(/\breturn\b/g) ?? []).length;
+    expect(returnCount).toBe(1);
+    // No `if (status` branches — the symptom of a per-status carve-out.
+    expect(styleFn![0]).not.toMatch(/if\s*\(\s*status/);
+    // HIGHLIGHT_GROW_PX must appear at least 4 times in the function
+    // body (one per side: left subtract, top subtract, width add,
+    // height add — width/height each multiply by 2 = 4 references
+    // to the constant total).
+    const growRefs = (styleFn![0].match(/HIGHLIGHT_GROW_PX/g) ?? []).length;
+    expect(growRefs).toBeGreaterThanOrEqual(4);
+  });
+
+  it("HIGHLIGHT_GROW_PX is still 2 — match the LEFT pane's value", () => {
+    // The LEFT pane's pdf-detection-overlay.tsx defines
+    // HIGHLIGHT_GROW_PX = 2 unconditionally for all statuses. This
+    // value matches that pane's; ensures the visual breathing room
+    // is consistent across both panes for the same detection. If the
+    // LEFT pane's value changes, this is the place to update.
+    expect(src).toMatch(/const\s+HIGHLIGHT_GROW_PX\s*=\s*2\s*;/);
   });
 
   it("renders nothing (returns null) when the page has no visible (pending+accepted) detections", () => {
