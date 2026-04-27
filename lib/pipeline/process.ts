@@ -22,6 +22,7 @@ import { validateFile } from "./file-validator";
 import { convertFromPages, convertToReviewFormat } from "./format-converter";
 import { detectPatterns } from "./patterns";
 import { detectLabelAdjacent } from "./label-adjacent";
+import { detectSectionMarkers } from "./section-marker-detect";
 import { detectWithAI } from "./ai-detect";
 import { classifyDocument, type DocumentClassification } from "./doc-classify";
 import { detectDuplicates } from "./duplicate-detect";
@@ -573,6 +574,22 @@ export async function processDocument(docId: string): Promise<void> {
       matches: labelAdjacentMatches.length,
     });
 
+    // Section-marker detection (April 2026 free-frank backstop).
+    // Deterministic regex pass for sections whose header marks the
+    // section as "(free and frank)" / "candid commentary" / similar.
+    // Inside such a section, every prose-shaped sentence becomes a
+    // free-frank candidate at confidence 75. Closes the prompt-
+    // engineering ceiling on ambiguous-type sentence content
+    // documented in docs/detection-coverage-retrospective-2026-04.md.
+    // Orthogonal to AI variance — same input feeds the AI pass below
+    // and downstream dedup keeps duplicates collapsed. See
+    // lib/pipeline/section-marker-detect.ts.
+    const sectionMarkerMatches = detectSectionMarkers(extraction.pages, enabledTypes);
+    log.info("Section-marker detection complete", {
+      docId,
+      matches: sectionMarkerMatches.length,
+    });
+
     // ------------------------------------------------------------------
     // 6.5 Custom rules detection (WP8)
     // ------------------------------------------------------------------
@@ -716,6 +733,18 @@ export async function processDocument(docId: string): Promise<void> {
         aiExplanation: `Label-adjacent match on "${la.labelMatched}". ${la.reasoning}`,
         source: "label-adjacent",
       })),
+      ...sectionMarkerMatches.map((sm) => ({
+        type: sm.type,
+        text: sm.text,
+        confidence: sm.confidence,
+        page: sm.page,
+        suggestedGround: sm.suggestedGround,
+        reasoning: sm.reasoning,
+        piConsideration:
+          "Free and frank candour protection — withholding must be balanced against public interest in transparency.",
+        aiExplanation: `Section-marker match inside "${sm.markerMatched}" section. ${sm.reasoning}`,
+        source: "section-marker",
+      })),
     ];
 
     // Entity propagation (Phase 4, April 2026). Deterministic pass over
@@ -770,13 +799,28 @@ export async function processDocument(docId: string): Promise<void> {
     const LONG_NARRATIVE_THRESHOLD = 80;
     for (const det of allDetections) {
       const layout = pageLayouts.get(det.page);
+      // Section-marker source captures literal page text from inside
+      // a labelled "(free and frank)" / "candid commentary" section
+      // — same rationale as manual detections (Bug 5 fix in PR #58).
+      // The LONG_NARRATIVE_THRESHOLD guard exists for AI narrative
+      // summaries which the model paraphrased; it does NOT apply to
+      // sources that capture literal text. Bypass via the bbox
+      // helper's skipLongTextGuard option so multi-sentence section
+      // candidates render on the canvas overlays.
+      const isLiteralCapture = det.source === "section-marker";
       let bboxes;
       if (!layout) {
         bboxes = [{ posX: 0, posY: 0, posW: 0, posH: 0 }];
-      } else if (det.text.length > LONG_NARRATIVE_THRESHOLD) {
+      } else if (det.text.length > LONG_NARRATIVE_THRESHOLD && !isLiteralCapture) {
         bboxes = [{ posX: 0, posY: 0, posW: 0, posH: 0 }];
       } else {
-        bboxes = calculateBBoxAll(det.text, layout.words, layout.width, layout.height);
+        bboxes = calculateBBoxAll(
+          det.text,
+          layout.words,
+          layout.width,
+          layout.height,
+          isLiteralCapture ? { skipLongTextGuard: true } : undefined,
+        );
       }
 
       for (const bbox of bboxes) {
