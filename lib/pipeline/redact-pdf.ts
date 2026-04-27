@@ -209,19 +209,22 @@ async function redactOriginalPdf(
   const storage = getStorage();
   const buffer = await storage.download(doc.originalPath);
 
-  // Prepare redaction data for the Python script
-  const redactions = detections.map((det) => {
-    const groundId = det.appliedGround || det.suggestedGround;
-    const ground = groundId ? getGroundById(groundId) : null;
-    return {
-      page: det.page,
-      posX: det.posX,
-      posY: det.posY,
-      posW: det.posW,
-      posH: det.posH,
-      label: ground ? ground.reference : (groundId || ""),
-    };
-  });
+  // Prepare redaction data for the Python script. The dedup step
+  // collapses overlapping/contained/duplicate bboxes into one entry
+  // per spatial group with the most-restrictive ground — see
+  // dedupeCoordinateRedactions for the algorithm. Without this,
+  // PyMuPDF's add_redact_annot draws each Detection row's citation
+  // independently, and near-overlapping rows (e.g. section-marker
+  // free-frank sentences sharing an edge with entity-propagation
+  // surnames) produce visibly doubled / offset citations on the
+  // exported PDF (Bug 6 from cr28 verification).
+  const beforeDedup = detections.length;
+  const redactions = dedupeCoordinateRedactions(detections);
+  if (beforeDedup !== redactions.length) {
+    console.log(
+      `[redact-pdf] Coordinate-mode deduped: ${beforeDedup} → ${redactions.length} redaction entries`,
+    );
+  }
 
   // Write input PDF and redaction JSON to temp files
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "veil-redact-"));
@@ -324,6 +327,280 @@ export async function convertToPdfWithLibreOffice(
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+// ---------------------------------------------------------------------------
+// Coordinate-mode dedup (Bug 6 fix, 2026-04-27)
+// ---------------------------------------------------------------------------
+
+/**
+ * Coordinate-mode dedup mirrors `dedupeTextSearchRedactions` for the
+ * spatial flavour of redaction. Pre-2026-04-27 the coord-mode path had
+ * no dedup at any layer (neither here nor in `redact_by_coordinates`
+ * inside `redact_pdf_pymupdf.py`), so every accepted Detection row
+ * produced an independent `add_redact_annot` call. When two rows had
+ * near-overlapping bboxes — e.g. a section-marker free-frank sentence
+ * sharing left edge with an entity-propagation surname inside it —
+ * PyMuPDF rendered each annotation's auto-fit citation independently,
+ * producing the visible double-citation Eugene reported.
+ *
+ * The dedup runs in three phases over rows on the same page:
+ *
+ *   1. Exact-duplicate collapse — rows with identical bbox merge.
+ *   2. Containment collapse — when bbox A contains bbox B
+ *      (IOU > CONTAINMENT_IOU_THRESHOLD AND smaller.area < larger.area
+ *      with the larger area also enclosing the smaller's bounds), they
+ *      merge to a single rect with A's bbox.
+ *   3. General overlap union — any remaining pair whose bboxes touch
+ *      (IOU > 0) merges to the union rect of all members.
+ *
+ * Phases run transitively: A↔B and B↔C connection both contribute to
+ * the same final group. Group survivor is the union of every member's
+ * bbox; survivor ground is the most-restrictive across the group per
+ * `GROUND_PRIORITY` below.
+ */
+const CONTAINMENT_IOU_THRESHOLD = 0.9;
+
+/**
+ * Most-restrictive-ground priority (lower index = more restrictive).
+ * Order matches the LGOIMA-pathway hierarchy:
+ *   - Section 6 (s6 a-d)            — conclusive grounds (must withhold).
+ *   - Section 7(2)(g)                — legal professional privilege.
+ *   - Section 7(2)(c)(i), (c)(ii)    — confidence grounds.
+ *   - Section 7(2)(b)(i), (b)(ii)    — trade secrets / commercial.
+ *   - Section 7(2)(h), (i)           — council commercial / negotiations.
+ *   - Section 7(2)(f)(i), (f)(ii)    — free-frank / harassment-risk.
+ *   - Section 7(2)(a)                — privacy of natural persons.
+ *   - Section 17 (a-h)               — refusal grounds (lowest priority
+ *                                      by default — these are usually
+ *                                      whole-document refusals not
+ *                                      per-bbox redactions).
+ *
+ * Tunable later if specific scenarios warrant adjustment. Grounds not
+ * in the list fall through to the lowest priority (highest numeric
+ * value).
+ */
+const GROUND_PRIORITY: ReadonlyArray<string> = [
+  "s6a", "s6b", "s6c", "s6d",
+  "s7_2g",
+  "s7_2ci", "s7_2cii",
+  "s7_2bi", "s7_2bii",
+  "s7_2h", "s7_2i",
+  "s7_2fi", "s7_2fii",
+  "s7_2a",
+  "s17a", "s17b", "s17ci", "s17cii", "s17d", "s17e", "s17f", "s17g", "s17h",
+];
+
+function groundPriority(groundId: string | null | undefined): number {
+  if (!groundId) return Number.MAX_SAFE_INTEGER;
+  const idx = GROUND_PRIORITY.indexOf(groundId);
+  return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
+}
+
+interface CoordinateBox {
+  page: number;
+  posX: number;
+  posY: number;
+  posW: number;
+  posH: number;
+}
+
+interface CoordinateDetection extends CoordinateBox {
+  appliedGround: string | null;
+  suggestedGround: string | null;
+}
+
+interface CoordinateRedaction extends CoordinateBox {
+  label: string;
+}
+
+/** Bbox area in (percentage)² — comparison only, the unit is irrelevant. */
+function area(b: CoordinateBox): number {
+  return b.posW * b.posH;
+}
+
+/** Intersection-over-Union for two same-page bboxes. */
+function iou(a: CoordinateBox, b: CoordinateBox): number {
+  if (a.page !== b.page) return 0;
+  const ax2 = a.posX + a.posW;
+  const ay2 = a.posY + a.posH;
+  const bx2 = b.posX + b.posW;
+  const by2 = b.posY + b.posH;
+  const ix1 = Math.max(a.posX, b.posX);
+  const iy1 = Math.max(a.posY, b.posY);
+  const ix2 = Math.min(ax2, bx2);
+  const iy2 = Math.min(ay2, by2);
+  if (ix1 >= ix2 || iy1 >= iy2) return 0;
+  const inter = (ix2 - ix1) * (iy2 - iy1);
+  const union = area(a) + area(b) - inter;
+  return union > 0 ? inter / union : 0;
+}
+
+/**
+ * Bbox A "contains" bbox B when A's rect fully encloses B's rect AND
+ * the IOU clears the threshold. The strict-enclosure check guards
+ * against the pathological case where two rects of similar area
+ * overlap heavily without one being inside the other.
+ */
+function contains(larger: CoordinateBox, smaller: CoordinateBox): boolean {
+  if (larger.page !== smaller.page) return false;
+  if (area(larger) <= area(smaller)) return false;
+  const enclosed =
+    larger.posX <= smaller.posX &&
+    larger.posY <= smaller.posY &&
+    larger.posX + larger.posW >= smaller.posX + smaller.posW &&
+    larger.posY + larger.posH >= smaller.posY + smaller.posH;
+  if (!enclosed) return false;
+  return iou(larger, smaller) > CONTAINMENT_IOU_THRESHOLD;
+}
+
+/** True when two bboxes share any pixel (touching counts as overlap). */
+function overlaps(a: CoordinateBox, b: CoordinateBox): boolean {
+  return iou(a, b) > 0;
+}
+
+/**
+ * Union rect — smallest bbox covering both inputs.
+ *
+ * The output is rounded to 2 decimal places to match the precision
+ * convention `calculateBBoxAll` uses elsewhere. Without rounding,
+ * accumulated subtractions over a containment chain produce values
+ * like 1.3400000000000034 from FP error — same final pixels, but
+ * test assertions and downstream logs become noisy.
+ */
+function unionRect(a: CoordinateBox, b: CoordinateBox): CoordinateBox {
+  const x1 = Math.min(a.posX, b.posX);
+  const y1 = Math.min(a.posY, b.posY);
+  const x2 = Math.max(a.posX + a.posW, b.posX + b.posW);
+  const y2 = Math.max(a.posY + a.posH, b.posY + b.posH);
+  return {
+    page: a.page,
+    posX: Math.round(x1 * 100) / 100,
+    posY: Math.round(y1 * 100) / 100,
+    posW: Math.round((x2 - x1) * 100) / 100,
+    posH: Math.round((y2 - y1) * 100) / 100,
+  };
+}
+
+/**
+ * Deduplicate a coordinate-mode detection list by spatial grouping.
+ *
+ * Algorithm:
+ *   - Build a graph where every detection on the same page is a node;
+ *     edges connect rows whose bboxes overlap OR have a containment
+ *     relationship.
+ *   - Compute connected components via union-find.
+ *   - For each component, emit one redaction entry. Bbox is the union
+ *     of all members. Ground is the most-restrictive label across all
+ *     members (per GROUND_PRIORITY).
+ *
+ * Output is stable in input order — the first member of each
+ * connected component dictates the output position. Rows on different
+ * pages never connect, so the algorithm scales linearly per page.
+ */
+export function dedupeCoordinateRedactions(
+  detections: CoordinateDetection[],
+): CoordinateRedaction[] {
+  if (detections.length === 0) return [];
+
+  // Union-find over indices.
+  const parent = detections.map((_, i) => i);
+  function find(i: number): number {
+    let root = i;
+    while (parent[root] !== root) root = parent[root];
+    let curr = i;
+    while (parent[curr] !== root) {
+      const next = parent[curr];
+      parent[curr] = root;
+      curr = next;
+    }
+    return root;
+  }
+  function unite(i: number, j: number) {
+    const ri = find(i);
+    const rj = find(j);
+    if (ri !== rj) parent[ri] = rj;
+  }
+
+  // Build edges. O(n²) per page is fine — accepted-detection lists
+  // are typically dozens, not thousands. If a fixture grows large we
+  // can re-bucket by page first to keep the constant factor down.
+  for (let i = 0; i < detections.length; i++) {
+    for (let j = i + 1; j < detections.length; j++) {
+      const a = detections[i];
+      const b = detections[j];
+      if (a.page !== b.page) continue;
+      // Containment check covers exact-duplicate as a degenerate case
+      // (IOU=1.0 ≥ 0.9; enclosed is true on identical rects when the
+      // strict-larger-area guard would skip them — but identical rects
+      // have equal area so contains() returns false and the overlaps()
+      // check below catches them via IOU=1).
+      if (overlaps(a, b) || contains(a, b) || contains(b, a)) {
+        unite(i, j);
+      }
+    }
+  }
+
+  // Group members by root.
+  const groupsByRoot = new Map<number, number[]>();
+  for (let i = 0; i < detections.length; i++) {
+    const root = find(i);
+    const list = groupsByRoot.get(root);
+    if (list) list.push(i);
+    else groupsByRoot.set(root, [i]);
+  }
+
+  // Emit one redaction per group, preserving the position of the
+  // first member encountered in the input order.
+  const seenRoots = new Set<number>();
+  const out: CoordinateRedaction[] = [];
+  for (let i = 0; i < detections.length; i++) {
+    const root = find(i);
+    if (seenRoots.has(root)) continue;
+    seenRoots.add(root);
+
+    const members = groupsByRoot.get(root)!;
+
+    // Bbox: union of all members.
+    let bbox: CoordinateBox = detections[members[0]];
+    for (let k = 1; k < members.length; k++) {
+      bbox = unionRect(bbox, detections[members[k]]);
+    }
+
+    // Ground: most-restrictive across members (lowest priority index).
+    // The effective ground for a detection is `appliedGround` when set
+    // (the reviewer's chosen ground) and falls back to `suggestedGround`
+    // otherwise. We do NOT consider both fields per detection — when
+    // the reviewer accepts with a specific ground that's the
+    // authoritative answer, even if `suggestedGround` is more
+    // restrictive. (Pre-2026-04-27 the loop iterated both fields per
+    // member and the AI's `suggestedGround` could quietly override the
+    // reviewer's `appliedGround` choice during dedup.)
+    let bestPriority = Number.MAX_SAFE_INTEGER;
+    let bestGround: string | null = null;
+    for (const idx of members) {
+      const det = detections[idx];
+      const effective = det.appliedGround ?? det.suggestedGround;
+      if (!effective) continue;
+      const p = groundPriority(effective);
+      if (p < bestPriority) {
+        bestPriority = p;
+        bestGround = effective;
+      }
+    }
+
+    const ground = bestGround ? getGroundById(bestGround) : null;
+    out.push({
+      page: bbox.page,
+      posX: bbox.posX,
+      posY: bbox.posY,
+      posW: bbox.posW,
+      posH: bbox.posH,
+      label: ground ? ground.reference : (bestGround || ""),
+    });
+  }
+
+  return out;
 }
 
 // ---------------------------------------------------------------------------
