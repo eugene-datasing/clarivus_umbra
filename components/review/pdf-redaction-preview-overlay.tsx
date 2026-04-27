@@ -87,21 +87,30 @@ function rightOverlayClass(status: string): string | null {
   }
 }
 
-// Pending highlights grow ~2px past the glyph bbox (same value as the
-// LEFT pane's `HIGHLIGHT_GROW_PX`) for visual breathing room. The
-// accepted black rectangle stays tight — the redaction preview must
-// obscure only what would actually be redacted in the export.
+// All status rectangles (pending yellow + accepted black) grow ~2px
+// past the glyph bbox — same value the LEFT pane's
+// `HIGHLIGHT_GROW_PX` uses unconditionally.
+//
+// Pre-2026-04-27 the accepted branch was a special case that stayed
+// tight to the bbox, with the rationale "the redaction preview must
+// obscure only what would actually be redacted in the export". That
+// reasoning was wrong (Bug 3 from PR #54 verification): Azure DI's
+// polygon `maxX` is the ink-bound right edge of the last glyph, but
+// the browser renders text with full glyph advance — so the last
+// 1-2px of the final character poked out the right side of the
+// black rectangle, visibly leaking the tail of the text the
+// rectangle was supposed to hide. The rationale only holds when the
+// underlying text is gone (export-time PyMuPDF redaction) — in the
+// in-app preview the text is still there, so a tight rectangle
+// under-represents what the export will hide.
+//
+// Aligning with the LEFT pane's grow gives the preview consistent
+// visual breathing room across both panes and across all statuses.
+// Export-time behaviour is unchanged (PyMuPDF's coordinate-mode
+// redaction still uses the raw `posW` from the DB).
 const HIGHLIGHT_GROW_PX = 2;
 
-function rightOverlayStyle(status: string, posX: number, posY: number, posW: number, posH: number) {
-  if (status === "accepted") {
-    return {
-      left:   `${posX}%`,
-      top:    `${posY}%`,
-      width:  `${posW}%`,
-      height: `${posH}%`,
-    };
-  }
+function rightOverlayStyle(_status: string, posX: number, posY: number, posW: number, posH: number) {
   return {
     left:   `calc(${posX}% - ${HIGHLIGHT_GROW_PX}px)`,
     top:    `calc(${posY}% - ${HIGHLIGHT_GROW_PX}px)`,
