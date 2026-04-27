@@ -257,49 +257,50 @@ jobs:
         # auto-recovered. The verify step's API call returned
         # `state=Running` because Azure's state machine lags container
         # termination by several seconds. This re-check sleeps 30s and
-        # re-reads the same three signals (state, linuxFxVersion,
-        # HTTP 200). Mismatches are reported as workflow warnings —
+        # then probes (state, linuxFxVersion, HTTP) up to 3 times at 10s
+        # intervals. Mismatches are reported as workflow warnings —
         # NOT failures — because:
-        #   - One observation isn't a recurring pattern; an aggressive
-        #     fail-the-workflow response to a transient Azure glitch
-        #     would noisily flag healthy deploys.
-        #   - When the cascade DID recur, prod auto-recovered without
-        #     intervention. Surfacing the cascade in the workflow run
-        #     page (via `::warning::`) gives operational awareness
-        #     without forcing a manual recovery action.
-        #   - The cr19 manual deploy didn't show this pattern, so it's
-        #     not deterministically reproducible — likely B1 SKU
-        #     pressure or a transient Azure infra hiccup.
-        # If we see the cascade repeat across multiple deploys, the
-        # right next move is an infra-tier conversation (B1 → P1V3) or
-        # adding a longer settle period before declaring success, not
-        # making this step blocking.
+        #   - The cr20 cascade auto-recovered without intervention;
+        #     surfacing it via `::warning::` gives operational awareness
+        #     without forcing manual recovery on a healthy deploy.
+        #   - cr22-cr29 showed a recurring HTTP=000 transient at the
+        #     +30s mark that always self-recovered by the next probe
+        #     ~10s later — single-probe noise, not a real fault. The
+        #     retry-with-backoff loop here filters that pattern: any
+        #     probe returning 200 (with state=Running and matching
+        #     linuxFxVersion) silently passes, only persistent failure
+        #     across all 3 probes raises a warning.
+        #   - If the cascade ever does persist past 3 probes, the
+        #     right next move is an infra-tier conversation (B1 → P1V3)
+        #     or extending the settle window further, not making this
+        #     step blocking.
         run: |
           set -euo pipefail
+          expected="DOCKER|acrveilprototype.azurecr.io/veil-prototype:${{ steps.tag.outputs.next_tag }}"
           echo "Settling 30s before re-checking deploy state..."
           sleep 30
-          state=$(az webapp show --name app-veil-prototype --resource-group rg-veil-prototype --query state -o tsv)
-          fxv=$(az webapp show --name app-veil-prototype --resource-group rg-veil-prototype --query 'siteConfig.linuxFxVersion' -o tsv)
-          expected="DOCKER|acrveilprototype.azurecr.io/veil-prototype:${{ steps.tag.outputs.next_tag }}"
-          http_code=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 15 https://veil.datasing.nz/ || echo "000")
-          echo "post-30s state=${state}"
-          echo "post-30s linuxFxVersion=${fxv}"
-          echo "post-30s HTTP=${http_code}"
-          ok=true
-          if [ "$state" != "Running" ]; then
-            echo "::warning::settle re-check: state drifted to '$state' (expected 'Running') — may indicate Azure-side container cascade post-restart"
-            ok=false
-          fi
-          if [ "$fxv" != "$expected" ]; then
-            echo "::warning::settle re-check: linuxFxVersion='$fxv' (expected '$expected')"
-            ok=false
-          fi
-          if [ "$http_code" != "200" ]; then
-            echo "::warning::settle re-check: HTTP=${http_code} from veil.datasing.nz (expected 200) — site may have stopped responding after the verify step"
-            ok=false
-          fi
+
+          attempts=()
+          ok=false
+          for i in 1 2 3; do
+            state=$(az webapp show --name app-veil-prototype --resource-group rg-veil-prototype --query state -o tsv)
+            fxv=$(az webapp show --name app-veil-prototype --resource-group rg-veil-prototype --query 'siteConfig.linuxFxVersion' -o tsv)
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 15 https://veil.datasing.nz/ || echo "000")
+            echo "probe ${i}: state=${state}  linuxFxVersion=${fxv}  HTTP=${http_code}"
+            attempts+=("probe${i}: state=${state} fxv=${fxv} http=${http_code}")
+            if [ "$state" = "Running" ] && [ "$fxv" = "$expected" ] && [ "$http_code" = "200" ]; then
+              ok=true
+              break
+            fi
+            if [ "$i" -lt 3 ]; then
+              sleep 10
+            fi
+          done
+
           if [ "$ok" = "true" ]; then
-            echo "settle re-check OK — deploy still healthy 30s after verify"
+            echo "settle re-check OK on attempt ${i} — deploy still healthy after verify"
+          else
+            echo "::warning::settle re-check: deploy state still degraded after 3 probes over ~50s post-restart. Attempts: ${attempts[*]} (expected state=Running, linuxFxVersion='${expected}', HTTP=200)"
           fi
           # Warning-only: don't fail the workflow on transient glitches.
           exit 0
