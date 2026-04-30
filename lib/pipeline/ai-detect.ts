@@ -8,6 +8,7 @@
  */
 
 import { AzureOpenAI } from "openai";
+import pLimit from "p-limit";
 import type { ExtractedPage } from "./extract";
 import {
   resilientOpenAICall,
@@ -18,6 +19,41 @@ import { lgoimaGrounds, normaliseGroundToId } from "@/lib/lgoima-grounds";
 import type { DocumentClassification } from "./doc-classify";
 
 const log = logger.child({ module: "ai-detect" });
+
+// ---------------------------------------------------------------------------
+// Concurrency control (Phase 2 of the parallel-AI-batches workstream).
+// ---------------------------------------------------------------------------
+
+/**
+ * Concurrency clamp [1, 8]. Lower bound ensures we always make at
+ * least one call; upper bound is a safety ceiling — even at the
+ * provisioned-tier-and-up end of the quota spectrum, going above 8
+ * concurrent batches per document offers diminishing returns and
+ * starts to risk thundering-herd retries on 429.
+ */
+const MIN_CONCURRENCY = 1;
+const MAX_CONCURRENCY = 8;
+const DEFAULT_CONCURRENCY = 2;
+
+/**
+ * Read AI_DETECT_CONCURRENCY from the environment, parsing as an
+ * integer and clamping to [MIN_CONCURRENCY, MAX_CONCURRENCY]. Invalid
+ * values (non-numeric, NaN, ≤0) silently fall back to the default.
+ *
+ * Default is 2: with the verified Standard-tier 50K TPM quota
+ * (2026-04-30 verification), concurrency=2 keeps the steady-state
+ * worst-case rate (~150K tok/min on an 8-batch document) above the
+ * raw quota but well within Azure's bucket-leak headroom that already
+ * absorbs sequential's ~78K tok/min today. Concurrency=4 would push
+ * peak rate to ~290K tok/min and start tripping 429s reliably.
+ */
+export function resolveConcurrency(): number {
+  const raw = process.env.AI_DETECT_CONCURRENCY;
+  if (raw === undefined || raw === "") return DEFAULT_CONCURRENCY;
+  const parsed = parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_CONCURRENCY;
+  return Math.max(MIN_CONCURRENCY, Math.min(MAX_CONCURRENCY, parsed));
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -553,83 +589,148 @@ export async function detectWithAI(
   const BATCH_SIZE =
     preparedPages.length <= maxSingleBatchPages ? preparedPages.length : 3;
 
+  // Build the list of (i, batch) pairs first so we can dispatch them
+  // through a concurrency limiter. Each batch is independent — the
+  // system prompt is identical across batches within a single call
+  // (Verification 2 of the Phase 1 investigation confirmed prompt
+  // caching is active, ~99% prefix hit rate on sequential calls;
+  // parallel calls may see lower hit rate but the system prompt is
+  // still stable per-batch by construction). No batch consumes
+  // another's output.
+  interface PreparedBatch {
+    index: number;
+    pages: ExtractedPage[];
+    userContent: string;
+  }
+  const preparedBatches: PreparedBatch[] = [];
   for (let i = 0; i < preparedPages.length; i += BATCH_SIZE) {
     const batch = preparedPages.slice(i, i + BATCH_SIZE);
-
-    // Build user message with page text
     const userContent = batch
-      .map(
-        (p) =>
-          `--- PAGE ${p.pageNumber} ---\n${p.text || "(empty page)"}`,
-      )
+      .map((p) => `--- PAGE ${p.pageNumber} ---\n${p.text || "(empty page)"}`)
       .join("\n\n");
 
-    // Skip batches that are essentially empty
+    // Skip batches that are essentially empty.
     if (userContent.replace(/--- PAGE \d+ ---\n\(empty page\)/g, "").trim().length < 20) {
       continue;
     }
-
-    try {
-      const systemPrompt = buildSystemPrompt(enabledTypes, classification);
-      const systemContent = feedbackPrompt
-        ? systemPrompt + feedbackPrompt
-        : systemPrompt;
-
-      const response = await resilientOpenAICall(() =>
-        client.chat.completions.create({
-          model: detectionDeployment,
-          messages: [
-            { role: "system", content: systemContent },
-            { role: "user", content: userContent },
-          ],
-          temperature: 0.1,
-          max_tokens: 4096,
-          response_format: { type: "json_object" },
-        }),
-      );
-
-      const content = response.choices?.[0]?.message?.content;
-      if (!content) continue;
-
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(content);
-      } catch {
-        log.warn("Failed to parse AI response as JSON", { preview: content.slice(0, 200) });
-        continue;
-      }
-
-      // Extract the detections array from the response
-      const detectionsArray =
-        Array.isArray(parsed)
-          ? parsed
-          : Array.isArray((parsed as Record<string, unknown>).detections)
-            ? (parsed as Record<string, unknown>).detections
-            : [];
-
-      for (const rawDet of detectionsArray as unknown[]) {
-        const det = validateDetection(rawDet);
-        if (det) {
-          allDetections.push(det);
-        }
-      }
-    } catch (error) {
-      if (error instanceof CircuitOpenError) {
-        log.warn("Circuit breaker OPEN for Azure OpenAI, skipping remaining batches", {
-          pages: batch.map((p) => p.pageNumber),
-        });
-        // Return what we have so far (partial processing / graceful degradation)
-        break;
-      }
-      log.error("Error processing AI detection batch", {
-        pages: batch.map((p) => p.pageNumber),
-        error: error instanceof Error ? error.message : String(error),
-      });
-      // Continue with remaining batches
-    }
+    preparedBatches.push({ index: i, pages: batch, userContent });
   }
 
-  // Filter out detections that overlap with existing pattern matches
+  // p-limit caps in-flight promise count without blocking dispatch —
+  // batch-3 waits in the queue until batch-1 or batch-2 settles.
+  // CircuitOpenError early-break (sequential pre-fix) is intentionally
+  // dropped: with concurrent batches each call has its own circuit-
+  // breaker check (the breaker is a singleton in azure-services.ts),
+  // so once the breaker opens the still-queued batches will fail-fast
+  // organically. No need to short-circuit the iteration.
+  const concurrency = resolveConcurrency();
+  const limit = pLimit(concurrency);
+  const startedAt = Date.now();
+  log.info("Dispatching AI detection batches", {
+    batches: preparedBatches.length,
+    concurrency,
+    pages: preparedPages.length,
+  });
+
+  const results = await Promise.allSettled(
+    preparedBatches.map((pb) =>
+      limit(async () => {
+        const batchStart = Date.now();
+        try {
+          const systemPrompt = buildSystemPrompt(enabledTypes, classification);
+          const systemContent = feedbackPrompt
+            ? systemPrompt + feedbackPrompt
+            : systemPrompt;
+
+          const response = await resilientOpenAICall(() =>
+            client.chat.completions.create({
+              model: detectionDeployment,
+              messages: [
+                { role: "system", content: systemContent },
+                { role: "user", content: pb.userContent },
+              ],
+              temperature: 0.1,
+              max_tokens: 4096,
+              response_format: { type: "json_object" },
+            }),
+          );
+
+          const content = response.choices?.[0]?.message?.content;
+          if (!content) {
+            return { detections: [] as AIDetection[], skipped: "empty-response" };
+          }
+
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(content);
+          } catch {
+            log.warn("Failed to parse AI response as JSON", {
+              preview: content.slice(0, 200),
+              pages: pb.pages.map((p) => p.pageNumber),
+            });
+            return { detections: [] as AIDetection[], skipped: "invalid-json" };
+          }
+
+          const detectionsArray =
+            Array.isArray(parsed)
+              ? parsed
+              : Array.isArray((parsed as Record<string, unknown>).detections)
+                ? (parsed as Record<string, unknown>).detections
+                : [];
+
+          const dets: AIDetection[] = [];
+          for (const rawDet of detectionsArray as unknown[]) {
+            const det = validateDetection(rawDet);
+            if (det) dets.push(det);
+          }
+          log.info("AI batch complete", {
+            pages: pb.pages.map((p) => p.pageNumber),
+            detections: dets.length,
+            elapsedMs: Date.now() - batchStart,
+          });
+          return { detections: dets };
+        } catch (error) {
+          if (error instanceof CircuitOpenError) {
+            log.warn("Circuit breaker OPEN for Azure OpenAI; this batch dropped", {
+              pages: pb.pages.map((p) => p.pageNumber),
+            });
+            // Re-throw so Promise.allSettled records the rejection;
+            // concurrent / queued batches still proceed and either hit
+            // the breaker themselves (also rejecting) or run cleanly
+            // if the breaker closes mid-flight. Net behaviour matches
+            // sequential pre-fix's "skip remaining on breaker open"
+            // because the breaker is a process-wide singleton.
+            throw error;
+          }
+          log.error("Error processing AI detection batch", {
+            pages: pb.pages.map((p) => p.pageNumber),
+            error: error instanceof Error ? error.message : String(error),
+          });
+          // Match sequential pre-fix's silent-continue on per-batch
+          // errors: return empty detections instead of rejecting so
+          // Promise.allSettled doesn't report this as a rejection.
+          return { detections: [] as AIDetection[], skipped: "error" };
+        }
+      }),
+    ),
+  );
+
+  for (const r of results) {
+    if (r.status === "fulfilled") {
+      allDetections.push(...r.value.detections);
+    }
+    // r.status === "rejected" → already logged above (CircuitOpenError);
+    // detections are simply dropped from this batch.
+  }
+
+  log.info("AI detection batch dispatch complete", {
+    totalDetections: allDetections.length,
+    totalElapsedMs: Date.now() - startedAt,
+    batches: preparedBatches.length,
+    concurrency,
+  });
+
+  // Filter out detections that overlap with existing pattern matches.
   const filtered = allDetections.filter((det) => {
     for (const existingText of existingPatternTexts) {
       if (textsOverlap(det.text, existingText)) {
