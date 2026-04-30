@@ -110,6 +110,70 @@ describe("dedupeTextSearchRedactions", () => {
     expect(dedupeTextSearchRedactions(detections)).toHaveLength(0);
   });
 
+  // ---------------------------------------------------------------------
+  // skipLongTextGuard option (2026-04-30, Fix B for zero-bbox AI long
+  // narrative). The Tier 1+2 chain in redactCanonicalPdf needs to feed
+  // long zero-bbox detections through text-search; the default 80-char
+  // filter would no-op the chain. The option opts out of the filter
+  // for that one call site without changing the standalone Tier 2
+  // path's behaviour.
+  // ---------------------------------------------------------------------
+  describe("skipLongTextGuard option (Fix B for zero-bbox chain)", () => {
+    it("retains long detections when skipLongTextGuard:true", () => {
+      const longText = "you're out of your depth Helen - let's be honest, you got this job because they needed a woman on the panel.";
+      expect(longText.length).toBeGreaterThan(80);
+      const detections = [
+        { text: longText, page: 1, appliedGround: "s7_2fii", suggestedGround: null },
+      ];
+      const result = dedupeTextSearchRedactions(detections, { skipLongTextGuard: true });
+      expect(result).toHaveLength(1);
+      expect(result[0].text).toBe(longText);
+    });
+
+    it("still drops long detections when option is omitted (default behaviour preserved)", () => {
+      const longText = "x".repeat(100);
+      const detections = [
+        { text: longText, page: 1, appliedGround: "s7_2a", suggestedGround: null },
+      ];
+      expect(dedupeTextSearchRedactions(detections)).toHaveLength(0);
+      expect(dedupeTextSearchRedactions(detections, {})).toHaveLength(0);
+      expect(dedupeTextSearchRedactions(detections, { skipLongTextGuard: false })).toHaveLength(0);
+    });
+
+    it("still dedupes by (page, text) when skipLongTextGuard:true", () => {
+      // The option only affects the length filter — dedup behaviour
+      // stays identical so a chained call with duplicate zero-bbox
+      // rows still collapses cleanly.
+      const longText = "x".repeat(120);
+      const detections = [
+        { text: longText, page: 1, appliedGround: "s7_2a", suggestedGround: null },
+        { text: longText, page: 1, appliedGround: "s7_2a", suggestedGround: null },
+      ];
+      const result = dedupeTextSearchRedactions(detections, { skipLongTextGuard: true });
+      expect(result).toHaveLength(1);
+    });
+
+    it("preserves the (page, text) split for the same long text on different pages", () => {
+      const longText = "x".repeat(120);
+      const detections = [
+        { text: longText, page: 1, appliedGround: "s7_2a", suggestedGround: null },
+        { text: longText, page: 2, appliedGround: "s7_2a", suggestedGround: null },
+      ];
+      const result = dedupeTextSearchRedactions(detections, { skipLongTextGuard: true });
+      expect(result).toHaveLength(2);
+    });
+
+    it("uses the same ground-resolution path (appliedGround || suggestedGround) regardless of length", () => {
+      const longText = "y".repeat(150);
+      const detections = [
+        { text: longText, page: 1, appliedGround: null, suggestedGround: "s7_2fi" },
+      ];
+      const result = dedupeTextSearchRedactions(detections, { skipLongTextGuard: true });
+      expect(result).toHaveLength(1);
+      expect(result[0].label).toContain("s7(2)(f)(i)");
+    });
+  });
+
   it("returns empty array for empty input", () => {
     expect(dedupeTextSearchRedactions([])).toHaveLength(0);
   });

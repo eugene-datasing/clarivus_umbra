@@ -97,6 +97,17 @@ async function redactCanonicalPdf(documentId: string): Promise<RedactedResult> {
   const usableBboxes = acceptedDetections.filter(
     (d) => d.posW > 0 && d.posH > 0,
   );
+  // Zero-bbox accepted detections — typically AI long-narrative or
+  // paraphrase emissions whose text was emitted before the
+  // skipLongTextGuard fix landed (forward-only, see fix/zero-bbox-ai
+  // PR), or whose text genuinely doesn't match the page words. Pre-fix
+  // these were silently dropped at Tier 1's bbox filter and never
+  // reached Tier 2 because Tier 2 only ran when EVERY accepted
+  // detection was zero-bbox. Now Tier 2 chains after Tier 1 on the
+  // same canonical PDF specifically for these rows.
+  const zeroBboxDetections = acceptedDetections.filter(
+    (d) => d.posW === 0 || d.posH === 0,
+  );
 
   // Tier 1: coordinate redaction on the canonical PDF. Reuses
   // redactOriginalPdf by passing a doc shim whose "originalPath" points
@@ -104,10 +115,53 @@ async function redactCanonicalPdf(documentId: string): Promise<RedactedResult> {
   // doc.id and doc.originalPath, so this is safe.
   if (usableBboxes.length > 0) {
     try {
-      return await redactOriginalPdf(
+      const tier1Result = await redactOriginalPdf(
         { id: doc.id, caseId: doc.caseId, originalPath: doc.canonicalPdfPath },
         usableBboxes,
       );
+
+      // Chain: if any accepted detections lack a usable bbox, run
+      // text-search through the already-coordinate-redacted Tier 1
+      // output so they get redacted via PyMuPDF's text matcher rather
+      // than silently skipped. No extra storage download — feed the
+      // Tier 1 buffer straight in.
+      if (zeroBboxDetections.length > 0) {
+        try {
+          const tier1Buffer = Buffer.from(tier1Result.pdfBytes);
+          const chainedResult = await redactByTextSearch(
+            tier1Buffer,
+            zeroBboxDetections,
+            // Bypass the 80-char guard inside dedupeTextSearchRedactions —
+            // zero-bbox detections are typically AI long-narrative
+            // emissions > 80 chars (that length is exactly why they
+            // landed at zero-bbox), and this chain pass is the only
+            // path that can redact them. PyMuPDF's text search silently
+            // misses on paraphrases, so passing long text through is
+            // safe.
+            { skipLongTextGuard: true },
+          );
+          console.log(
+            `[redact-pdf] Tier 2 chain redacted ${zeroBboxDetections.length} zero-bbox detection(s) on top of Tier 1 output for ${doc.id}`,
+          );
+          return {
+            pdfBytes: chainedResult.pdfBytes,
+            redactionCount:
+              tier1Result.redactionCount + chainedResult.redactionCount,
+            pageCount: chainedResult.pageCount,
+          };
+        } catch (chainErr) {
+          console.warn(
+            `[redact-pdf] Tier 2 chain on zero-bbox detections failed for ${doc.id}; returning Tier 1 result:`,
+            chainErr instanceof Error ? chainErr.message : chainErr,
+          );
+          // Fall through and return the Tier 1 result without the
+          // text-search chain. Worst case the zero-bbox rows aren't
+          // redacted in this export; better than failing the whole
+          // export.
+        }
+      }
+
+      return tier1Result;
     } catch (err) {
       console.warn(
         `[redact-pdf] Coordinate redaction on canonical failed for ${doc.id}, trying text-search:`,
@@ -116,7 +170,8 @@ async function redactCanonicalPdf(documentId: string): Promise<RedactedResult> {
     }
   }
 
-  // Tier 2: text-search redaction against the canonical PDF.
+  // Tier 2 standalone: text-search against the canonical PDF when
+  // either no detections had usable bboxes or Tier 1 itself errored.
   try {
     const storage = getStorage();
     const canonicalBuffer = await storage.download(doc.canonicalPdfPath);
@@ -627,14 +682,25 @@ interface TextSearchRedaction {
 /**
  * Deduplicate by (page, text) and filter out long AI-summary detections
  * that aren't literal document text. Returns the filtered redaction entries.
+ *
+ * `options.skipLongTextGuard` (default false) bypasses the 80-char
+ * filter — used by the Tier 1+2 chain in `redactCanonicalPdf` for the
+ * zero-bbox detection subset. The 80-char guard exists to short-circuit
+ * AI paraphrase summaries on the standalone Tier 2 path; the chain
+ * pass however is the only path that can redact long zero-bbox rows
+ * at all, so the filter would no-op the chain. PyMuPDF's text search
+ * silently fails on misses, so feeding long text through is safe — at
+ * worst nothing matches; at best the literal sentence is redacted.
  */
 export function dedupeTextSearchRedactions(
   detections: TextSearchDetection[],
+  options?: { skipLongTextGuard?: boolean },
 ): TextSearchRedaction[] {
   const seen = new Set<string>();
   const redactions: TextSearchRedaction[] = [];
+  const skipLongTextGuard = options?.skipLongTextGuard === true;
   for (const det of detections) {
-    if (det.text.length > TEXT_SEARCH_MAX_LENGTH) continue;
+    if (!skipLongTextGuard && det.text.length > TEXT_SEARCH_MAX_LENGTH) continue;
 
     const key = `${det.page}|${det.text}`;
     if (seen.has(key)) continue;
@@ -665,9 +731,10 @@ export function dedupeTextSearchRedactions(
 async function redactByTextSearch(
   pdfBuffer: Buffer,
   detections: TextSearchDetection[],
+  options?: { skipLongTextGuard?: boolean },
 ): Promise<RedactedResult> {
   const before = detections.length;
-  const redactions = dedupeTextSearchRedactions(detections);
+  const redactions = dedupeTextSearchRedactions(detections, options);
   console.log(`[redact-pdf] Deduped: ${before} → ${redactions.length} redaction entries`);
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "veil-redact-ts-"));

@@ -799,15 +799,23 @@ export async function processDocument(docId: string): Promise<void> {
     const LONG_NARRATIVE_THRESHOLD = 80;
     for (const det of allDetections) {
       const layout = pageLayouts.get(det.page);
-      // Section-marker source captures literal page text from inside
-      // a labelled "(free and frank)" / "candid commentary" section
-      // — same rationale as manual detections (Bug 5 fix in PR #58).
-      // The LONG_NARRATIVE_THRESHOLD guard exists for AI narrative
-      // summaries which the model paraphrased; it does NOT apply to
-      // sources that capture literal text. Bypass via the bbox
-      // helper's skipLongTextGuard option so multi-sentence section
-      // candidates render on the canvas overlays.
-      const isLiteralCapture = det.source === "section-marker";
+      // Section-marker captures literal page text inside a labelled
+      // "(free and frank)" / "candid commentary" section. AI emissions
+      // are also (per the prompt's worked examples) supposed to be the
+      // literal sentence flagged — the original LONG_NARRATIVE_THRESHOLD
+      // guard predates the current prompt and was overly conservative,
+      // dropping straight to placeholder bbox even when the page words
+      // contained an exact match. The B2 "depth Helen" diagnosis
+      // (2026-04-30) showed the resulting (0,0,0,0) rows leaking into
+      // the review UI: no canvas overlay, dead click-to-scroll, and
+      // silent skip in the Tier 1 redaction filter. Treat AI as a
+      // literal-capture source for bbox purposes, with a fallback to
+      // (0,0,0,0) only when the match attempt yields nothing — that
+      // preserves the prior "long AI is always sidebar-visible"
+      // contract while letting the common case (the AI-emitted
+      // sentence is verbatim from the page) gain a real bbox.
+      const isLiteralCapture =
+        det.source === "section-marker" || det.source === "ai";
       let bboxes;
       if (!layout) {
         bboxes = [{ posX: 0, posY: 0, posW: 0, posH: 0 }];
@@ -821,6 +829,19 @@ export async function processDocument(docId: string): Promise<void> {
           layout.height,
           isLiteralCapture ? { skipLongTextGuard: true } : undefined,
         );
+        // Long AI text that genuinely doesn't match the page words
+        // (paraphrase, ellipsis, normalised punctuation) keeps today's
+        // placeholder so the row reaches the sidebar; Fix B at
+        // redact-pdf.ts handles its export-time redaction via text
+        // search, and Fix C at review-client.tsx flags the row so the
+        // reviewer knows there's no canvas anchor.
+        if (
+          bboxes.length === 0 &&
+          det.source === "ai" &&
+          det.text.length > LONG_NARRATIVE_THRESHOLD
+        ) {
+          bboxes = [{ posX: 0, posY: 0, posW: 0, posH: 0 }];
+        }
       }
 
       for (const bbox of bboxes) {

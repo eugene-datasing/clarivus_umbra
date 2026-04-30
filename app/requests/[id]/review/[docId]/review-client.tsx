@@ -1990,6 +1990,23 @@ export default function ReviewClient({
                               Rule
                             </span>
                           )}
+                          {/* Zero-bbox indicator. The detection is in the
+                              database and counts toward redaction at export
+                              time (text-search fallback in redact-pdf.ts),
+                              but it has no canvas anchor — the overlay
+                              components filter (0,0,0,0) bboxes out, and
+                              click-to-scroll has nothing to target.
+                              Surfacing this in the sidebar prevents the
+                              "why is the click dead?" reviewer surprise. */}
+                          {det.position.w === 0 && det.position.h === 0 && (
+                            <span
+                              className="badge bg-amber-50 text-amber-700 text-[9px] shrink-0"
+                              title="This detection has no canvas anchor — the page words didn't match exactly, so no highlight box is drawn. Accept/reject still works; the redacted export uses text-search to redact this row."
+                              aria-label="No canvas anchor — accept and reject still work, redaction handled by text search at export time"
+                            >
+                              No anchor
+                            </span>
+                          )}
                         </div>
                       </td>
 
