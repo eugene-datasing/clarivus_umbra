@@ -267,11 +267,49 @@ export const isReviewer = (r: string | undefined): r is "reviewer" => r === "rev
 
 **Dependencies.** Phase 2 (schema), Phase 3 (auth).
 
+### Phase 4 retrospective (executed split: 4a / 4b-i / 4b-ii)
+
+Phase 4 was split into three sub-phases during execution. Final shape:
+
+- **Phase 4a**: Deletions + settings strip (commits ce27dab, 9f61200, a2d768c). 14 file deletions, 5 file edits, 3,751 lines removed. Removed SCIM endpoints, pipeline UI, department-actions, and the Workflow/Departments/Integrations settings tabs.
+- **Phase 4b-i**: Lib layer Case→Batch + recomputeBatchStatus + audit chain (commits bd6338d, f8963b0, a5b93da). Schema amendment dropped seven LGOIMA scalars from Batch (regenerated 0001_init). Renamed lib/data/cases.ts→batches.ts and lib/actions/case-actions.ts→batch-actions.ts. Audit hash payload now uses batchId; notification events Umbra-flavoured.
+- **Phase 4b-ii**: App routes Case→Batch (commits 60770f2, 6978d11, 4557227, 60b0524, de5d77e). Renamed app/requests/→app/batches/, e2e/cases/→e2e/batches/, dynamic params [requestId]→[batchId]. Updated CaseData→BatchData interfaces. Dropped the deprecated authorizeForCase alias. Cleaned orphan files (lib/data/departments.ts, lib/data/snapshots.ts, lib/actions/profile-actions.ts) that referenced dropped Phase 2 models.
+
+Net TS error reduction across Phase 4: 369 → 223 (cleared 146 errors). All remaining errors in known later-phase debt categories (Phase 5/6/7/8/9).
+
+Cross-cutting work alongside Phase 4 (not part of any single sub-phase):
+
+- **Dev DB split**: Discovered that Veil and Umbra were sharing the same Postgres database, contaminating each other's schemas. Veil-side CC created a separate `umbra` database + user; Umbra-side CC updated DATABASE_URL and re-ran migrations against the new DB. Veil's branch protection on `clarivus_veil` main caught a force-push near-miss earlier in the session.
+- **.env hygiene**: Umbra .env was a byte-identical copy of Veil's, which exposed Veil's prod credentials. Cleared AZURE_STORAGE_CONNECTION_STRING, AZURE_AD_*, AZURE_OPENAI_*_SPIKE; regenerated AUTH_SECRET; preserved shared AZURE_OPENAI/AZURE_DI for now (separate in Phase 11).
+- **GitHub Actions disabled**: Inherited Veil-era CI/Docker workflows were failing on every push (no Azure secrets configured). Moved .github/workflows/ to .github/workflows-disabled/ pending Phase 11 rebuild.
+- **CREATEDB privilege**: Phase 4b-i's `prisma migrate dev` needed shadow-DB creation privilege. Granted via `ALTER USER umbra CREATEDB` from the veil superuser.
+
+Lessons recorded for future phases:
+
+- **Force-push discipline**: Always verify `git remote -v` before any `git push --force`. Branch protection on production repos is non-negotiable safety infrastructure.
+- **Plan Mode collapse**: Claude Code's Plan Mode can collapse multi-edit tasks into a single "write to disk" action without applying intermediate amendments. For amendment-style work, prompt explicitly with "Do NOT enter Plan Mode; execute via Edit tool".
+- **Cross-session DB awareness**: When two CC sessions work in adjacent directories, they may share infrastructure (DB, secrets) without realising. Audit shared resources early in any fork.
+
+---
+
+## Inter-phase housekeeping
+
+### Pre-Phase-5: npm audit triage
+
+The Veil-fork inheritance brought 27 npm vulnerabilities (1 critical, 13 high, 12 moderate, 1 low). Most are deep transitive deps. Recommended task before starting Phase 5:
+
+1. Run `npm audit` and review the list.
+2. Apply `npm audit fix` for non-breaking patches.
+3. For breaking changes (`npm audit fix --force`), review impact on the dependency graph before applying — some Veil-era deps may be removable in Phase 7 (cover-letter/cost-recovery deletions) or Phase 9 (seed rewrite).
+4. Document residual vulnerabilities (those requiring upstream fixes) in a `SECURITY-NOTES.md` for visibility.
+
+Effort: 0.5 person-day.
+
 ---
 
 ## Phase 5 — Detection-type rename + parity test
 
-**Goal.** Rename `driver-licence` → `nz-driver-licence` everywhere. Add a compile-time/runtime parity test that locks the detection-type list to the validation vocabulary, eliminating the silent-failure risk flagged in survey Q3 / Q10.
+**Goal.** Rename `driver-licence` → `nz-driver-licence` everywhere AND clean up the call sites for the three Detection fields dropped in Phase 2 (`suggestedGround`, `appliedGround`, `piConsideration`). The latter wasn't enumerated in the original Phase 5 scope but emerged during Phase 4b-i verification — ~95 TS errors across `lib/actions/detection-actions.ts` (39), `lib/data/qa-simulation.ts` (11), `lib/actions/manual-detection-actions.ts` (11), `lib/data/detections.ts` (10), `lib/pipeline/version-snapshot.ts` (5), and smaller satellites. Add a parity test that locks the detection-type list to the validation vocabulary, eliminating the silent-failure risk flagged in survey Q3 / Q10.
 
 **Scope.**
 
@@ -287,6 +325,14 @@ export const isReviewer = (r: string | undefined): r is "reviewer" => r === "rev
 - `lib/pipeline/__tests__/canonical-pdf.integration.test.ts` — `HM847219` driver-licence assertion.
 
 *Note on grounds.* The `DEFAULT_GROUND_FOR_TYPE` map is being repurposed in Phase 7 (export). For Phase 5, we keep the structure — the LGOIMA ground codes get replaced with Umbra category codes in Phase 7. The rename of the type key is independent of the codomain rework.
+
+*Detection field call-site cleanup.* The fields `suggestedGround`, `appliedGround`, and `piConsideration` were dropped from the Detection model in Phase 2's schema reboot, replaced by a single `note: String?`. Phase 5 cleans up the call sites:
+- `lib/actions/detection-actions.ts` (~39 errors): remove all reads/writes of the three dropped fields. Where reviewer rationale is being captured, write to `note` instead.
+- `lib/actions/manual-detection-actions.ts` (~11 errors): same.
+- `lib/data/detections.ts` (~10 errors): drop the fields from select/include shapes and from any `DetectionInput` types.
+- `lib/data/qa-simulation.ts` (~11 errors): adapt simulation harness to the simplified Detection shape.
+- `lib/pipeline/version-snapshot.ts` (~5 errors): adjust snapshot serialisation to drop the three fields.
+- Any other satellites surfaced during work.
 
 *Parity test (new).* Add `lib/__tests__/detection-type-parity.test.ts`:
 
@@ -325,7 +371,7 @@ it("every detection type appears in every plumbing point", () => {
 
 **Rollback.** Single revert.
 
-**Effort.** 0.5–1 person-day.
+**Effort.** 1.5–2 person-days.
 
 **Dependencies.** None hard — can be done in parallel with Phase 3-4 if desired. Plan ordering keeps it after the workflow rework so test fixtures only churn once.
 
@@ -336,6 +382,8 @@ it("every detection type appears in every plumbing point", () => {
 **Goal.** Build the retention/purge subsystem from scratch. Soft-delete a batch on user action; auto-archive its audit chain to long-term blob storage when the grace expires; hard-delete + cascade afterwards. Admin "Purge Now" with grace-respect or skip-grace-with-confirm.
 
 **Scope.**
+
+*Carry-over from Phase 4b: lib/queue/job-queue.ts disposition.* The file references the dropped `ProcessingJob` Prisma model (15 TS errors). Phase 6's pg-boss introduction is the natural decision point. Choose: (a) delete the file outright if pg-boss replaces all its functionality, or (b) refactor to consume pg-boss's job table and keep any unique helpers. Likely (a) — the file's functionality (queue UI for processing jobs) is being subsumed by both the simpler workflow (no explicit processing queue) and pg-boss (background job scheduling).
 
 *Scheduled-job runner (new).* Recommended: add `pg-boss` (Postgres-backed job queue, no external infra, survives restarts, schema co-located in our DB). Alternatives flagged in Open Questions.
 
@@ -672,6 +720,17 @@ model PurgeLog {
 - Storage Account `stumbraprototype` with containers `documents`, `archives` (audit archive from Phase 6), `backups`.
 - Key Vault `kv-umbra-prototype`.
 - Application Insights instance.
+
+### Cross-product separation context (precedent set in Phase 4)
+
+Today's DB-split work between Veil and Umbra established a precedent that Phase 11 must extend to production:
+
+- **Database**: Veil and Umbra share the same dev Postgres instance but with separate users (`veil`, `umbra`) and separate databases. For production, Phase 11 must provision a *separate* Azure Postgres Flexible Server for Umbra (`psql-umbra-prototype`) — not a shared instance.
+- **Storage**: Umbra dev uses local filesystem fallback (`AZURE_STORAGE_CONNECTION_STRING=""`). Phase 11 must provision a separate Azure Storage Account for Umbra (`stumbraprototype`) with containers `documents`, `archives`, `backups`.
+- **Auth**: Umbra dev forces Credentials login (`AZURE_AD_*=""`). Phase 11 must register a separate Azure AD app for Umbra and populate its CLIENT_ID/SECRET/TENANT_ID — never share Veil's app registration.
+- **AI services**: Umbra dev currently shares Veil's Azure OpenAI + Document Intelligence deployments (50K TPM bucket). Phase 11 should evaluate whether to provision separate Umbra deployments or continue sharing. Decision factors: TPM contention impact on Veil's bench reliability, separate billing requirements, separate quota management.
+- **AUTH_SECRET**: Each Umbra environment must have its own freshly-generated `AUTH_SECRET` (cryptographically distinct from any Veil environment). Don't copy from another deployment.
+- **Spike credentials**: The four `AZURE_OPENAI_*_SPIKE` keys were Veil-specific detection-quality experiments. Umbra has no immediate need for them; populate only if Umbra introduces its own spike-comparison endpoints.
 
 *Configuration.*
 - App Service env vars: `DATABASE_URL`, `AUTH_SECRET`, `AZURE_OPENAI_*`, `AZURE_DI_*`, `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_AD_*`, `RETENTION_*` (Phase 6).
