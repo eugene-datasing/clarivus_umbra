@@ -4,11 +4,8 @@ import {
   setSetting,
   SETTING_KEYS,
   type DetectionToggle,
-  type WorkflowConfig,
-  type LGOIMAConfig,
   type NotificationPref,
 } from "@/lib/data/settings";
-import { getLGOIMAConfig } from "@/lib/data/org-config";
 import { requireUser } from "@/lib/auth/session";
 import { requireAdmin } from "@/lib/auth/authorize";
 import { revalidatePath } from "next/cache";
@@ -17,27 +14,6 @@ export async function saveDetectionToggles(toggles: DetectionToggle[]) {
   const user = await requireUser();
   await requireAdmin(user);
   await setSetting(SETTING_KEYS.DETECTION_TOGGLES, toggles, user.name);
-  revalidatePath("/admin/settings");
-  return { success: true };
-}
-
-export async function saveWorkflowConfig(config: WorkflowConfig) {
-  const user = await requireUser();
-  await requireAdmin(user);
-  await setSetting(SETTING_KEYS.WORKFLOW_CONFIG, config, user.name);
-  revalidatePath("/admin/settings");
-  return { success: true };
-}
-
-export async function saveLGOIMAWarningThresholds(amberWarningDays: number, redWarningDays: number) {
-  const user = await requireUser();
-  await requireAdmin(user);
-  const current = await getLGOIMAConfig();
-  await setSetting(
-    SETTING_KEYS.LGOIMA_CONFIG,
-    { ...current, amberWarningDays, redWarningDays },
-    user.name,
-  );
   revalidatePath("/admin/settings");
   return { success: true };
 }

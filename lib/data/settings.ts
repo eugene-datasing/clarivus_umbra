@@ -8,13 +8,10 @@ import { prisma } from "@/lib/db/prisma";
 /** Well-known setting keys */
 export const SETTING_KEYS = {
   DETECTION_TOGGLES: "detection_toggles",
-  WORKFLOW_CONFIG: "workflow_config",
   NOTIFICATION_PREFS: "notification_prefs",
   ORG_IDENTITY: "org_identity",
   ORG_BRANDING: "org_branding",
   ORG_SIGNATORY: "org_signatory",
-  ORG_OMBUDSMAN: "org_ombudsman",
-  LGOIMA_CONFIG: "lgoima_config",
   CONFIDENCE_THRESHOLDS: "confidence_thresholds",
   SETUP_WIZARD_STATE: "setup_wizard_state",
   ACTIVATION_STATUS: "activation_status",
@@ -203,36 +200,6 @@ export const DEFAULT_ORG_SIGNATORY: OrgSignatory = {
   name: "",
   title: "Information and Privacy Officer",
   department: "",
-};
-
-export interface OrgOmbudsman {
-  line1: string;
-  line2: string;
-  city: string;
-  phone: string;
-  email: string;
-}
-
-export const DEFAULT_ORG_OMBUDSMAN: OrgOmbudsman = {
-  line1: "Office of the Ombudsman",
-  line2: "PO Box 10152",
-  city: "Wellington 6143",
-  phone: "0800 802 602",
-  email: "info@ombudsman.parliament.nz",
-};
-
-export interface LGOIMAConfig {
-  defaultResponseDays: number;
-  extensionMaxDays: number;
-  amberWarningDays: number;
-  redWarningDays: number;
-}
-
-export const DEFAULT_LGOIMA_CONFIG: LGOIMAConfig = {
-  defaultResponseDays: 20,
-  extensionMaxDays: 40,
-  amberWarningDays: 10,
-  redWarningDays: 5,
 };
 
 export interface ConfidenceThresholds {
