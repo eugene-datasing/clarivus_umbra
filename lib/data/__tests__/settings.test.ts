@@ -16,11 +16,7 @@ import {
   getAllSettings,
   SETTING_KEYS,
   DEFAULT_DETECTION_TOGGLES,
-  DEFAULT_WORKFLOW_CONFIG,
   DEFAULT_NOTIFICATION_PREFS,
-  DEFAULT_ORG_IDENTITY,
-  DEFAULT_ORG_BRANDING,
-  DEFAULT_LGOIMA_CONFIG,
   DEFAULT_CONFIDENCE_THRESHOLDS,
   DEFAULT_SETUP_WIZARD_STATE,
   DEFAULT_ACTIVATION_STATUS,
@@ -130,13 +126,10 @@ describe("getAllSettings", () => {
 describe("SETTING_KEYS", () => {
   it("defines all expected keys", () => {
     expect(SETTING_KEYS.DETECTION_TOGGLES).toBe("detection_toggles");
-    expect(SETTING_KEYS.WORKFLOW_CONFIG).toBe("workflow_config");
     expect(SETTING_KEYS.NOTIFICATION_PREFS).toBe("notification_prefs");
     expect(SETTING_KEYS.ORG_IDENTITY).toBe("org_identity");
     expect(SETTING_KEYS.ORG_BRANDING).toBe("org_branding");
     expect(SETTING_KEYS.ORG_SIGNATORY).toBe("org_signatory");
-    expect(SETTING_KEYS.ORG_OMBUDSMAN).toBe("org_ombudsman");
-    expect(SETTING_KEYS.LGOIMA_CONFIG).toBe("lgoima_config");
     expect(SETTING_KEYS.CONFIDENCE_THRESHOLDS).toBe("confidence_thresholds");
     expect(SETTING_KEYS.SETUP_WIZARD_STATE).toBe("setup_wizard_state");
     expect(SETTING_KEYS.ACTIVATION_STATUS).toBe("activation_status");
@@ -206,18 +199,6 @@ describe("default values", () => {
       expect(typeof toggle.label).toBe("string");
       expect(typeof toggle.enabled).toBe("boolean");
     }
-  });
-
-  it("DEFAULT_WORKFLOW_CONFIG has expected fields", () => {
-    expect(DEFAULT_WORKFLOW_CONFIG.seniorReview).toBe(true);
-    expect(DEFAULT_WORKFLOW_CONFIG.finalApproval).toBe(true);
-  });
-
-  it("DEFAULT_LGOIMA_CONFIG has expected fields", () => {
-    expect(DEFAULT_LGOIMA_CONFIG.defaultResponseDays).toBe(20);
-    expect(DEFAULT_LGOIMA_CONFIG.extensionMaxDays).toBe(40);
-    expect(DEFAULT_LGOIMA_CONFIG.amberWarningDays).toBe(10);
-    expect(DEFAULT_LGOIMA_CONFIG.redWarningDays).toBe(5);
   });
 
   it("DEFAULT_CONFIDENCE_THRESHOLDS has high > medium", () => {
