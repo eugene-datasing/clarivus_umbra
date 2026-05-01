@@ -66,3 +66,10 @@ test-fixtures/bench/*
 # model-choice spike: commit the runner outputs and comparison but not the
 # cached DI extraction (2k+ lines, regenerates on demand from the runner)
 docs/spike-model-comparison-2026-04-20/b1-extracted-pages.json
+
+# Umbra rework: editor state, throwaway bench baselines, spike folders, and
+# investigation scripts that don't belong in the repo.
+.claude/
+docs/bench-baselines/
+docs/spike-harassment-risk-*/
+scripts/anomaly-investigate.ts
