@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 interface AILearningPanelProps {
   detectionId: string;
   detectionText: string;
-  caseId: string;
+  batchId: string;
   onClose: () => void;
   onCrossDocCreated?: (count: number) => void;
   panelHeight?: number;
@@ -38,7 +38,7 @@ interface CrossDocMatch {
 export default function AILearningPanel({
   detectionId,
   detectionText,
-  caseId,
+  batchId,
   onClose,
   onCrossDocCreated,
   panelHeight = 280,
@@ -68,7 +68,7 @@ export default function AILearningPanel({
   const handleScanCrossDoc = async () => {
     setScanStatus("loading");
     try {
-      const result = await scanCrossDocument(detectionId, caseId);
+      const result = await scanCrossDocument(detectionId, batchId);
       setScanMatches(result.matches);
       // Select all by default
       setSelectedMatches(new Set(result.matches.map((_, i) => i)));

@@ -1,14 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { workingDaysRemaining, deadlineColor, formatDate, cn, confidenceColor } from "@/lib/utils";
-import { type RequestStatus, statusConfig } from "@/lib/db/mappers";
+import { formatDate, cn, confidenceColor } from "@/lib/utils";
 import { FileText, Mail, ArrowRight } from "lucide-react";
 
 interface QueueDocument {
   id: string;
-  requestId: string;
-  requestReference: string;
+  batchId: string;
+  batchReference: string;
   name: string;
   type: string;
   pageCount: number;
@@ -20,52 +19,50 @@ interface QueueDocument {
   updatedAt: string;
 }
 
-interface CaseItem {
+interface BatchItem {
   id: string;
   reference: string;
-  requesterName: string;
-  requesterType: string;
-  dateReceived: string;
-  deadline: string;
-  priority: "standard" | "urgent" | "extended";
-  department: string[];
-  description: string;
+  name: string;
   status: string;
   documentCount: number;
   reviewedCount: number;
   redactionCount: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface QueueGroup {
-  request: CaseItem;
+  batch: BatchItem;
   docs: QueueDocument[];
-  daysRemaining: number;
 }
 
 interface QueueClientProps {
   queueDocuments: QueueDocument[];
-  cases: CaseItem[];
-  amberWarningDays?: number;
-  redWarningDays?: number;
+  batches: BatchItem[];
 }
 
-function buildQueueGroups(queueDocs: QueueDocument[], cases: CaseItem[]): QueueGroup[] {
-  const requestIds = [...new Set(queueDocs.map((d) => d.requestId))];
-  const groups: QueueGroup[] = requestIds
-    .map((rid) => {
-      const request = cases.find((r) => r.id === rid);
-      if (!request) return null;
-      const docs = queueDocs.filter((d) => d.requestId === rid);
-      return {
-        request,
-        docs,
-        daysRemaining: workingDaysRemaining(request.deadline),
-      };
+const batchStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
+  draft: { label: "Draft", color: "text-gray-600", bg: "bg-gray-100" },
+  processing: { label: "Processing", color: "text-blue-700", bg: "bg-blue-50" },
+  "ready-for-review": { label: "Ready for Review", color: "text-amber-600", bg: "bg-amber-50" },
+  reviewed: { label: "Reviewed", color: "text-purple-600", bg: "bg-purple-50" },
+  exported: { label: "Exported", color: "text-green-700", bg: "bg-green-50" },
+  deleted: { label: "Deleted", color: "text-red-700", bg: "bg-red-50" },
+};
+
+function buildQueueGroups(queueDocs: QueueDocument[], batches: BatchItem[]): QueueGroup[] {
+  const batchIds = [...new Set(queueDocs.map((d) => d.batchId))];
+  const groups: QueueGroup[] = batchIds
+    .map((bid) => {
+      const batch = batches.find((b) => b.id === bid);
+      if (!batch) return null;
+      const docs = queueDocs.filter((d) => d.batchId === bid);
+      return { batch, docs };
     })
     .filter(Boolean) as QueueGroup[];
 
-  // Sort by deadline urgency (fewest days first)
-  groups.sort((a, b) => a.daysRemaining - b.daysRemaining);
+  // Sort by batch updatedAt descending (most recent first)
+  groups.sort((a, b) => new Date(b.batch.updatedAt).getTime() - new Date(a.batch.updatedAt).getTime());
   return groups;
 }
 
@@ -76,13 +73,12 @@ function DocTypeIcon({ type }: { type: string }) {
   return <FileText className="w-4 h-4 text-red-500" />;
 }
 
-export default function QueueClient({ queueDocuments, cases, amberWarningDays, redWarningDays }: QueueClientProps) {
-  const queueGroups = buildQueueGroups(queueDocuments, cases);
+export default function QueueClient({ queueDocuments, batches }: QueueClientProps) {
+  const queueGroups = buildQueueGroups(queueDocuments, batches);
   const totalQueueCount = queueGroups.reduce((sum, g) => sum + g.docs.length, 0);
 
   return (
     <div>
-      {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-heading font-bold text-txt-primary">My Review Queue</h1>
         <p className="text-sm text-txt-secondary mt-1">
@@ -90,40 +86,25 @@ export default function QueueClient({ queueDocuments, cases, amberWarningDays, r
         </p>
       </div>
 
-      {/* Queue Groups */}
       <div className="space-y-6">
         {queueGroups.map((group) => {
-          const days = group.daysRemaining;
-          const cfg = statusConfig[group.request.status as RequestStatus];
+          const cfg = batchStatusConfig[group.batch.status] ?? { label: group.batch.status, color: "text-gray-600", bg: "bg-gray-100" };
           return (
-            <div key={group.request.id} className="card p-0 overflow-hidden">
-              {/* Group Header */}
+            <div key={group.batch.id} className="card p-0 overflow-hidden">
               <div className="px-6 py-4 bg-surface-bg/50 border-b border-border flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <Link
-                    href={`/requests/${group.request.id}`}
+                    href={`/batches/${group.batch.id}`}
                     className="font-mono text-sm font-medium text-brand-primary hover:underline"
                   >
-                    {group.request.reference}
+                    {group.batch.reference}
                   </Link>
                   <span className={cn("badge", cfg.bg, cfg.color)}>{cfg.label}</span>
-                  <span className="text-xs text-txt-secondary">
-                    {group.request.requesterName} &middot; {group.request.department.join(", ")}
-                  </span>
+                  <span className="text-sm text-txt-primary">{group.batch.name}</span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className={cn("text-sm font-semibold", deadlineColor(days, { amberDays: amberWarningDays, redDays: redWarningDays }))}>
-                    {days < 0
-                      ? `${Math.abs(days)}d overdue`
-                      : days === 0
-                      ? "Due today"
-                      : `${days}d remaining`}
-                  </span>
-                  <span className="text-xs text-txt-secondary">{formatDate(group.request.deadline)}</span>
-                </div>
+                <span className="text-xs text-txt-secondary">{formatDate(group.batch.updatedAt)}</span>
               </div>
 
-              {/* Document List */}
               <div className="divide-y divide-border">
                 {group.docs.map((doc) => {
                   const confColor = doc.avgConfidence > 0 ? confidenceColor(doc.avgConfidence) : "";
@@ -132,32 +113,23 @@ export default function QueueClient({ queueDocuments, cases, amberWarningDays, r
                       key={doc.id}
                       className="flex items-center gap-4 px-6 py-3 hover:bg-surface-hover transition-colors group"
                     >
-                      {/* File Icon */}
                       <DocTypeIcon type={doc.type} />
 
-                      {/* File Info */}
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-txt-primary truncate">
-                          {doc.name}
-                        </div>
+                        <div className="text-sm font-medium text-txt-primary truncate">{doc.name}</div>
                         <div className="flex items-center gap-3 mt-0.5">
-                          <span className="text-xs text-txt-secondary">
-                            {doc.detectionCount} detections
-                          </span>
+                          <span className="text-xs text-txt-secondary">{doc.detectionCount} detections</span>
                           {doc.avgConfidence > 0 && (
                             <span className={cn("text-xs font-medium", `text-${confColor}`)}>
                               {doc.avgConfidence}% avg confidence
                             </span>
                           )}
-                          <span className="text-xs text-txt-secondary">
-                            {doc.pageCount} pages
-                          </span>
+                          <span className="text-xs text-txt-secondary">{doc.pageCount} pages</span>
                         </div>
                       </div>
 
-                      {/* Start Review Button */}
                       <Link
-                        href={`/requests/${doc.requestId}/review/${doc.id}`}
+                        href={`/batches/${doc.batchId}/review/${doc.id}`}
                         className="btn-primary text-xs flex items-center gap-1.5 opacity-80 group-hover:opacity-100 transition-opacity"
                       >
                         Start Review
@@ -176,9 +148,7 @@ export default function QueueClient({ queueDocuments, cases, amberWarningDays, r
         <div className="card text-center py-16">
           <FileText className="w-10 h-10 text-txt-secondary/30 mx-auto mb-3" />
           <h3 className="text-lg font-medium text-txt-primary mb-1">Queue is empty</h3>
-          <p className="text-sm text-txt-secondary">
-            No documents are currently assigned to you for review.
-          </p>
+          <p className="text-sm text-txt-secondary">No documents are currently assigned to you for review.</p>
         </div>
       )}
     </div>

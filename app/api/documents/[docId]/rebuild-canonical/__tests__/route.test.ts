@@ -131,7 +131,7 @@ describe("POST /api/documents/[docId]/rebuild-canonical", () => {
     authorizeForDocumentMock.mockResolvedValue("case-1");
     findUniqueMock.mockResolvedValue({
       id: "doc-1",
-      caseId: "case-1",
+      batchId: "case-1",
       fileType: "xyz",
       canonicalPdfPath: null,
       originalPath: "case-1/doc-1/original.xyz",
@@ -161,7 +161,7 @@ describe("POST /api/documents/[docId]/rebuild-canonical", () => {
     authorizeForDocumentMock.mockResolvedValue("case-1");
     findUniqueMock.mockResolvedValue({
       id: "doc-1",
-      caseId: "case-1",
+      batchId: "case-1",
       fileType: "pdf",
       canonicalPdfPath: null,
       originalPath: "case-1/doc-1/original.pdf",
@@ -227,7 +227,7 @@ describe("POST /api/documents/[docId]/rebuild-canonical", () => {
     authorizeForDocumentMock.mockResolvedValue("case-1");
     findUniqueMock.mockResolvedValue({
       id: "doc-1",
-      caseId: "case-1",
+      batchId: "case-1",
       fileType: "pdf",
       canonicalPdfPath: "case-1/doc-1/canonical.pdf",
       canonicalPdfSha256: "existing-sha256",
@@ -275,7 +275,7 @@ describe("POST /api/documents/[docId]/rebuild-canonical", () => {
     authorizeForDocumentMock.mockResolvedValue("case-1");
     findUniqueMock.mockResolvedValue({
       id: "doc-1",
-      caseId: "case-1",
+      batchId: "case-1",
       fileType: "pdf",
       canonicalPdfPath: null,
       originalPath: "case-1/doc-1/original.pdf",

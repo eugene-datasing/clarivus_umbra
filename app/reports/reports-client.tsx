@@ -52,7 +52,7 @@ const reportTemplates: ReportTemplate[] = [
 export interface CaseOption {
   id: string;
   reference: string;
-  requesterName: string;
+  name: string;
 }
 
 interface ReportsClientProps {
@@ -154,11 +154,11 @@ export default function ReportsClient({
   }
 
   /** Download the PDF from the API route. */
-  async function downloadReport(key: ReportKey, caseId?: string) {
+  async function downloadReport(key: ReportKey, batchId?: string) {
     setGenerating(true);
     try {
       let url = API_ROUTES[key];
-      if (caseId) url += `?caseId=${encodeURIComponent(caseId)}`;
+      if (batchId) url += `?batchId=${encodeURIComponent(batchId)}`;
 
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to generate report");
@@ -415,7 +415,7 @@ export default function ReportsClient({
               <option value="">-- Choose a case --</option>
               {cases.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.reference} -- {c.requesterName}
+                  {c.reference} -- {c.name}
                 </option>
               ))}
             </select>

@@ -14,9 +14,9 @@ import {
 
 const navItems = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard, section: "main" },
-  { label: "Cases", href: "/requests", icon: FolderOpen, section: "main" },
+  { label: "Cases", href: "/batches", icon: FolderOpen, section: "main" },
   { label: "My Queue", href: "/queue", icon: ClipboardList, section: "main" },
-  { label: "New Case", href: "/requests/new", icon: PlusCircle, section: "main" },
+  { label: "New Case", href: "/batches/new", icon: PlusCircle, section: "main" },
   { label: "Custom Rules", href: "/admin/rules", icon: Settings2, section: "admin" },
   { label: "AI Governance", href: "/admin/ai-governance", icon: Brain, section: "admin" },
   { label: "Reports", href: "/reports", icon: FileBarChart, section: "admin" },

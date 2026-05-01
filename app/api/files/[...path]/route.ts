@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStorage } from "@/lib/storage";
 import path from "path";
 import { requireUser } from "@/lib/auth/session";
-import { authorizeForCase } from "@/lib/auth/authorize";
+import { authorizeForBatch } from "@/lib/auth/authorize";
 import { logger } from "@/lib/logger";
 
 /** Map file extension to MIME type for the Content-Type header */
@@ -44,7 +44,7 @@ export async function GET(
   try {
     const { path: pathSegments } = await params;
     const user = await requireUser();
-    await authorizeForCase(user, pathSegments[0]);
+    await authorizeForBatch(user, pathSegments[0]);
     const key = pathSegments.join("/");
 
     const storage = getStorage();

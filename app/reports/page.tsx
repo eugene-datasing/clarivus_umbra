@@ -9,9 +9,10 @@ export default async function ReportsPage() {
     getGroundUsageBreakdown(),
     getRecentExports(),
     computeAccuracyMetrics(),
-    prisma.case.findMany({
-      orderBy: { dateReceived: "desc" },
-      select: { id: true, reference: true, requesterName: true },
+    prisma.batch.findMany({
+      where: { deletedAt: null },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, reference: true, name: true },
     }),
   ]);
 

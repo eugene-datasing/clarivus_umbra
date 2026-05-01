@@ -4,7 +4,7 @@ import { getStorage } from "@/lib/storage";
 import { prisma } from "@/lib/db/prisma";
 import { createAuditEntry } from "@/lib/data/audit";
 import { requireUser } from "@/lib/auth/session";
-import { authorizeForCase } from "@/lib/auth/authorize";
+import { authorizeForBatch } from "@/lib/auth/authorize";
 import { applyRateLimit } from "@/lib/api-utils";
 import { validateFile } from "@/lib/pipeline/file-validator";
 import { logger } from "@/lib/logger";
@@ -85,29 +85,29 @@ export async function POST(request: NextRequest) {
     if (rateLimitResponse) return rateLimitResponse;
 
     const formData = await request.formData();
-    const caseId = formData.get("caseId") as string | null;
+    const batchId = formData.get("batchId") as string | null;
 
-    if (!caseId) {
+    if (!batchId) {
       return NextResponse.json(
-        { error: "caseId is required" },
+        { error: "batchId is required" },
         { status: 400 },
       );
     }
 
     // Verify the case exists
-    const existingCase = await prisma.case.findUnique({
-      where: { id: caseId },
+    const existingCase = await prisma.batch.findUnique({
+      where: { id: batchId },
     });
 
     if (!existingCase) {
       return NextResponse.json(
-        { error: `Case not found: ${caseId}` },
+        { error: `Case not found: ${batchId}` },
         { status: 404 },
       );
     }
 
     // Authorize the user for this specific case
-    await authorizeForCase(user, caseId);
+    await authorizeForBatch(user, batchId);
 
     const files = formData.getAll("files") as File[];
 
@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
       // Create the document record first to get a Prisma-generated ID
       const doc = await prisma.document.create({
         data: {
-          caseId,
+          batchId,
           name: file.name,
           fileType,
           mimeType,
@@ -195,7 +195,7 @@ export async function POST(request: NextRequest) {
       });
 
       // Store the file using the generated document ID
-      const storageKey = `${caseId}/${doc.id}/original${ext}`;
+      const storageKey = `${batchId}/${doc.id}/original${ext}`;
       await storage.upload(storageKey, buffer, mimeType);
 
       // Update the document with the storage path
@@ -219,8 +219,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Update the case document count and transition draft -> ingesting
-    await prisma.case.update({
-      where: { id: caseId },
+    await prisma.batch.update({
+      where: { id: batchId },
       data: {
         documentCount: {
           increment: results.length,
@@ -236,8 +236,8 @@ export async function POST(request: NextRequest) {
       userRole: user.role,
       type: "document_upload",
       description: `Uploaded ${results.length} document${results.length > 1 ? "s" : ""}`,
-      target: caseId,
-      caseId,
+      target: batchId,
+      batchId,
       detail: results.map((r) => r.name).join(", "),
     });
 

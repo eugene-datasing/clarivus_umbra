@@ -1,29 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildChainOfCustodyReport } from "@/lib/pipeline/chain-of-custody";
 import { requireUser } from "@/lib/auth/session";
-import { authorizeForCase } from "@/lib/auth/authorize";
+import { authorizeForBatch } from "@/lib/auth/authorize";
 import { logger } from "@/lib/logger";
 
 export async function GET(request: NextRequest) {
   try {
     const user = await requireUser();
 
-    const caseId = request.nextUrl.searchParams.get("caseId");
-    if (!caseId) {
+    const batchId = request.nextUrl.searchParams.get("batchId");
+    if (!batchId) {
       return NextResponse.json(
-        { error: "Missing required query parameter: caseId" },
+        { error: "Missing required query parameter: batchId" },
         { status: 400 },
       );
     }
 
-    await authorizeForCase(user, caseId);
+    await authorizeForBatch(user, batchId);
 
-    const result = await buildChainOfCustodyReport(caseId, user.name);
+    const result = await buildChainOfCustodyReport(batchId, user.name);
 
     return new NextResponse(new Uint8Array(result.pdfBytes), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="chain-of-custody-${caseId.slice(0, 8)}.pdf"`,
+        "Content-Disposition": `inline; filename="chain-of-custody-${batchId.slice(0, 8)}.pdf"`,
       },
     });
   } catch (error) {

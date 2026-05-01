@@ -1,9 +1,8 @@
 import { redirect } from "next/navigation";
 import { isActivated } from "@/lib/data/activation";
 import { auth } from "@/lib/auth/auth-options";
-import { getCases, getDashboardStats } from "@/lib/data/cases";
+import { getBatches, getDashboardStats } from "@/lib/data/batches";
 import { getRecentActivity } from "@/lib/data/audit";
-import { getLGOIMAConfig } from "@/lib/data/org-config";
 import DashboardClient from "./dashboard-client";
 import LandingPage from "./landing-page";
 
@@ -24,20 +23,17 @@ export default async function RootPage() {
     redirect("/activate");
   }
 
-  const [cases, dashboardStats, recentActivity, lgoimaConfig] = await Promise.all([
-    getCases(),
+  const [batches, dashboardStats, recentActivity] = await Promise.all([
+    getBatches(),
     getDashboardStats(),
     getRecentActivity(10),
-    getLGOIMAConfig(),
   ]);
 
   return (
     <DashboardClient
-      cases={cases}
+      batches={batches}
       dashboardStats={dashboardStats}
       recentActivity={recentActivity}
-      amberWarningDays={lgoimaConfig.amberWarningDays}
-      redWarningDays={lgoimaConfig.redWarningDays}
     />
   );
 }

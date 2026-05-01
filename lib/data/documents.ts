@@ -9,7 +9,7 @@ export async function getDocumentsForCase(batchId: string) {
 
   return docs.map((d) => ({
     id: d.id,
-    requestId: d.batchId,
+    batchId: d.batchId,
     name: d.name,
     type: d.fileType,
     pageCount: d.pageCount,
@@ -33,7 +33,7 @@ export async function getDocument(id: string) {
 
   return {
     id: d.id,
-    requestId: d.batchId,
+    batchId: d.batchId,
     name: d.name,
     type: d.fileType,
     pageCount: d.pageCount,
@@ -70,14 +70,14 @@ export async function getDocumentPages(documentId: string) {
 export async function getQueueDocuments() {
   const docs = await prisma.document.findMany({
     where: { status: { in: ["ready", "in-review", "submitted"] } },
-    include: { assignee: true, case: true },
+    include: { assignee: true, batch: true },
     orderBy: { updatedAt: "desc" },
   });
 
   return docs.map((d) => ({
     id: d.id,
-    requestId: d.batchId,
-    requestReference: d.case.reference,
+    batchId: d.batchId,
+    batchReference: d.batch.reference,
     name: d.name,
     type: d.fileType,
     pageCount: d.pageCount,

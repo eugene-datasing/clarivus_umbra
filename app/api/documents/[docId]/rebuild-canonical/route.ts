@@ -4,7 +4,7 @@
  * Admin-only, idempotent canonical-PDF rebuild for a single document.
  *
  * - First call: invokes buildCanonicalPdf, persists at
- *   {caseId}/{docId}/canonical.pdf, writes the five canonical_pdf_*
+ *   {batchId}/{docId}/canonical.pdf, writes the five canonical_pdf_*
  *   Document columns, returns 200 { status: "built", … }.
  * - Second call: detects canonicalPdfPath already set and returns 200
  *   { status: "already-built", … } without re-running the build. No
@@ -104,7 +104,7 @@ export async function POST(
       originalBuffer,
     );
 
-    const canonicalKey = `${doc.caseId}/${doc.id}/canonical.pdf`;
+    const canonicalKey = `${doc.batchId}/${doc.id}/canonical.pdf`;
     await storage.upload(canonicalKey, result.pdfBuffer, "application/pdf");
 
     await prisma.document.update({
