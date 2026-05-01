@@ -45,13 +45,6 @@ export async function authorizeForBatch(
 }
 
 /**
- * @deprecated Kept as an alias of `authorizeForBatch` to keep app/ callers
- * compiling until Phase 4b-ii migrates them. Lib/ has been migrated to
- * `authorizeForBatch`. Remove once app/ is fully on the canonical name.
- */
-export const authorizeForCase = authorizeForBatch;
-
-/**
  * Resolve a document to its parent batch, then authorize.
  * Returns the batchId on success, or null if access is denied.
  */
