@@ -7,7 +7,7 @@ import { SEED } from "../fixtures/test-data";
  * count/type-based assertion strategy as review-document.spec.ts.
  */
 test.describe("Document Review Actions (PDF view)", () => {
-  const reviewUrl = `/requests/${SEED.documents.mainCaseFile.caseId}/review/${SEED.documents.mainCaseFile.id}`;
+  const reviewUrl = `/batches/${SEED.documents.mainCaseFile.batchId}/review/${SEED.documents.mainCaseFile.id}`;
 
   test("clicking Redact opens the ground selector", async ({ page }) => {
     await page.goto(reviewUrl);

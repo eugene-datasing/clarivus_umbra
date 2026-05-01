@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { SEED } from "../fixtures/test-data";
 
 test.describe("Bulk Review Actions", () => {
-  const bulkReviewUrl = `/requests/${SEED.cases.featherstonStreet.id}/bulk-review`;
+  const bulkReviewUrl = `/batches/${SEED.cases.featherstonStreet.id}/bulk-review`;
 
   test("shows confidence threshold slider", async ({ page }) => {
     await page.goto(bulkReviewUrl);

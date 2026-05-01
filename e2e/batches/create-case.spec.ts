@@ -2,21 +2,21 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Create Case", () => {
   test("navigates to the new request form", async ({ page }) => {
-    await page.goto("/requests/new");
+    await page.goto("/batches/new");
     await expect(page).toHaveURL(/\/requests\/new/);
     // The form should have recognisable LGOIMA fields
     await expect(page.locator("body")).toContainText(/new|request|case/i);
   });
 
   test("renders form fields for LGOIMA request", async ({ page }) => {
-    await page.goto("/requests/new");
+    await page.goto("/batches/new");
     // Check for key form fields
     const body = page.locator("body");
     await expect(body).toContainText(/requester|requestor/i);
   });
 
   test("shows auto-generated reference number", async ({ page }) => {
-    await page.goto("/requests/new");
+    await page.goto("/batches/new");
     // The reference is rendered as a readonly input field value
     const refInput = page.locator('input').filter({ hasText: /LGOIMA/ }).or(
       page.locator('input[value*="LGOIMA"]'),
@@ -25,7 +25,7 @@ test.describe("Create Case", () => {
   });
 
   test("can submit a new case and redirect to case detail", async ({ page }) => {
-    await page.goto("/requests/new");
+    await page.goto("/batches/new");
 
     // Fill in required fields — field selectors depend on the form implementation
     const requesterNameInput = page.getByLabel(/requester.*name/i).or(

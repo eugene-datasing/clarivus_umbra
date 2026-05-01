@@ -8,18 +8,18 @@ import { SEED } from "./fixtures/test-data";
 test.describe("Screenshot Audit", () => {
   const pages = [
     { name: "dashboard", url: "/" },
-    { name: "case-list", url: "/requests" },
-    { name: "case-create", url: "/requests/new" },
-    { name: "case-detail", url: `/requests/${SEED.cases.featherstonStreet.id}` },
-    { name: "case-pipeline", url: `/requests/${SEED.cases.featherstonStreet.id}/pipeline` },
-    { name: "case-ingest", url: `/requests/${SEED.cases.featherstonStreet.id}/ingest` },
-    { name: "case-review-doc", url: `/requests/${SEED.cases.featherstonStreet.id}/review/${SEED.documents.mainCaseFile.id}` },
-    { name: "case-review-compare", url: `/requests/${SEED.cases.featherstonStreet.id}/review/${SEED.documents.mainCaseFile.id}/compare` },
-    { name: "case-bulk-review", url: `/requests/${SEED.cases.featherstonStreet.id}/bulk-review` },
-    { name: "case-qa", url: `/requests/${SEED.cases.featherstonStreet.id}/qa` },
-    { name: "case-schedule", url: `/requests/${SEED.cases.featherstonStreet.id}/schedule` },
-    { name: "case-audit", url: `/requests/${SEED.cases.featherstonStreet.id}/audit` },
-    { name: "case-export", url: `/requests/${SEED.cases.featherstonStreet.id}/export` },
+    { name: "case-list", url: "/batches" },
+    { name: "case-create", url: "/batches/new" },
+    { name: "case-detail", url: `/batches/${SEED.cases.featherstonStreet.id}` },
+    { name: "case-pipeline", url: `/batches/${SEED.cases.featherstonStreet.id}/pipeline` },
+    { name: "case-ingest", url: `/batches/${SEED.cases.featherstonStreet.id}/ingest` },
+    { name: "case-review-doc", url: `/batches/${SEED.cases.featherstonStreet.id}/review/${SEED.documents.mainCaseFile.id}` },
+    { name: "case-review-compare", url: `/batches/${SEED.cases.featherstonStreet.id}/review/${SEED.documents.mainCaseFile.id}/compare` },
+    { name: "case-bulk-review", url: `/batches/${SEED.cases.featherstonStreet.id}/bulk-review` },
+    { name: "case-qa", url: `/batches/${SEED.cases.featherstonStreet.id}/qa` },
+    { name: "case-schedule", url: `/batches/${SEED.cases.featherstonStreet.id}/schedule` },
+    { name: "case-audit", url: `/batches/${SEED.cases.featherstonStreet.id}/audit` },
+    { name: "case-export", url: `/batches/${SEED.cases.featherstonStreet.id}/export` },
     { name: "profile", url: "/profile" },
     { name: "queue", url: "/queue" },
     { name: "reports", url: "/reports" },
@@ -86,7 +86,7 @@ test.describe("Screenshot Audit", () => {
       storageState: "e2e/.auth/reviewer.json",
     });
     const reviewerPage = await reviewerCtx.newPage();
-    await reviewerPage.goto(`/requests/${SEED.cases.waterQuality.id}`);
+    await reviewerPage.goto(`/batches/${SEED.cases.waterQuality.id}`);
     await reviewerPage.waitForLoadState("networkidle");
     await reviewerPage.screenshot({
       path: "e2e/screenshots/error-boundary.png",

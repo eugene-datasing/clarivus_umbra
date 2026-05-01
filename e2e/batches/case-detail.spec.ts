@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { SEED } from "../fixtures/test-data";
 
 test.describe("Case Detail", () => {
-  const caseUrl = `/requests/${SEED.cases.featherstonStreet.id}`;
+  const caseUrl = `/batches/${SEED.cases.featherstonStreet.id}`;
 
   test("displays the case reference", async ({ page }) => {
     await page.goto(caseUrl);
@@ -37,7 +37,7 @@ test.describe("Case Detail", () => {
     await expect(docLink).toBeVisible();
     await docLink.click();
     await page.waitForURL(
-      new RegExp(`/requests/${SEED.cases.featherstonStreet.id}/review/`),
+      new RegExp(`/batches/${SEED.cases.featherstonStreet.id}/review/`),
       { timeout: 10_000 },
     );
   });

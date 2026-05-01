@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { SEED } from "../fixtures/test-data";
 
 test.describe("Withholding Schedule", () => {
-  const scheduleUrl = `/requests/${SEED.cases.featherstonStreet.id}/schedule`;
+  const scheduleUrl = `/batches/${SEED.cases.featherstonStreet.id}/schedule`;
 
   test("renders the withholding schedule page", async ({ page }) => {
     await page.goto(scheduleUrl);

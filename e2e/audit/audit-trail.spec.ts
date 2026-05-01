@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { SEED } from "../fixtures/test-data";
 
 test.describe("Audit Trail", () => {
-  const auditUrl = `/requests/${SEED.cases.featherstonStreet.id}/audit`;
+  const auditUrl = `/batches/${SEED.cases.featherstonStreet.id}/audit`;
 
   test("renders the audit trail page with heading", async ({ page }) => {
     await page.goto(auditUrl);

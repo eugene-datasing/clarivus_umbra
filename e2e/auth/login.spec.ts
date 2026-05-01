@@ -45,7 +45,7 @@ test.describe("Login", () => {
   });
 
   test("redirects unauthenticated users accessing /requests to /login", async ({ page }) => {
-    await page.goto("/requests/new");
+    await page.goto("/batches/new");
     await expect(page).toHaveURL(/\/login/);
   });
 });

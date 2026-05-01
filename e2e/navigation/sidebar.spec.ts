@@ -16,7 +16,7 @@ test.describe("Sidebar Navigation", () => {
   });
 
   test("navigation highlights current page", async ({ page }) => {
-    await page.goto("/requests");
+    await page.goto("/batches");
     // The "Cases" nav item should have active styling
     const casesItem = page.locator(sidebarNav).getByText("Cases");
     await expect(casesItem).toBeVisible();
@@ -32,7 +32,7 @@ test.describe("Sidebar Navigation", () => {
   });
 
   test("clicking Dashboard navigates to home", async ({ page }) => {
-    await page.goto("/requests");
+    await page.goto("/batches");
     const dashLink = page.locator(sidebarNav).getByText("Dashboard");
     await dashLink.click();
     await expect(page).toHaveURL("/");

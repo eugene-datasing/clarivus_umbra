@@ -18,7 +18,7 @@ test.describe("Upload authorization", () => {
     const response = await request.post("/api/documents/upload", {
       headers: { "x-requested-with": "XMLHttpRequest" },
       multipart: {
-        caseId: SEED.cases.waterQuality.id,
+        batchId: SEED.cases.waterQuality.id,
         files: {
           name: "test-document.pdf",
           mimeType: "application/pdf",

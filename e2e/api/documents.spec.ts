@@ -24,7 +24,7 @@ test.describe("Document API", () => {
   test("POST /api/documents/upload rejects request without files", async ({ request }) => {
     const res = await request.post("/api/documents/upload", {
       multipart: {
-        caseId: SEED.cases.featherstonStreet.id,
+        batchId: SEED.cases.featherstonStreet.id,
       },
     });
     // May return 403 (CSRF), 400 (no files), or 401 (auth)

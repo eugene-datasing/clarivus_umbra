@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Create Case Form Validation", () => {
   test("shows auto-generated reference number", async ({ page }) => {
-    await page.goto("/requests/new");
+    await page.goto("/batches/new");
     // Reference field is a read-only input pre-populated with LGOIMA-YYYY-NNN
     const refInput = page.locator("input[readonly]").first();
     await expect(refInput).toBeVisible();
@@ -11,7 +11,7 @@ test.describe("Create Case Form Validation", () => {
   });
 
   test("shows requester type dropdown with options", async ({ page }) => {
-    await page.goto("/requests/new");
+    await page.goto("/batches/new");
     // Requester Type is a <select> with options like Individual, Media, etc.
     await expect(page.locator("body")).toContainText(/requester type/i);
     const typeSelect = page.locator("select").first();
@@ -19,7 +19,7 @@ test.describe("Create Case Form Validation", () => {
   });
 
   test("shows department checkboxes", async ({ page }) => {
-    await page.goto("/requests/new");
+    await page.goto("/batches/new");
     // Department selection with checkboxes
     await expect(page.locator("body")).toContainText(/department/i);
     const checkbox = page.locator("input[type='checkbox']").first();
@@ -27,7 +27,7 @@ test.describe("Create Case Form Validation", () => {
   });
 
   test("validates required fields on submit", async ({ page }) => {
-    await page.goto("/requests/new");
+    await page.goto("/batches/new");
     // Clear required fields and try to submit
     const requesterName = page.locator("input[placeholder='Full name of the requester']");
     await requesterName.clear();
@@ -43,19 +43,19 @@ test.describe("Create Case Form Validation", () => {
   });
 
   test("shows statutory deadline calculated from date received", async ({ page }) => {
-    await page.goto("/requests/new");
+    await page.goto("/batches/new");
     // Statutory deadline is auto-calculated (+20 working days)
     await expect(page.locator("body")).toContainText(/statutory deadline|deadline/i);
   });
 
   test("shows priority selector", async ({ page }) => {
-    await page.goto("/requests/new");
+    await page.goto("/batches/new");
     await expect(page.locator("body")).toContainText(/priority/i);
     await expect(page.locator("body")).toContainText(/standard|urgent/i);
   });
 
   test("shows description textarea", async ({ page }) => {
-    await page.goto("/requests/new");
+    await page.goto("/batches/new");
     // First textarea on the page (description) — strict-mode-safe.
     const description = page.locator("textarea").first();
     await expect(description).toBeVisible();
@@ -64,7 +64,7 @@ test.describe("Create Case Form Validation", () => {
   });
 
   test("successful submission shows toast and redirects", async ({ page }) => {
-    await page.goto("/requests/new");
+    await page.goto("/batches/new");
 
     // Fill the form using placeholders since labels lack htmlFor
     const requesterName = page.locator("input[placeholder='Full name of the requester']");

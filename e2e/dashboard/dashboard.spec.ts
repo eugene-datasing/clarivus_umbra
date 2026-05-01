@@ -22,7 +22,7 @@ test.describe("Dashboard", () => {
     await expect(caseLink).toBeVisible();
     await caseLink.click();
     await expect(page).toHaveURL(
-      new RegExp(`/requests/${SEED.cases.featherstonStreet.id}`),
+      new RegExp(`/batches/${SEED.cases.featherstonStreet.id}`),
     );
   });
 

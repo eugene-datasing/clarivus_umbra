@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { SEED } from "../fixtures/test-data";
 
 test.describe("Pre-Release QA", () => {
-  const qaUrl = `/requests/${SEED.cases.featherstonStreet.id}/qa`;
+  const qaUrl = `/batches/${SEED.cases.featherstonStreet.id}/qa`;
 
   test("renders the QA page with heading", async ({ page }) => {
     await page.goto(qaUrl);

@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { SEED } from "../fixtures/test-data";
 
 test.describe("Export Package", () => {
-  const exportUrl = `/requests/${SEED.cases.featherstonStreet.id}/export`;
+  const exportUrl = `/batches/${SEED.cases.featherstonStreet.id}/export`;
 
   test("renders the export page with heading", async ({ page }) => {
     await page.goto(exportUrl);

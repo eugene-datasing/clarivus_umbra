@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Create Case — End-to-End", () => {
   test("fills the form, submits, and arrives at the new case", async ({ page }) => {
-    await page.goto("/requests/new");
+    await page.goto("/batches/new");
 
     // Capture the auto-generated reference for later assertion
     const refInput = page.locator('input[value*="LGOIMA"]');
@@ -41,7 +41,7 @@ test.describe("Create Case — End-to-End", () => {
   });
 
   test("shows validation error when no department is selected", async ({ page }) => {
-    await page.goto("/requests/new");
+    await page.goto("/batches/new");
 
     await page.getByPlaceholder("Full name of the requester").fill("Missing Dept Requester");
     await page.getByPlaceholder(/full text of the LGOIMA request/i).fill(

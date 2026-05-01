@@ -11,7 +11,7 @@ const DOCX_FIXTURE = path.resolve(
 
 test.describe("Canonical PDF — build and fetch", () => {
   // Admin storageState so (a) requireAdmin on /canonical passes, and
-  // (b) /api/files/{caseId}/… auth via authorizeForCase passes for any case.
+  // (b) /api/files/{batchId}/… auth via authorizeForBatch passes for any case.
   test.use({ storageState: "e2e/.auth/admin.json" });
 
   // Phase 2 routes DOCX extraction through DI on the canonical PDF —
@@ -36,7 +36,7 @@ test.describe("Canonical PDF — build and fetch", () => {
     //    with setInputFiles — otherwise on a fresh dev server the setInput
     //    can fire faster than the listener registers and we miss the
     //    response.
-    await page.goto(`/requests/${CASE_ID}/ingest`);
+    await page.goto(`/batches/${CASE_ID}/ingest`);
     const fileInput = page.locator('input[type="file"][aria-label="Upload documents"]');
     await fileInput.waitFor({ state: "attached" });
 

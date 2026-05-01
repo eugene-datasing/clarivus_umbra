@@ -16,7 +16,7 @@ import { SEED } from "../fixtures/test-data";
  * break the spec.
  */
 test.describe("Document Review (PDF view)", () => {
-  const reviewUrl = `/requests/${SEED.documents.mainCaseFile.caseId}/review/${SEED.documents.mainCaseFile.id}`;
+  const reviewUrl = `/batches/${SEED.documents.mainCaseFile.batchId}/review/${SEED.documents.mainCaseFile.id}`;
 
   test("renders the review page with document name", async ({ page }) => {
     await page.goto(reviewUrl);
@@ -90,7 +90,7 @@ test.describe("Document Review (PDF view)", () => {
   });
 
   test("Option C banner IS shown for a text-less canonical (scanned-sim)", async ({ page }) => {
-    const scannedUrl = `/requests/${SEED.documents.scannedSim.caseId}/review/${SEED.documents.scannedSim.id}`;
+    const scannedUrl = `/batches/${SEED.documents.scannedSim.batchId}/review/${SEED.documents.scannedSim.id}`;
     await page.goto(scannedUrl);
     // Match by the banner copy rather than the data attribute — under
     // production webpack, Playwright's locator on `[data-...="..."]` is
@@ -104,7 +104,7 @@ test.describe("Document Review (PDF view)", () => {
   });
 
   test("HTML branch renders for a doc with null canonicalPdfPath", async ({ page }) => {
-    const nullCanonUrl = `/requests/${SEED.documents.employmentAgreement.caseId}/review/${SEED.documents.employmentAgreement.id}`;
+    const nullCanonUrl = `/batches/${SEED.documents.employmentAgreement.batchId}/review/${SEED.documents.employmentAgreement.id}`;
     await page.goto(nullCanonUrl);
     await page.waitForTimeout(2000);
     // Slice A routing falls back to HTML when canonicalPdfPath is null —

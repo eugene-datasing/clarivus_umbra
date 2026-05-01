@@ -62,7 +62,7 @@ export const SEED = {
      */
     mainCaseFile: {
       id: "cmo5enehy00002z6cicgod7np",
-      caseId: "req-001",
+      batchId: "req-001",
       name: "04_main_case_file_long.docx",
     },
     /**
@@ -71,7 +71,7 @@ export const SEED = {
      */
     scannedSim: {
       id: "cmoc936xg00005p061gn1w35e",
-      caseId: "req-002",
+      batchId: "req-002",
       name: "Scanned-Simulation-For-Option-C.pdf",
     },
     /**
@@ -80,7 +80,7 @@ export const SEED = {
      */
     formalReport: {
       id: "cmo3zc44b001o6c6cnk5bud97",
-      caseId: "req-005",
+      batchId: "req-005",
       name: "07_formal_report.pdf",
     },
     /**
@@ -90,7 +90,7 @@ export const SEED = {
      */
     employmentAgreement: {
       id: "cmo3xr66j00096c6cg7lns5g1",
-      caseId: "req-005",
+      batchId: "req-005",
       name: "Employment Agreement - Zhang Liyong (1)[62].pdf",
     },
   },
