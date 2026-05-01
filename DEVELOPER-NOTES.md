@@ -1,3 +1,7 @@
+> **Umbra (in-flight rework)** — fork of Veil, simplifying to a PII redaction tool for NZ councils and central-government agencies. Full rework plan: [`docs/umbra-implementation-plan.md`](docs/umbra-implementation-plan.md). Until Phase 9 (branding + docs cleanup) lands, this document and most of the codebase retain Veil-era content; the divergence is intentional and tracked.
+
+---
+
 # Veil POC — Developer Notes
 ## Architecture Decisions, What's Working, and Remaining Gaps
 
