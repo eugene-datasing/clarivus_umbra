@@ -13,7 +13,7 @@ function computeIntegrityHash(
   type: string,
   description: string,
   target: string,
-  caseId: string | null | undefined,
+  batchId: string | null | undefined,
 ): string {
   const payload = [
     previousHash ?? "",
@@ -22,7 +22,7 @@ function computeIntegrityHash(
     type,
     description,
     target,
-    caseId ?? "",
+    batchId ?? "",
   ].join("|");
 
   return createHash("sha256").update(payload).digest("hex");
@@ -36,7 +36,7 @@ describe("computeIntegrityHash", () => {
     type: "document_uploaded",
     description: "Uploaded Report.pdf",
     target: "Report.pdf",
-    caseId: "case-1",
+    batchId: "case-1",
   };
 
   it("produces a 64-character hex string", () => {
@@ -47,7 +47,7 @@ describe("computeIntegrityHash", () => {
       baseArgs.type,
       baseArgs.description,
       baseArgs.target,
-      baseArgs.caseId,
+      baseArgs.batchId,
     );
     expect(hash).toMatch(/^[a-f0-9]{64}$/);
   });
@@ -60,7 +60,7 @@ describe("computeIntegrityHash", () => {
       baseArgs.type,
       baseArgs.description,
       baseArgs.target,
-      baseArgs.caseId,
+      baseArgs.batchId,
     );
     const h2 = computeIntegrityHash(
       baseArgs.previousHash,
@@ -69,7 +69,7 @@ describe("computeIntegrityHash", () => {
       baseArgs.type,
       baseArgs.description,
       baseArgs.target,
-      baseArgs.caseId,
+      baseArgs.batchId,
     );
     expect(h1).toBe(h2);
   });
@@ -82,7 +82,7 @@ describe("computeIntegrityHash", () => {
       baseArgs.type,
       baseArgs.description,
       baseArgs.target,
-      baseArgs.caseId,
+      baseArgs.batchId,
     );
     const h2 = computeIntegrityHash(
       baseArgs.previousHash,
@@ -91,7 +91,7 @@ describe("computeIntegrityHash", () => {
       baseArgs.type,
       baseArgs.description,
       baseArgs.target,
-      baseArgs.caseId,
+      baseArgs.batchId,
     );
     expect(h1).not.toBe(h2);
   });
@@ -104,7 +104,7 @@ describe("computeIntegrityHash", () => {
       baseArgs.type,
       baseArgs.description,
       baseArgs.target,
-      baseArgs.caseId,
+      baseArgs.batchId,
     );
     const h2 = computeIntegrityHash(
       baseArgs.previousHash,
@@ -113,7 +113,7 @@ describe("computeIntegrityHash", () => {
       baseArgs.type,
       baseArgs.description,
       baseArgs.target,
-      baseArgs.caseId,
+      baseArgs.batchId,
     );
     expect(h1).not.toBe(h2);
   });
@@ -126,7 +126,7 @@ describe("computeIntegrityHash", () => {
       "document_uploaded",
       baseArgs.description,
       baseArgs.target,
-      baseArgs.caseId,
+      baseArgs.batchId,
     );
     const h2 = computeIntegrityHash(
       baseArgs.previousHash,
@@ -135,7 +135,7 @@ describe("computeIntegrityHash", () => {
       "document_deleted",
       baseArgs.description,
       baseArgs.target,
-      baseArgs.caseId,
+      baseArgs.batchId,
     );
     expect(h1).not.toBe(h2);
   });
@@ -148,7 +148,7 @@ describe("computeIntegrityHash", () => {
       baseArgs.type,
       "Uploaded Report.pdf",
       baseArgs.target,
-      baseArgs.caseId,
+      baseArgs.batchId,
     );
     const h2 = computeIntegrityHash(
       baseArgs.previousHash,
@@ -157,7 +157,7 @@ describe("computeIntegrityHash", () => {
       baseArgs.type,
       "Uploaded Invoice.pdf",
       baseArgs.target,
-      baseArgs.caseId,
+      baseArgs.batchId,
     );
     expect(h1).not.toBe(h2);
   });
@@ -170,7 +170,7 @@ describe("computeIntegrityHash", () => {
       baseArgs.type,
       baseArgs.description,
       "Report.pdf",
-      baseArgs.caseId,
+      baseArgs.batchId,
     );
     const h2 = computeIntegrityHash(
       baseArgs.previousHash,
@@ -179,12 +179,12 @@ describe("computeIntegrityHash", () => {
       baseArgs.type,
       baseArgs.description,
       "Invoice.pdf",
-      baseArgs.caseId,
+      baseArgs.batchId,
     );
     expect(h1).not.toBe(h2);
   });
 
-  it("changes when caseId is modified", () => {
+  it("changes when batchId is modified", () => {
     const h1 = computeIntegrityHash(
       baseArgs.previousHash,
       baseArgs.timestamp,
@@ -214,7 +214,7 @@ describe("computeIntegrityHash", () => {
       baseArgs.type,
       baseArgs.description,
       baseArgs.target,
-      baseArgs.caseId,
+      baseArgs.batchId,
     );
     const h2 = computeIntegrityHash(
       "abc123def456",
@@ -223,7 +223,7 @@ describe("computeIntegrityHash", () => {
       baseArgs.type,
       baseArgs.description,
       baseArgs.target,
-      baseArgs.caseId,
+      baseArgs.batchId,
     );
     expect(h1).not.toBe(h2);
   });
@@ -236,12 +236,12 @@ describe("computeIntegrityHash", () => {
       baseArgs.type,
       baseArgs.description,
       baseArgs.target,
-      baseArgs.caseId,
+      baseArgs.batchId,
     );
     expect(h1).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  it("handles undefined caseId gracefully", () => {
+  it("handles undefined batchId gracefully", () => {
     const h1 = computeIntegrityHash(
       null,
       baseArgs.timestamp,
@@ -267,7 +267,7 @@ describe("audit chain integrity verification", () => {
       type: string;
       description: string;
       target: string;
-      caseId: string;
+      batchId: string;
     }>,
   ) {
     const chain: Array<{
@@ -278,7 +278,7 @@ describe("audit chain integrity verification", () => {
       type: string;
       description: string;
       target: string;
-      caseId: string;
+      batchId: string;
     }> = [];
 
     for (const entry of entries) {
@@ -290,7 +290,7 @@ describe("audit chain integrity verification", () => {
         entry.type,
         entry.description,
         entry.target,
-        entry.caseId,
+        entry.batchId,
       );
       chain.push({ ...entry, previousHash, integrityHash });
     }
@@ -306,7 +306,7 @@ describe("audit chain integrity verification", () => {
       type: string;
       description: string;
       target: string;
-      caseId: string;
+      batchId: string;
     }>,
   ): { valid: boolean; brokenAt?: number } {
     for (let i = 0; i < chain.length; i++) {
@@ -324,7 +324,7 @@ describe("audit chain integrity verification", () => {
         entry.type,
         entry.description,
         entry.target,
-        entry.caseId,
+        entry.batchId,
       );
 
       if (recomputed !== entry.integrityHash) {
@@ -336,17 +336,17 @@ describe("audit chain integrity verification", () => {
 
   it("validates a correct chain", () => {
     const chain = buildChain([
-      { timestamp: "2025-01-01T00:00:00Z", userId: "u1", type: "upload", description: "Upload", target: "f.pdf", caseId: "c1" },
-      { timestamp: "2025-01-01T00:01:00Z", userId: "u1", type: "review", description: "Review", target: "f.pdf", caseId: "c1" },
-      { timestamp: "2025-01-01T00:02:00Z", userId: "u2", type: "approve", description: "Approve", target: "f.pdf", caseId: "c1" },
+      { timestamp: "2025-01-01T00:00:00Z", userId: "u1", type: "upload", description: "Upload", target: "f.pdf", batchId: "c1" },
+      { timestamp: "2025-01-01T00:01:00Z", userId: "u1", type: "review", description: "Review", target: "f.pdf", batchId: "c1" },
+      { timestamp: "2025-01-01T00:02:00Z", userId: "u2", type: "approve", description: "Approve", target: "f.pdf", batchId: "c1" },
     ]);
     expect(verifyChain(chain)).toEqual({ valid: true });
   });
 
   it("detects a tampered description", () => {
     const chain = buildChain([
-      { timestamp: "2025-01-01T00:00:00Z", userId: "u1", type: "upload", description: "Upload", target: "f.pdf", caseId: "c1" },
-      { timestamp: "2025-01-01T00:01:00Z", userId: "u1", type: "review", description: "Review", target: "f.pdf", caseId: "c1" },
+      { timestamp: "2025-01-01T00:00:00Z", userId: "u1", type: "upload", description: "Upload", target: "f.pdf", batchId: "c1" },
+      { timestamp: "2025-01-01T00:01:00Z", userId: "u1", type: "review", description: "Review", target: "f.pdf", batchId: "c1" },
     ]);
 
     // Tamper with the first entry's description
@@ -359,8 +359,8 @@ describe("audit chain integrity verification", () => {
 
   it("detects a broken previousHash link", () => {
     const chain = buildChain([
-      { timestamp: "2025-01-01T00:00:00Z", userId: "u1", type: "upload", description: "Upload", target: "f.pdf", caseId: "c1" },
-      { timestamp: "2025-01-01T00:01:00Z", userId: "u1", type: "review", description: "Review", target: "f.pdf", caseId: "c1" },
+      { timestamp: "2025-01-01T00:00:00Z", userId: "u1", type: "upload", description: "Upload", target: "f.pdf", batchId: "c1" },
+      { timestamp: "2025-01-01T00:01:00Z", userId: "u1", type: "review", description: "Review", target: "f.pdf", batchId: "c1" },
     ]);
 
     // Break the chain link
@@ -377,7 +377,7 @@ describe("audit chain integrity verification", () => {
 
   it("validates a single-entry chain", () => {
     const chain = buildChain([
-      { timestamp: "2025-01-01T00:00:00Z", userId: "u1", type: "upload", description: "Upload", target: "f.pdf", caseId: "c1" },
+      { timestamp: "2025-01-01T00:00:00Z", userId: "u1", type: "upload", description: "Upload", target: "f.pdf", batchId: "c1" },
     ]);
     expect(verifyChain(chain)).toEqual({ valid: true });
   });
@@ -395,10 +395,10 @@ describe("per-case chain isolation", () => {
       type: string;
       description: string;
       target: string;
-      caseId: string;
+      batchId: string;
     }>,
   ) {
-    // Groups entries by caseId and chains within each case independently
+    // Groups entries by batchId and chains within each case independently
     const caseChains = new Map<string, Array<{
       previousHash: string | null;
       integrityHash: string;
@@ -407,11 +407,11 @@ describe("per-case chain isolation", () => {
       type: string;
       description: string;
       target: string;
-      caseId: string;
+      batchId: string;
     }>>();
 
     for (const entry of entries) {
-      const chain = caseChains.get(entry.caseId) ?? [];
+      const chain = caseChains.get(entry.batchId) ?? [];
       const previousHash = chain.length > 0 ? chain[chain.length - 1].integrityHash : null;
       const integrityHash = computeIntegrityHash(
         previousHash,
@@ -420,10 +420,10 @@ describe("per-case chain isolation", () => {
         entry.type,
         entry.description,
         entry.target,
-        entry.caseId,
+        entry.batchId,
       );
       chain.push({ ...entry, previousHash, integrityHash });
-      caseChains.set(entry.caseId, chain);
+      caseChains.set(entry.batchId, chain);
     }
 
     return caseChains;
@@ -438,7 +438,7 @@ describe("per-case chain isolation", () => {
       type: string;
       description: string;
       target: string;
-      caseId: string;
+      batchId: string;
     }>,
   ): { valid: boolean; brokenAt?: number } {
     // Mirrors the updated verifyAuditIntegrity with legacy tolerance on index 0
@@ -459,7 +459,7 @@ describe("per-case chain isolation", () => {
         entry.type,
         entry.description,
         entry.target,
-        entry.caseId,
+        entry.batchId,
       );
 
       if (recomputed !== entry.integrityHash) {
@@ -471,8 +471,8 @@ describe("per-case chain isolation", () => {
 
   it("two entries for the same case chain correctly", () => {
     const chains = buildPerCaseChain([
-      { timestamp: "2025-01-01T00:00:00Z", userId: "u1", type: "upload", description: "Upload", target: "f.pdf", caseId: "case-A" },
-      { timestamp: "2025-01-01T00:01:00Z", userId: "u1", type: "review", description: "Review", target: "f.pdf", caseId: "case-A" },
+      { timestamp: "2025-01-01T00:00:00Z", userId: "u1", type: "upload", description: "Upload", target: "f.pdf", batchId: "case-A" },
+      { timestamp: "2025-01-01T00:01:00Z", userId: "u1", type: "review", description: "Review", target: "f.pdf", batchId: "case-A" },
     ]);
     const caseA = chains.get("case-A")!;
     expect(caseA[1].previousHash).toBe(caseA[0].integrityHash);
@@ -481,9 +481,9 @@ describe("per-case chain isolation", () => {
 
   it("entry for case A does not chain to entry for case B", () => {
     const chains = buildPerCaseChain([
-      { timestamp: "2025-01-01T00:00:00Z", userId: "u1", type: "upload", description: "Upload A", target: "a.pdf", caseId: "case-A" },
-      { timestamp: "2025-01-01T00:00:01Z", userId: "u1", type: "upload", description: "Upload B", target: "b.pdf", caseId: "case-B" },
-      { timestamp: "2025-01-01T00:01:00Z", userId: "u1", type: "review", description: "Review A", target: "a.pdf", caseId: "case-A" },
+      { timestamp: "2025-01-01T00:00:00Z", userId: "u1", type: "upload", description: "Upload A", target: "a.pdf", batchId: "case-A" },
+      { timestamp: "2025-01-01T00:00:01Z", userId: "u1", type: "upload", description: "Upload B", target: "b.pdf", batchId: "case-B" },
+      { timestamp: "2025-01-01T00:01:00Z", userId: "u1", type: "review", description: "Review A", target: "a.pdf", batchId: "case-A" },
     ]);
 
     const caseA = chains.get("case-A")!;
@@ -498,8 +498,8 @@ describe("per-case chain isolation", () => {
     expect(verifyPerCaseChain(caseB)).toEqual({ valid: true });
   });
 
-  it("system entry (no caseId) has previousHash of null", () => {
-    // Simulates a standalone system entry — no caseId, previousHash is null
+  it("system entry (no batchId) has previousHash of null", () => {
+    // Simulates a standalone system entry — no batchId, previousHash is null
     const integrityHash = computeIntegrityHash(
       null,
       "2025-01-01T00:00:00Z",
@@ -517,7 +517,7 @@ describe("per-case chain isolation", () => {
       type: "settings-change",
       description: "Updated org name",
       target: "settings",
-      caseId: "",
+      batchId: "",
     };
     // Single standalone entry should verify
     expect(verifyPerCaseChain([systemEntry])).toEqual({ valid: true });
@@ -526,17 +526,17 @@ describe("per-case chain isolation", () => {
 
   it("verifyPerCaseChain passes for a valid per-case chain", () => {
     const chains = buildPerCaseChain([
-      { timestamp: "2025-01-01T00:00:00Z", userId: "u1", type: "upload", description: "Upload", target: "f.pdf", caseId: "case-X" },
-      { timestamp: "2025-01-01T00:01:00Z", userId: "u2", type: "review", description: "Review", target: "f.pdf", caseId: "case-X" },
-      { timestamp: "2025-01-01T00:02:00Z", userId: "u3", type: "approve", description: "Approve", target: "f.pdf", caseId: "case-X" },
+      { timestamp: "2025-01-01T00:00:00Z", userId: "u1", type: "upload", description: "Upload", target: "f.pdf", batchId: "case-X" },
+      { timestamp: "2025-01-01T00:01:00Z", userId: "u2", type: "review", description: "Review", target: "f.pdf", batchId: "case-X" },
+      { timestamp: "2025-01-01T00:02:00Z", userId: "u3", type: "approve", description: "Approve", target: "f.pdf", batchId: "case-X" },
     ]);
     expect(verifyPerCaseChain(chains.get("case-X")!)).toEqual({ valid: true });
   });
 
   it("verifyPerCaseChain fails when an entry hash is tampered with", () => {
     const chains = buildPerCaseChain([
-      { timestamp: "2025-01-01T00:00:00Z", userId: "u1", type: "upload", description: "Upload", target: "f.pdf", caseId: "case-T" },
-      { timestamp: "2025-01-01T00:01:00Z", userId: "u1", type: "review", description: "Review", target: "f.pdf", caseId: "case-T" },
+      { timestamp: "2025-01-01T00:00:00Z", userId: "u1", type: "upload", description: "Upload", target: "f.pdf", batchId: "case-T" },
+      { timestamp: "2025-01-01T00:01:00Z", userId: "u1", type: "review", description: "Review", target: "f.pdf", batchId: "case-T" },
     ]);
     const chain = chains.get("case-T")!;
     // Tamper with the second entry's description
@@ -576,7 +576,7 @@ describe("per-case chain isolation", () => {
         type: "upload",
         description: "Upload",
         target: "f.pdf",
-        caseId: "case-legacy",
+        batchId: "case-legacy",
       },
       {
         previousHash: firstEntryHash,
@@ -586,7 +586,7 @@ describe("per-case chain isolation", () => {
         type: "review",
         description: "Review",
         target: "f.pdf",
-        caseId: "case-legacy",
+        batchId: "case-legacy",
       },
     ];
 

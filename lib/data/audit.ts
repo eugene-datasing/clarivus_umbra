@@ -2,9 +2,9 @@ import { createHash } from "crypto";
 import { prisma } from "@/lib/db/prisma";
 import { stripPiiPatterns } from "./audit-sanitize";
 
-export async function getAuditLog(caseId?: string) {
+export async function getAuditLog(batchId?: string) {
   const entries = await prisma.auditEntry.findMany({
-    where: caseId ? { caseId } : undefined,
+    where: batchId ? { batchId } : undefined,
     orderBy: { timestamp: "desc" },
   });
 
@@ -26,15 +26,15 @@ export async function getAuditLog(caseId?: string) {
 }
 
 /**
- * CHAIN SCOPE: Per-case.
- * Each case has its own independent hash chain. Entries without a caseId
- * are standalone (previousHash is null). This allows per-case verification
+ * CHAIN SCOPE: Per-batch.
+ * Each batch has its own independent hash chain. Entries without a batchId
+ * are standalone (previousHash is null). This allows per-batch verification
  * and export without needing the full global audit history.
  */
 
 /**
  * Compute a SHA-256 integrity hash for an audit entry.
- * The hash covers: previousHash | timestamp | userId | type | description | target | caseId
+ * The hash covers: previousHash | timestamp | userId | type | description | target | batchId
  */
 function computeIntegrityHash(
   previousHash: string | null,
@@ -43,7 +43,7 @@ function computeIntegrityHash(
   type: string,
   description: string,
   target: string,
-  caseId: string | null | undefined,
+  batchId: string | null | undefined,
 ): string {
   const payload = [
     previousHash ?? "",
@@ -52,7 +52,7 @@ function computeIntegrityHash(
     type,
     description,
     target,
-    caseId ?? "",
+    batchId ?? "",
   ].join("|");
 
   return createHash("sha256").update(payload).digest("hex");
@@ -65,7 +65,7 @@ export async function createAuditEntry(data: {
   type: string;
   description: string;
   target: string;
-  caseId?: string;
+  batchId?: string;
   detail?: string;
   previousValue?: string;
   newValue?: string;
@@ -81,15 +81,15 @@ export async function createAuditEntry(data: {
     newValue: data.newValue ? stripPiiPatterns(data.newValue) : undefined,
   };
 
-  const caseId = data.caseId;
+  const batchId = data.batchId;
 
   // Wrap read-previous + create in a serializable transaction to prevent
   // race conditions where two concurrent writes read the same previousHash.
   return prisma.$transaction(async (tx) => {
-    // Chain within the case scope. Entries without a caseId are standalone.
-    const lastEntry = caseId
+    // Chain within the batch scope. Entries without a batchId are standalone.
+    const lastEntry = batchId
       ? await tx.auditEntry.findFirst({
-          where: { caseId },
+          where: { batchId },
           orderBy: { timestamp: "desc" },
           select: { integrityHash: true },
         })
@@ -105,7 +105,7 @@ export async function createAuditEntry(data: {
       data.type,
       sanitized.description,
       sanitized.target,
-      caseId,
+      batchId,
     );
 
     return tx.auditEntry.create({
@@ -117,7 +117,7 @@ export async function createAuditEntry(data: {
         type: data.type,
         description: sanitized.description,
         target: sanitized.target,
-        caseId,
+        batchId,
         detail: sanitized.detail,
         previousValue: sanitized.previousValue,
         newValue: sanitized.newValue,
@@ -147,40 +147,20 @@ export async function getRecentActivity(limit = 10) {
 
 
 /**
- * Audit event types that are meaningful as notifications for other users.
+ * Audit event types meaningful as notifications for other users (Umbra v1).
  *
- * Excludes: individual detection accept/reject (too granular), bulk threshold
- * operations, settings/rule changes, and internal pipeline events. These
+ * Excludes individual detection accept/reject (too granular), bulk threshold
+ * operations, settings/rule changes, and internal pipeline events. Those
  * belong in the audit trail but aren't actionable notifications.
  */
 const NOTIFICATION_EVENT_TYPES = [
-  // Case lifecycle
-  "case-created",
-  "case_created",
-
-  // Document uploads & processing complete
-  "document-upload",
+  "batch-created",
   "document-uploaded",
-  "document_upload",
   "processing-complete",
-  "processing-completed",
   "processing-error",
-
-  // Review workflow transitions (actionable for the next person in the chain)
   "review-submitted",
-  "senior-review-submitted",
-  "senior-review",
-  "senior-review-complete",
-  "sign-off",
   "signed-off",
-  "final-approval",
-  "request-changes",
-
-  // Export events
   "export-generated",
-  "export-started",
-
-  // Assignment
   "document-assigned",
 ];
 
@@ -215,27 +195,22 @@ function mapAuditType(type: string): "approval" | "review" | "detection" | "inge
 }
 
 /**
- * Verify the integrity of the per-case audit hash chain.
- * Walks all entries for the given case in chronological order, recomputing
+ * Verify the integrity of the per-batch audit hash chain.
+ * Walks all entries for the given batch in chronological order, recomputing
  * each hash and verifying it matches the stored value and that previousHash
  * links are correct.
- *
- * Legacy tolerance: the first entry in a case's chain may have a non-null
- * previousHash left over from the old global chain. This is accepted for the
- * first entry only (index 0) — the hash is still recomputed and verified
- * using whatever previousHash is stored.
  */
-export async function verifyAuditIntegrity(caseId?: string): Promise<{
+export async function verifyAuditIntegrity(batchId?: string): Promise<{
   valid: boolean;
   totalEntries: number;
   brokenAt?: number; // Index of first broken link
 }> {
   // Use raw SQL to read timestamps as text in the exact format used during
-  // hash computation.  The column is `timestamp(3) without time zone` and
+  // hash computation. The column is `timestamp(3) without time zone` and
   // createAuditEntry writes `new Date(isoString)` — the stored value is the
-  // UTC time WITHOUT timezone info.  Prisma/pg would normally re-interpret
+  // UTC time WITHOUT timezone info. Prisma/pg would normally re-interpret
   // it in the server's local timezone, producing a different ISO string on
-  // read.  By using `to_char` we bypass that and get the stored value back
+  // read. Using `to_char` bypasses that and returns the stored value back
   // in the original format.
   interface RawAuditRow {
     id: string;
@@ -244,24 +219,24 @@ export async function verifyAuditIntegrity(caseId?: string): Promise<{
     type: string;
     description: string;
     target: string;
-    caseId: string | null;
+    batchId: string | null;
     integrityHash: string | null;
     previousHash: string | null;
   }
 
-  const entries: RawAuditRow[] = caseId
+  const entries: RawAuditRow[] = batchId
     ? await prisma.$queryRaw`
         SELECT id,
                to_char(timestamp, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "ts_iso",
-               "userId", type, description, target, "caseId",
+               "userId", type, description, target, "batchId",
                "integrityHash", "previousHash"
         FROM audit_entries
-        WHERE "caseId" = ${caseId}
+        WHERE "batchId" = ${batchId}
         ORDER BY timestamp ASC, id ASC`
     : await prisma.$queryRaw`
         SELECT id,
                to_char(timestamp, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "ts_iso",
-               "userId", type, description, target, "caseId",
+               "userId", type, description, target, "batchId",
                "integrityHash", "previousHash"
         FROM audit_entries
         ORDER BY timestamp ASC, id ASC`;
@@ -291,7 +266,7 @@ export async function verifyAuditIntegrity(caseId?: string): Promise<{
       entry.type,
       entry.description,
       entry.target,
-      entry.caseId,
+      entry.batchId,
     );
 
     if (recomputedHash !== entry.integrityHash) {
