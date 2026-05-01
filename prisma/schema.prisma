@@ -8,8 +8,16 @@ datasource db {
 }
 
 // ============================================================
-// MODELS
+// MODELS — Umbra 0001_init (forked from Veil)
 // ============================================================
+//
+// Phase 2 of the Veil → Umbra rework. Disclosure-workflow models
+// (Department, CaseMilestone, CaseAssignment, DetectionSnapshot,
+// FeedbackExample, ProcessingJob) are dropped. Case is renamed to
+// Batch and caseId → batchId across the FK graph. Soft-delete +
+// purge-state columns are added to Batch in preparation for the
+// Phase 6 retention worker. AuditEntry, ExportJob, and FileUpload
+// now cascade on Batch delete.
 
 model User {
   id           String   @id @default(cuid())
@@ -17,39 +25,21 @@ model User {
   email        String?  @unique
   passwordHash String?
   role         String   @default("reviewer")
-  departmentId String?
   azureAdOid   String?  @unique
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  department        Department?      @relation(fields: [departmentId], references: [id])
-  assignedDocuments Document[]       @relation("DocumentAssignee")
+  assignedDocuments Document[]   @relation("DocumentAssignee")
   auditEntries      AuditEntry[]
-  caseAssignments   CaseAssignment[] @relation("caseAssignments")
 
   @@map("users")
 }
 
-model Department {
-  id           String   @id @default(cuid())
-  name         String   @unique
-  contactEmail String?
-  headName     String?
-  isActive     Boolean  @default(true)
-  sortOrder    Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  users           User[]
-  caseAssignments CaseAssignment[]
-
-  @@map("departments")
-}
-
-model Case {
+model Batch {
   id             String   @id @default(cuid())
   reference      String   @unique
+  name           String   // user-supplied batch name (e.g. "May submission responses"); per US-002. Length enforced at Zod layer in later phases.
   requesterName  String
   requesterType  String
   dateReceived   DateTime
@@ -64,38 +54,46 @@ model Case {
   reviewedCount  Int @default(0)
   redactionCount Int @default(0)
 
+  // Soft-delete + retention worker state (Phase 6 wires these up).
+  // purgeStatus values constrained in app code: null | "scheduled" | "purging" | "archived"
+  deletedAt        DateTime?
+  purgeScheduledAt DateTime?
+  purgedAt         DateTime?
+  purgeStatus      String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  documents        Document[]
-  auditEntries     AuditEntry[]
-  feedbackExamples FeedbackExample[]
-  milestones       CaseMilestone[]
-  caseAssignments  CaseAssignment[]
-  exportJobs       ExportJob[]
+  documents    Document[]
+  auditEntries AuditEntry[]
+  milestones   BatchMilestone[]
+  exportJobs   ExportJob[]
+  fileUploads  FileUpload[]
 
-  @@map("cases")
+  @@index([deletedAt])
+  @@index([purgeScheduledAt])
+  @@map("batches")
 }
 
 model Document {
-  id             String  @id @default(cuid())
-  caseId         String
-  name           String
-  fileType       String
-  mimeType       String  @default("application/octet-stream")
-  sizeBytes      Int     @default(0)
-  pageCount      Int     @default(0)
-  status         String  @default("pending")
-  originalPath   String?
+  id              String  @id @default(cuid())
+  batchId         String
+  name            String
+  fileType        String
+  mimeType        String  @default("application/octet-stream")
+  sizeBytes       Int     @default(0)
+  pageCount       Int     @default(0)
+  status          String  @default("pending")
+  originalPath    String?
   processingError String?
 
-  // Canonical PDF — one-PDF-per-document viewer rework (Phase 1, April 2026)
-  canonicalPdfPath            String?  @map("canonical_pdf_path")
-  canonicalPdfSha256          String?  @map("canonical_pdf_sha256")
-  canonicalPdfPageCount       Int?     @map("canonical_pdf_page_count")
-  canonicalPdfBuildMs         Int?     @map("canonical_pdf_build_ms")
-  canonicalPdfSource          String?  @map("canonical_pdf_source") // "original" | "libreoffice" | "email-template"
-  canonicalPdfTextSelectable  Boolean? @map("canonical_pdf_text_selectable") // pdf.js text-layer probe; null = not yet probed, false = scanned/image-only
+  // Canonical PDF — one-PDF-per-document viewer rework
+  canonicalPdfPath           String?  @map("canonical_pdf_path")
+  canonicalPdfSha256         String?  @map("canonical_pdf_sha256")
+  canonicalPdfPageCount      Int?     @map("canonical_pdf_page_count")
+  canonicalPdfBuildMs        Int?     @map("canonical_pdf_build_ms")
+  canonicalPdfSource         String?  @map("canonical_pdf_source") // "original" | "libreoffice" | "email-template"
+  canonicalPdfTextSelectable Boolean? @map("canonical_pdf_text_selectable") // pdf.js text-layer probe; null = not yet probed
 
   // AI results (denormalized for list views)
   detectionCount Int   @default(0)
@@ -103,7 +101,7 @@ model Document {
 
   // Assignment
   assigneeId String?
-  assignee   User?  @relation("DocumentAssignee", fields: [assigneeId], references: [id])
+  assignee   User?   @relation("DocumentAssignee", fields: [assigneeId], references: [id])
 
   // Duplicate handling
   duplicateGroup String?
@@ -115,24 +113,22 @@ model Document {
   // AI document-level classification (DocumentClassification as JSON)
   classification Json?
 
-  // Processing timing (WP13)
-  processingStartedAt  DateTime?
+  // Processing timing
+  processingStartedAt   DateTime?
   processingCompletedAt DateTime?
-  extractionMs         Int?
-  patternDetectionMs   Int?
-  aiDetectionMs        Int?
-  totalProcessingMs    Int?
+  extractionMs          Int?
+  patternDetectionMs    Int?
+  aiDetectionMs         Int?
+  totalProcessingMs     Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  case             Case              @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  pages            DocumentPage[]
-  detections       Detection[]
-  snapshots        DetectionSnapshot[]
-  feedbackExamples FeedbackExample[]
+  batch      Batch          @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  pages      DocumentPage[]
+  detections Detection[]
 
-  @@index([caseId])
+  @@index([batchId])
   @@index([status])
   @@index([contentHash])
   @@index([canonicalPdfSha256])
@@ -158,23 +154,21 @@ model DocumentPage {
 }
 
 model Detection {
-  id              String  @id @default(cuid())
-  documentId      String
-  type            String
-  text            String
-  confidence      Float
-  page            Int
-  posX            Float   @default(0)
-  posY            Float   @default(0)
-  posW            Float   @default(0)
-  posH            Float   @default(0)
-  suggestedGround String?
-  appliedGround   String?
-  status          String  @default("pending")
-  reasoning       String  @default("")
-  piConsideration String  @default("")
-  aiExplanation   String  @default("")
-  source          String  @default("ai")
+  id            String  @id @default(cuid())
+  documentId    String
+  type          String
+  text          String
+  confidence    Float
+  page          Int
+  posX          Float   @default(0)
+  posY          Float   @default(0)
+  posW          Float   @default(0)
+  posH          Float   @default(0)
+  status        String  @default("pending")
+  reasoning     String  @default("")
+  aiExplanation String  @default("")
+  source        String  @default("ai")
+  note          String? // free-form reviewer rationale (replaces suggestedGround/appliedGround/piConsideration)
 
   reviewedBy String?
   reviewedAt DateTime?
@@ -182,9 +176,8 @@ model Detection {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  document        Document          @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  history         DetectionHistory[]
-  feedbackExample FeedbackExample?
+  document Document           @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  history  DetectionHistory[]
 
   @@index([documentId])
   @@index([status])
@@ -200,17 +193,17 @@ model AuditEntry {
   type          String
   description   String
   target        String
-  caseId        String?
+  batchId       String?
   detail        String?
   previousValue String?
   newValue      String?
   integrityHash String?  // SHA-256 hash of this entry + previous hash
   previousHash  String?  // Hash of the prior entry (null for first entry)
 
-  user User? @relation(fields: [userId], references: [id])
-  case Case? @relation(fields: [caseId], references: [id])
+  user  User?  @relation(fields: [userId], references: [id])
+  batch Batch? @relation(fields: [batchId], references: [id], onDelete: Cascade)
 
-  @@index([caseId])
+  @@index([batchId])
   @@index([timestamp])
   @@index([userId])
   @@map("audit_entries")
@@ -218,6 +211,7 @@ model AuditEntry {
 
 model FileUpload {
   id         String   @id @default(cuid())
+  batchId    String
   filename   String
   mimeType   String
   sizeBytes  Int
@@ -225,6 +219,9 @@ model FileUpload {
   sha256Hash String?
   createdAt  DateTime @default(now())
 
+  batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId])
   @@map("file_uploads")
 }
 
@@ -262,7 +259,7 @@ model CustomRule {
   keywords        String   @default("")
   scope           String   @default("All Documents")
   priority        String   @default("Medium")
-  suggestedGround String?
+  suggestedGround String?  // Phase 8 reworks this into a free-form note field.
   description     String   @default("")
   matchCount      Int      @default(0)
 
@@ -272,77 +269,16 @@ model CustomRule {
   @@map("custom_rules")
 }
 
-model CaseMilestone {
+model BatchMilestone {
   id          String    @id @default(cuid())
-  caseId      String
-  stage       String    // collection, processing, initial-review, senior-review, final-approval, release
-  label       String
-  targetDate  DateTime
+  batchId     String
+  stage       String    // "upload" | "review" | "export"
   completedAt DateTime?
-  sortOrder   Int
 
-  case        Case             @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  assignments CaseAssignment[]
+  batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
 
-  @@unique([caseId, stage])
-  @@index([caseId])
-  @@map("case_milestones")
-}
-
-model CaseAssignment {
-  id           String   @id @default(cuid())
-  caseId       String
-  milestoneId  String
-  type         String   // "user" or "department"
-  userId       String?
-  departmentId String?
-  role         String?  // "lead-reviewer", "sme-reviewer", "senior-reviewer", "final-approver"
-  assignedAt   DateTime @default(now())
-  assignedBy   String
-
-  case       Case           @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  milestone  CaseMilestone  @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
-  user       User?          @relation("caseAssignments", fields: [userId], references: [id])
-  department Department?    @relation(fields: [departmentId], references: [id])
-
-  @@index([caseId])
-  @@index([milestoneId])
-  @@map("case_assignments")
-}
-
-model DetectionSnapshot {
-  id             String   @id @default(cuid())
-  documentId     String
-  snapshotType   String   // "draft" | "final"
-  createdBy      String
-  detectionsJson Json     // Array of detection states at snapshot time
-  createdAt      DateTime @default(now())
-
-  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-
-  @@index([documentId])
-  @@map("detection_snapshots")
-}
-
-model FeedbackExample {
-  id          String   @id @default(cuid())
-  caseId      String?
-  documentId  String
-  detectionId String   @unique
-  type        String   // Detection type: "personal-name", "phone", etc.
-  text        String   // The missed text that was manually detected
-  ground      String?  // LGOIMA withholding ground
-  reasoning   String   @default("")
-  createdBy   String
-  createdAt   DateTime @default(now())
-
-  case      Case?     @relation(fields: [caseId], references: [id], onDelete: SetNull)
-  document  Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  detection Detection @relation(fields: [detectionId], references: [id], onDelete: Cascade)
-
-  @@index([type])
-  @@index([createdAt])
-  @@map("feedback_examples")
+  @@unique([batchId, stage])
+  @@map("batch_milestones")
 }
 
 model ActivationCode {
@@ -363,17 +299,16 @@ model ActivationCode {
 }
 
 model UserInvitation {
-  id           String    @id @default(cuid())
-  email        String
-  name         String?
-  role         String    @default("reviewer")
-  departmentId String?
-  invitedBy    String
-  status       String    @default("pending") // "pending" | "accepted" | "expired" | "revoked"
-  token        String    @unique
-  acceptedAt   DateTime?
-  expiresAt    DateTime
-  createdAt    DateTime  @default(now())
+  id         String    @id @default(cuid())
+  email      String
+  name       String?
+  role       String    @default("reviewer")
+  invitedBy  String
+  status     String    @default("pending") // "pending" | "accepted" | "expired" | "revoked"
+  token      String    @unique
+  acceptedAt DateTime?
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
 
   @@index([email])
   @@index([status])
@@ -381,43 +316,26 @@ model UserInvitation {
 }
 
 model ExportJob {
-  id            String    @id @default(cuid())
-  caseId        String
-  case          Case      @relation(fields: [caseId], references: [id])
-  status        String    @default("pending") // pending | generating | verifying | complete | error
-  packageType   String    @default("requester") // requester | internal | ombudsman
-  progress      Int       @default(0) // 0-100
-  currentStep   String?
-  error         String?
-  storageKey    String?   // blob/local storage key for the ZIP
-  sha256        String?
-  filename      String?
-  documentIds   Json?     // string[] of included document IDs
-  docResults    Json?     // per-document success/failure log
-  batchGroupId  String?   // links batched exports together
-  batchNumber   Int?      // 1-based index within a batch group
-  createdAt     DateTime  @default(now())
-  completedAt   DateTime?
+  id           String    @id @default(cuid())
+  batchId      String
+  status       String    @default("pending") // pending | generating | verifying | complete | error
+  packageType  String    @default("requester") // requester | internal | ombudsman — Phase 7 simplifies
+  progress     Int       @default(0) // 0-100
+  currentStep  String?
+  error        String?
+  storageKey   String?   // blob/local storage key for the ZIP
+  sha256       String?
+  filename     String?
+  documentIds  Json?     // string[] of included document IDs
+  docResults   Json?     // per-document success/failure log
+  batchGroupId String?   // groups multi-export runs (unrelated to Batch.id; Phase 7 may drop)
+  batchNumber  Int?      // 1-based index within a batch group
+  createdAt    DateTime  @default(now())
+  completedAt  DateTime?
 
-  @@index([caseId])
+  batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId])
   @@index([batchGroupId])
   @@map("export_jobs")
-}
-
-model ProcessingJob {
-  id          String    @id @default(cuid())
-  docId       String
-  status      String    @default("queued") // "queued" | "processing" | "complete" | "error"
-  step        String    @default("Waiting in queue")
-  progress    Int       @default(0) // 0-100
-  attempt     Int       @default(0)
-  maxAttempts Int       @default(3)
-  error       String?
-  enqueuedAt  DateTime  @default(now())
-  startedAt   DateTime?
-  completedAt DateTime?
-
-  @@index([docId])
-  @@index([status])
-  @@map("processing_jobs")
 }
