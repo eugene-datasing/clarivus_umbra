@@ -14,6 +14,7 @@
 
 import NextAuth from "next-auth";
 import { authConfig } from "@/lib/auth/auth.config";
+import { isAdmin } from "@/lib/auth/roles";
 import { NextResponse } from "next/server";
 
 const { auth } = NextAuth(authConfig);
@@ -45,10 +46,9 @@ export default auth((req) => {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Admin route protection
+  // Admin route protection — only admins
   const role = (req.auth?.user as { role?: string })?.role;
-  const adminRoles = ["admin", "senior-reviewer", "request-manager", "final-approver"];
-  if (pathname.startsWith("/admin") && !adminRoles.includes(role ?? "")) {
+  if (pathname.startsWith("/admin") && !isAdmin(role)) {
     return NextResponse.redirect(new URL("/", req.nextUrl.origin));
   }
 

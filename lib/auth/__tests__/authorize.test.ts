@@ -21,20 +21,18 @@ describe("requireAdmin", () => {
     await expect(requireAdmin(makeUser("admin"))).resolves.toBeUndefined();
   });
 
-  it("allows request-manager role", async () => {
-    await expect(requireAdmin(makeUser("request-manager"))).resolves.toBeUndefined();
-  });
-
   it("throws for reviewer role", async () => {
     await expect(requireAdmin(makeUser("reviewer"))).rejects.toThrow(
       "Access denied: admin role required",
     );
   });
 
-  it("throws for senior-reviewer role", async () => {
-    await expect(requireAdmin(makeUser("senior-reviewer"))).rejects.toThrow(
-      "Access denied: admin role required",
-    );
+  it("throws for legacy roles (request-manager, senior-reviewer, final-approver)", async () => {
+    for (const role of ["request-manager", "senior-reviewer", "final-approver"]) {
+      await expect(requireAdmin(makeUser(role))).rejects.toThrow(
+        "Access denied: admin role required",
+      );
+    }
   });
 
   it("throws for empty role", async () => {

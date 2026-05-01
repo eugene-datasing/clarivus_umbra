@@ -3,17 +3,17 @@
 import crypto from "crypto";
 import { prisma } from "@/lib/db/prisma";
 import { requireUser } from "@/lib/auth/session";
+import { isAdmin, ROLES, type Role } from "@/lib/auth/roles";
 import { createAuditEntry } from "@/lib/data/audit";
 import { sendInvitationEmail } from "@/lib/email/send";
 import { getSetting, SETTING_KEYS, type OrgIdentity, DEFAULT_ORG_IDENTITY } from "@/lib/data/settings";
 import { logger } from "@/lib/logger";
 
 const INVITATION_EXPIRY_DAYS = 14;
-const ADMIN_ROLES = ["admin", "request-manager"];
 
 function requireInvitationAdmin(role: string) {
-  if (!ADMIN_ROLES.includes(role)) {
-    throw new Error("Only administrators and request managers can manage invitations");
+  if (!isAdmin(role)) {
+    throw new Error("Only administrators can manage invitations");
   }
 }
 
@@ -60,8 +60,8 @@ export async function inviteUser(
     return { success: false, error: "A display name is required." };
   }
 
-  const validRoles = ["reviewer", "senior-reviewer", "request-manager", "admin"];
-  if (!validRoles.includes(role)) {
+  const validRoles: readonly Role[] = ROLES;
+  if (!(validRoles as readonly string[]).includes(role)) {
     return { success: false, error: `Invalid role: ${role}` };
   }
 

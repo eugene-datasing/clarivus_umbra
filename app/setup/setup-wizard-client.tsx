@@ -1178,8 +1178,6 @@ export default function SetupWizardClient({
                               onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value })}
                             >
                               <option value="reviewer">Reviewer</option>
-                              <option value="senior-reviewer">Senior Reviewer</option>
-                              <option value="request-manager">Request Manager</option>
                               <option value="admin">Administrator</option>
                             </select>
                           </div>

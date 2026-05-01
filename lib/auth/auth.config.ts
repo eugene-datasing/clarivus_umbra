@@ -8,6 +8,7 @@
  */
 
 import type { NextAuthConfig } from "next-auth";
+import { isAdmin } from "@/lib/auth/roles";
 
 export const authConfig = {
   providers: [] as [],  // Providers added in auth-options.ts; empty here for Edge middleware
@@ -62,10 +63,9 @@ export const authConfig = {
       // Everything else requires auth
       if (!isLoggedIn) return false;
 
-      // Admin route protection — restrict to roles with admin access
+      // Admin route protection — only admins
       const role = (auth?.user as { role?: string })?.role;
-      const adminRoles = ["admin", "senior-reviewer", "request-manager", "final-approver"];
-      if (pathname.startsWith("/admin") && !adminRoles.includes(role ?? "")) {
+      if (pathname.startsWith("/admin") && !isAdmin(role)) {
         return Response.redirect(new URL("/", nextUrl));
       }
 

@@ -6,6 +6,7 @@ import { maskEntityText, stripPiiPatterns } from "@/lib/data/audit-sanitize";
 import { createSnapshot } from "@/lib/pipeline/version-snapshot";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeForDocument, authorizeForDetection } from "@/lib/auth/authorize";
+import { isAdmin } from "@/lib/auth/roles";
 import {
   acceptDetectionSchema,
   rejectDetectionSchema,
@@ -538,7 +539,7 @@ export async function bulkRejectDetections(detectionIds: string[]) {
 /**
  * Auto-accept all pending detections above a confidence threshold.
  * Each detection gets its suggestedGround applied as appliedGround.
- * Only senior-reviewer, admin, and request-manager roles may use this.
+ * Admin-only.
  */
 export async function applyConfidenceThreshold(caseId: string, threshold: number) {
   const { caseId: validCaseId, threshold: validThreshold } =
@@ -547,10 +548,8 @@ export async function applyConfidenceThreshold(caseId: string, threshold: number
   const user = await requireUser();
   await authorizeForCase(user, validCaseId);
 
-  // Role restriction: only senior reviewers and admins
-  const allowedRoles = new Set(["admin", "request-manager", "senior-reviewer"]);
-  if (!allowedRoles.has(user.role)) {
-    throw new Error("Access denied: only senior reviewers and admins can apply confidence thresholds");
+  if (!isAdmin(user.role)) {
+    throw new Error("Access denied: only admins can apply confidence thresholds");
   }
 
   // Find all pending detections above the threshold

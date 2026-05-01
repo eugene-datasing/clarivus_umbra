@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
+import { isAdmin } from "@/lib/auth/roles";
 import {
   LayoutDashboard, FolderOpen, ClipboardList, PlusCircle,
   Settings2, Brain, FileBarChart, Cog, Bell, ChevronLeft, ChevronRight, EyeOff,
@@ -39,7 +40,6 @@ const notifIconMap: Record<string, { icon: typeof AlertTriangle; color: string }
 
 const roleLabels: Record<string, string> = {
   reviewer: "Reviewer",
-  "senior-reviewer": "Senior Reviewer",
   admin: "Admin",
 };
 
@@ -106,7 +106,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
     setMobileMenuOpen(false);
   }, [pathname]);
 
-  const canAccessAdmin = userRole !== "reviewer";
+  const canAccessAdmin = isAdmin(userRole);
   const sections = {
     main: navItems.filter((i) => i.section === "main"),
     admin: canAccessAdmin ? navItems.filter((i) => i.section === "admin") : [],

@@ -66,17 +66,11 @@ const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
 
 const roleBadgeMap: Record<string, string> = {
   admin: "bg-red-50 text-red-700",
-  "request-manager": "bg-purple-50 text-purple-700",
-  "senior-reviewer": "bg-teal-50 text-teal-700",
-  "final-approver": "bg-amber-50 text-amber-700",
   reviewer: "bg-blue-50 text-blue-700",
 };
 
 const roleLabelMap: Record<string, string> = {
   admin: "Administrator",
-  "request-manager": "Request Manager",
-  "senior-reviewer": "Senior Reviewer",
-  "final-approver": "Final Approver",
   reviewer: "Reviewer",
 };
 

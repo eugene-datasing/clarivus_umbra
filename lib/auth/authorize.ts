@@ -2,119 +2,91 @@
  * Resource-level authorization helpers.
  *
  * All server actions call requireUser() for authentication, but that only
- * confirms *who* the caller is.  These helpers confirm the caller is
- * *allowed* to access the specific case / document / detection.
+ * confirms *who* the caller is. These helpers confirm the caller is
+ * *allowed* to access the specific batch / document / detection.
+ *
+ * Single-tenant simplification (Umbra v1): any authenticated user (admin
+ * or reviewer) can access any non-soft-deleted batch. Admins can also
+ * access soft-deleted batches (for Trash views). Per-batch reviewer
+ * assignment is a v2 concern.
  */
 
 import { prisma } from "@/lib/db/prisma";
+import { isAdmin } from "@/lib/auth/roles";
 import type { SessionUser } from "./session";
 
-/** Roles that bypass department-level checks. */
-const PRIVILEGED_ROLES = new Set([
-  "admin",
-  "request-manager",
-  "senior-reviewer",
-  "final-approver",
-]);
-
 /**
- * Verify the user has access to a specific case.
+ * Verify the user has access to a specific batch.
  *
- * Privileged roles bypass the check.  For all other roles the user's
- * department must appear in the case's departments list.
+ * Returns true if access is permitted, false otherwise. Returns false for
+ * non-existent batches and for soft-deleted batches accessed by non-admins.
  */
-export async function authorizeForCase(
+export async function authorizeForBatch(
   user: SessionUser,
-  caseId: string,
-): Promise<void> {
+  batchId: string,
+): Promise<boolean> {
   // Re-read role from DB rather than trusting the JWT claim, because the JWT
   // can be stale after role promotions (e.g. activation → admin).
   const dbUser = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { role: true, departmentId: true },
+    select: { role: true },
+  });
+  const role = dbUser?.role ?? user.role;
+
+  const batch = await prisma.batch.findUnique({
+    where: { id: batchId },
+    select: { deletedAt: true },
   });
 
-  const role = dbUser?.role ?? user.role;
-  if (PRIVILEGED_ROLES.has(role)) return;
+  if (!batch) return false;
+  if (batch.deletedAt !== null && !isAdmin(role)) return false;
 
-  if (!dbUser?.departmentId) {
-    throw new Error("Access denied: user has no department assignment");
-  }
-
-  const [caseRecord, dept] = await Promise.all([
-    prisma.case.findUnique({
-      where: { id: caseId },
-      select: { departments: true },
-    }),
-    prisma.department.findUnique({
-      where: { id: dbUser.departmentId },
-      select: { name: true },
-    }),
-  ]);
-
-  if (!caseRecord) throw new Error("Case not found");
-  if (!dept) throw new Error("Access denied: user department not found");
-
-  if (!caseRecord.departments.includes(dept.name)) {
-    throw new Error("Access denied: user department not assigned to this case");
-  }
+  return true;
 }
 
+/** @deprecated Phase 4 will rename callers to authorizeForBatch. */
+export const authorizeForCase = authorizeForBatch;
+
 /**
- * Resolve a document to its parent case, then authorize.
- * Returns the caseId for convenience.
+ * Resolve a document to its parent batch, then authorize.
+ * Returns the batchId on success, or null if access is denied.
  */
 export async function authorizeForDocument(
   user: SessionUser,
   documentId: string,
-): Promise<string> {
+): Promise<string | null> {
   const doc = await prisma.document.findUnique({
     where: { id: documentId },
-    select: { caseId: true },
+    select: { batchId: true },
   });
-  if (!doc) throw new Error("Document not found");
+  if (!doc) return null;
 
-  // Re-read role from DB (JWT may be stale after role promotion)
-  const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: { role: true },
-  });
-  const role = dbUser?.role ?? user.role;
-  if (PRIVILEGED_ROLES.has(role)) return doc.caseId;
-
-  await authorizeForCase(user, doc.caseId);
-  return doc.caseId;
+  const ok = await authorizeForBatch(user, doc.batchId);
+  return ok ? doc.batchId : null;
 }
 
 /**
- * Resolve a detection to its parent document/case, then authorize.
- * Returns both IDs for convenience.
+ * Resolve a detection to its parent document/batch, then authorize.
+ * Returns both IDs on success, or null if access is denied.
  */
 export async function authorizeForDetection(
   user: SessionUser,
   detectionId: string,
-): Promise<{ caseId: string; documentId: string }> {
+): Promise<{ batchId: string; documentId: string } | null> {
   const detection = await prisma.detection.findUnique({
     where: { id: detectionId },
     select: {
       documentId: true,
-      document: { select: { caseId: true } },
+      document: { select: { batchId: true } },
     },
   });
-  if (!detection) throw new Error("Detection not found");
+  if (!detection) return null;
 
-  // Re-read role from DB (JWT may be stale after role promotion)
-  const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: { role: true },
-  });
-  const role = dbUser?.role ?? user.role;
-  if (!PRIVILEGED_ROLES.has(role)) {
-    await authorizeForCase(user, detection.document.caseId);
-  }
+  const ok = await authorizeForBatch(user, detection.document.batchId);
+  if (!ok) return null;
 
   return {
-    caseId: detection.document.caseId,
+    batchId: detection.document.batchId,
     documentId: detection.documentId,
   };
 }
@@ -124,7 +96,7 @@ export async function authorizeForDetection(
  *
  * Re-reads the role from the database rather than trusting the JWT claim,
  * because the JWT can be stale after role promotions (e.g. activation →
- * admin).  This adds one lightweight SELECT but ensures authorisation is
+ * admin). This adds one lightweight SELECT but ensures authorisation is
  * always correct.
  */
 export async function requireAdmin(user: SessionUser): Promise<void> {
@@ -134,7 +106,7 @@ export async function requireAdmin(user: SessionUser): Promise<void> {
   });
 
   const role = dbUser?.role ?? user.role;
-  if (role !== "admin" && role !== "request-manager") {
+  if (!isAdmin(role)) {
     throw new Error("Access denied: admin role required");
   }
 }
