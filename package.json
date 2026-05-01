@@ -1,6 +1,6 @@
 {
-  "name": "veil-prototype",
-  "version": "0.1.0",
+  "name": "umbra-prototype",
+  "version": "0.1.0-umbra",
   "private": true,
   "scripts": {
     "postinstall": "tsx scripts/copy-pdfjs-worker.ts",
