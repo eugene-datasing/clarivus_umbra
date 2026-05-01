@@ -34,8 +34,8 @@ const jetbrainsMono = JetBrains_Mono({
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Veil — OIA & LGOIMA Disclosure Platform",
-  description: "AI-powered document redaction and official information disclosure workflow for OIA and LGOIMA — DataSing / Clarivus AI",
+  title: "Umbra",
+  description: "PII redaction tool for NZ councils and central-government agencies.",
   icons: {
     icon: [
       { url: "/favicon/favicon.ico", sizes: "any" },
