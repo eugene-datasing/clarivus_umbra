@@ -191,7 +191,7 @@ export default function IngestClient({
 
       try {
         const formData = new FormData();
-        formData.append("caseId", requestId);
+        formData.append("batchId", requestId);
         Array.from(files).forEach((file) => {
           formData.append("files", file);
         });
@@ -269,14 +269,14 @@ export default function IngestClient({
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 text-sm text-txt-secondary mb-6">
         <Link
-          href="/requests"
+          href="/batches"
           className="hover:text-brand-primary transition-colors"
         >
           Cases
         </Link>
         <ChevronRight className="w-3.5 h-3.5" />
         <Link
-          href={`/requests/${requestId}`}
+          href={`/batches/${requestId}`}
           className="hover:text-brand-primary transition-colors font-mono"
         >
           {caseReference}
@@ -618,7 +618,7 @@ export default function IngestClient({
       {totalCount > 0 && (
         <div className="flex items-center justify-end">
           <Link
-            href={`/requests/${requestId}`}
+            href={`/batches/${requestId}`}
             className="btn-primary flex items-center gap-2"
           >
             Continue to Review

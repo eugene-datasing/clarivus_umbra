@@ -60,7 +60,7 @@ export default function CaseError({
         title="Error Loading Case"
         message={message}
         suggestion={suggestion}
-        backHref="/requests"
+        backHref="/batches"
         backLabel="Back to Cases"
         onRetry={reset}
         variant="card"

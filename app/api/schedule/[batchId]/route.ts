@@ -1,19 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildWithholdingSchedule } from "@/lib/pipeline/schedule";
 import { requireUser } from "@/lib/auth/session";
-import { authorizeForCase } from "@/lib/auth/authorize";
+import { authorizeForBatch } from "@/lib/auth/authorize";
 import { logger } from "@/lib/logger";
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ requestId: string }> },
+  { params }: { params: Promise<{ batchId: string }> },
 ) {
   try {
-    const { requestId } = await params;
+    const { batchId } = await params;
     const user = await requireUser();
-    await authorizeForCase(user, requestId);
+    await authorizeForBatch(user, batchId);
 
-    const result = await buildWithholdingSchedule(requestId, {
+    const result = await buildWithholdingSchedule(batchId, {
       includeReasoning: true,
     });
 

@@ -1,8 +1,8 @@
-import { getCase } from "@/lib/data/cases";
+import { getBatch } from "@/lib/data/batches";
 import { getDocumentsForCase } from "@/lib/data/documents";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
-import { authorizeForCase } from "@/lib/auth/authorize";
+import { authorizeForBatch } from "@/lib/auth/authorize";
 import { isM365Configured } from "@/lib/integrations/m365-connector";
 import IngestClient from "./ingest-client";
 
@@ -13,20 +13,20 @@ export default async function IngestPage({
 }) {
   const { id } = await params;
   const user = await requireUser();
-  await authorizeForCase(user, id);
-  const [caseData, existingDocs] = await Promise.all([
-    getCase(id),
+  await authorizeForBatch(user, id);
+  const [batchData, existingDocs] = await Promise.all([
+    getBatch(id),
     getDocumentsForCase(id),
   ]);
 
-  if (!caseData) notFound();
+  if (!batchData) notFound();
 
   const m365Configured = isM365Configured();
 
   return (
     <IngestClient
       requestId={id}
-      caseReference={caseData.reference}
+      caseReference={batchData.reference}
       existingDocs={existingDocs.map((d) => ({
         id: d.id,
         name: d.name,

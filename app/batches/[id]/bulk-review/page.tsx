@@ -1,8 +1,8 @@
 import { getGroupedDetectionsForCase, getThresholdPreview } from "@/lib/data/detections";
-import { getCase } from "@/lib/data/cases";
+import { getBatch } from "@/lib/data/batches";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
-import { authorizeForCase } from "@/lib/auth/authorize";
+import { authorizeForBatch } from "@/lib/auth/authorize";
 import BulkReviewClient from "./bulk-review-client";
 import { detectionTypeConfig, type DetectionType } from "@/lib/db/mappers";
 import { getGroundLabelMap } from "@/lib/lgoima-grounds";
@@ -16,14 +16,14 @@ export default async function BulkReviewPage({
 }) {
   const { id } = await params;
   const user = await requireUser();
-  await authorizeForCase(user, id);
-  const [caseData, detections, thresholdDetections] = await Promise.all([
-    getCase(id),
+  await authorizeForBatch(user, id);
+  const [batchData, detections, thresholdDetections] = await Promise.all([
+    getBatch(id),
     getGroupedDetectionsForCase(id),
     getThresholdPreview(id),
   ]);
 
-  if (!caseData) notFound();
+  if (!batchData) notFound();
 
   // Group detections by text to create entity groups
   const groupMap = new Map<string, typeof detections>();
@@ -121,9 +121,9 @@ export default async function BulkReviewPage({
   return (
     <BulkReviewClient
       entityGroups={entityGroups}
-      caseReference={caseData.reference}
+      caseReference={batchData.reference}
       requestId={id}
-      totalDocuments={caseData.documentCount}
+      totalDocuments={batchData.documentCount}
       thresholdData={thresholdData}
     />
   );

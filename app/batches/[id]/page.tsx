@@ -1,36 +1,26 @@
 import { notFound } from "next/navigation";
-import { getCase } from "@/lib/data/cases";
+import { getBatch } from "@/lib/data/batches";
 import { getDocumentsForCase } from "@/lib/data/documents";
-import { getLGOIMAConfig } from "@/lib/data/org-config";
 import { requireUser } from "@/lib/auth/session";
-import { authorizeForCase } from "@/lib/auth/authorize";
-import CaseDetailClient from "./case-detail-client";
+import { authorizeForBatch } from "@/lib/auth/authorize";
+import BatchDetailClient from "./batch-detail-client";
 
-export default async function CaseDetailPage({
+export default async function BatchDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
   const user = await requireUser();
-  await authorizeForCase(user, id);
-  const [caseData, documents, lgoimaConfig] = await Promise.all([
-    getCase(id),
+  await authorizeForBatch(user, id);
+  const [batchData, documents] = await Promise.all([
+    getBatch(id),
     getDocumentsForCase(id),
-    getLGOIMAConfig(),
   ]);
 
-  if (!caseData) {
+  if (!batchData) {
     notFound();
   }
 
-  return (
-    <CaseDetailClient
-      caseData={caseData}
-      documents={documents}
-      amberWarningDays={lgoimaConfig.amberWarningDays}
-      redWarningDays={lgoimaConfig.redWarningDays}
-      extensionMaxDays={lgoimaConfig.extensionMaxDays}
-    />
-  );
+  return <BatchDetailClient batchData={batchData} documents={documents} />;
 }

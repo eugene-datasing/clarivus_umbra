@@ -31,15 +31,15 @@ interface AuditEntry {
   newValue?: string;
 }
 
-interface CaseData {
+interface BatchData {
   id: string;
   reference: string;
-  description: string;
+  name: string;
 }
 
 interface AuditClientProps {
   requestId: string;
-  caseData: CaseData | null;
+  batchData: BatchData | null;
   auditEntries: AuditEntry[];
 }
 
@@ -85,7 +85,7 @@ function formatTimestamp(ts: string): { date: string; time: string } {
   return { date, time };
 }
 
-export default function AuditClient({ requestId, caseData, auditEntries }: AuditClientProps) {
+export default function AuditClient({ requestId, batchData, auditEntries }: AuditClientProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState("");
 
@@ -122,18 +122,18 @@ export default function AuditClient({ requestId, caseData, auditEntries }: Audit
 
   const uniqueUsers = new Set(auditEntries.map((e) => e.userName)).size;
 
-  const caseReference = caseData?.reference ?? "Unknown";
-  const caseDescription = caseData?.description ?? "";
+  const caseReference = batchData?.reference ?? "Unknown";
+  const caseDescription = batchData?.name ?? "";
 
   return (
     <div className="p-6 max-w-[1400px]">
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 text-sm text-txt-secondary mb-6">
-        <Link href="/requests" className="hover:text-brand-primary transition-colors">
+        <Link href="/batches" className="hover:text-brand-primary transition-colors">
           Cases
         </Link>
         <ChevronRight className="w-3.5 h-3.5" />
-        <Link href={`/requests/${requestId}`} className="hover:text-brand-primary transition-colors">
+        <Link href={`/batches/${requestId}`} className="hover:text-brand-primary transition-colors">
           {caseReference}
         </Link>
         <ChevronRight className="w-3.5 h-3.5" />
@@ -145,7 +145,7 @@ export default function AuditClient({ requestId, caseData, auditEntries }: Audit
         {tabs.map((tab) => (
           <Link
             key={tab.href}
-            href={tab.href ? `/requests/${requestId}/${tab.href}` : `/requests/${requestId}`}
+            href={tab.href ? `/batches/${requestId}/${tab.href}` : `/batches/${requestId}`}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
               tab.href === "audit"
                 ? "border-brand-primary text-brand-primary"

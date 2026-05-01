@@ -315,11 +315,11 @@ export default function BulkReviewClient({
     <div className="p-6 max-w-[1100px]">
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 text-sm text-txt-secondary mb-6">
-        <Link href="/requests" className="hover:text-brand-primary transition-colors">
+        <Link href="/batches" className="hover:text-brand-primary transition-colors">
           Cases
         </Link>
         <ChevronRight className="w-3.5 h-3.5" />
-        <Link href={`/requests/${requestId}`} className="hover:text-brand-primary transition-colors">
+        <Link href={`/batches/${requestId}`} className="hover:text-brand-primary transition-colors">
           {caseReference}
         </Link>
         <ChevronRight className="w-3.5 h-3.5" />
@@ -328,7 +328,7 @@ export default function BulkReviewClient({
 
       {/* Back link */}
       <Link
-        href={`/requests/${requestId}`}
+        href={`/batches/${requestId}`}
         className="inline-flex items-center gap-1.5 text-sm text-txt-secondary hover:text-brand-primary transition-colors mb-4"
       >
         <ArrowLeft className="w-3.5 h-3.5" />
@@ -876,7 +876,7 @@ export default function BulkReviewClient({
                       Apply to All Similar
                     </button>
                     <Link
-                      href={`/requests/${requestId}`}
+                      href={`/batches/${requestId}`}
                       className="btn-secondary flex items-center gap-2"
                     >
                       <Eye className="w-4 h-4" />
@@ -973,7 +973,7 @@ export default function BulkReviewClient({
               No remaining detections require manual review.
             </p>
             <Link
-              href={`/requests/${requestId}`}
+              href={`/batches/${requestId}`}
               className="btn-primary inline-flex items-center gap-2"
             >
               <ArrowLeft className="w-4 h-4" />

@@ -1,8 +1,8 @@
-import { getCase } from "@/lib/data/cases";
+import { getBatch } from "@/lib/data/batches";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { requireUser } from "@/lib/auth/session";
-import { authorizeForCase } from "@/lib/auth/authorize";
+import { authorizeForBatch } from "@/lib/auth/authorize";
 import ExportClient, { type ExportDocument } from "./export-client";
 
 export default async function ExportPage({
@@ -12,13 +12,13 @@ export default async function ExportPage({
 }) {
   const { id } = await params;
   const user = await requireUser();
-  await authorizeForCase(user, id);
-  const caseData = await getCase(id);
-  if (!caseData) notFound();
+  await authorizeForBatch(user, id);
+  const batchData = await getBatch(id);
+  if (!batchData) notFound();
 
   // Fetch all documents for this case with their detection stats
   const documents = await prisma.document.findMany({
-    where: { caseId: id },
+    where: { batchId: id },
     orderBy: { name: "asc" },
     select: {
       id: true,
@@ -71,8 +71,8 @@ export default async function ExportPage({
   return (
     <ExportClient
       requestId={id}
-      caseReference={caseData.reference}
-      caseDescription={caseData.description}
+      caseReference={batchData.reference}
+      caseDescription={batchData.name}
       documents={exportDocs}
     />
   );

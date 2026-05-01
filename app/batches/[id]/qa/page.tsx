@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
-import { getCase } from "@/lib/data/cases";
+import { getBatch } from "@/lib/data/batches";
 import { getDocumentsForCase } from "@/lib/data/documents";
 import { getWithholdingItems } from "@/lib/data/detections";
 import { getQASimulation } from "@/lib/data/qa-simulation";
 import { prisma } from "@/lib/db/prisma";
 import { requireUser } from "@/lib/auth/session";
-import { authorizeForCase } from "@/lib/auth/authorize";
+import { authorizeForBatch } from "@/lib/auth/authorize";
 import QAClient from "./qa-client";
 
 export default async function QAPage({
@@ -15,16 +15,16 @@ export default async function QAPage({
 }) {
   const { id } = await params;
   const user = await requireUser();
-  await authorizeForCase(user, id);
+  await authorizeForBatch(user, id);
 
-  const [caseData, documents, withholdingItems, simulation] = await Promise.all([
-    getCase(id),
+  const [batchData, documents, withholdingItems, simulation] = await Promise.all([
+    getBatch(id),
     getDocumentsForCase(id),
     getWithholdingItems(id),
     getQASimulation(id),
   ]);
 
-  if (!caseData) {
+  if (!batchData) {
     notFound();
   }
 
@@ -54,13 +54,13 @@ export default async function QAPage({
     }),
     prisma.document.count({
       where: {
-        caseId: id,
+        batchId: id,
         status: { notIn: ["pending", "processing", "error"] },
       },
     }),
     prisma.auditEntry.findFirst({
       where: {
-        caseId: id,
+        batchId: id,
         type: "redaction-verification",
       },
       orderBy: { timestamp: "desc" },
@@ -71,7 +71,7 @@ export default async function QAPage({
   return (
     <QAClient
       requestId={id}
-      caseData={caseData}
+      batchData={batchData}
       documents={documents.map((d) => ({
         id: d.id,
         status: d.status,

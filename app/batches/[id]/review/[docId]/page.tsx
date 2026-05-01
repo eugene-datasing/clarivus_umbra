@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getCase } from "@/lib/data/cases";
+import { getBatch } from "@/lib/data/batches";
 import { getDocument, getDocumentIdsForCase } from "@/lib/data/documents";
 import { getDetectionsForDocument } from "@/lib/data/detections";
 import { getDocumentContent, getDocumentHeader } from "@/lib/data/document-content";
@@ -12,7 +12,7 @@ import {
 } from "@/lib/data/settings";
 import { markDocumentInReview } from "@/lib/actions/detection-actions";
 import { requireUser } from "@/lib/auth/session";
-import { authorizeForCase } from "@/lib/auth/authorize";
+import { authorizeForBatch } from "@/lib/auth/authorize";
 import ReviewClient from "./review-client";
 
 export default async function ReviewPage({
@@ -22,11 +22,11 @@ export default async function ReviewPage({
 }) {
   const { id, docId } = await params;
   const user = await requireUser();
-  await authorizeForCase(user, id);
+  await authorizeForBatch(user, id);
 
   // Fetch all data in parallel
-  const [caseData, doc, detections, content, documentIds, header, viewerModeRaw] = await Promise.all([
-    getCase(id),
+  const [batchData, doc, detections, content, documentIds, header, viewerModeRaw] = await Promise.all([
+    getBatch(id),
     getDocument(docId),
     getDetectionsForDocument(docId),
     getDocumentContent(docId),
@@ -39,7 +39,7 @@ export default async function ReviewPage({
   // rather than crashing the review page.
   const viewerMode: ViewerMode = isViewerMode(viewerModeRaw) ? viewerModeRaw : DEFAULT_VIEWER_MODE;
 
-  if (!caseData || !doc) {
+  if (!batchData || !doc) {
     notFound();
   }
 
@@ -67,7 +67,7 @@ export default async function ReviewPage({
   return (
     <ReviewClient
       requestId={id}
-      caseId={id}
+      batchId={id}
       docId={docId}
       docName={doc.name}
       docStatus={docStatus}

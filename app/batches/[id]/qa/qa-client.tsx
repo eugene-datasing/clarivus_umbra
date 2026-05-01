@@ -25,10 +25,10 @@ interface QAGroup {
   items: QAItem[];
 }
 
-interface CaseData {
+interface BatchData {
   id: string;
   reference: string;
-  description: string;
+  name: string;
   documentCount: number;
   reviewedCount: number;
   redactionCount: number;
@@ -55,7 +55,7 @@ interface VerificationData {
 
 interface QAClientProps {
   requestId: string;
-  caseData: CaseData | null;
+  batchData: BatchData | null;
   documents: DocumentData[];
   withholdingItems: WithholdingItem[];
   s7Stats: { total: number; missingPi: number };
@@ -72,7 +72,7 @@ const statusIcon = {
 };
 
 function buildQAGroups(
-  caseData: CaseData | null,
+  batchData: BatchData | null,
   documents: DocumentData[],
   withholdingItems: WithholdingItem[],
   s7Stats: { total: number; missingPi: number },
@@ -80,7 +80,7 @@ function buildQAGroups(
   processedDocCount: number,
   verificationResult: VerificationData | null,
 ): QAGroup[] {
-  const totalDocs = caseData?.documentCount ?? documents.length;
+  const totalDocs = batchData?.documentCount ?? documents.length;
 
   // Use real document status machine values
   const reviewedDocs = documents.filter((d) =>
@@ -234,10 +234,10 @@ function buildQAGroups(
   ];
 }
 
-export default function QAClient({ requestId, caseData, documents, withholdingItems, s7Stats, pendingDetections, processedDocCount, verificationResult, simulation }: QAClientProps) {
-  const qaGroups = buildQAGroups(caseData, documents, withholdingItems, s7Stats, pendingDetections, processedDocCount, verificationResult);
+export default function QAClient({ requestId, batchData, documents, withholdingItems, s7Stats, pendingDetections, processedDocCount, verificationResult, simulation }: QAClientProps) {
+  const qaGroups = buildQAGroups(batchData, documents, withholdingItems, s7Stats, pendingDetections, processedDocCount, verificationResult);
 
-  const caseReference = caseData?.reference ?? "Unknown";
+  const caseReference = batchData?.reference ?? "Unknown";
 
   const totalPassed = qaGroups.flatMap((g) => g.items).filter((i) => i.status === "pass").length;
   const totalWarnings = qaGroups.flatMap((g) => g.items).filter((i) => i.status === "warning").length;
@@ -247,11 +247,11 @@ export default function QAClient({ requestId, caseData, documents, withholdingIt
     <div className="p-6 max-w-[1100px]">
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 text-sm text-txt-secondary mb-6">
-        <Link href="/requests" className="hover:text-brand-primary transition-colors">
+        <Link href="/batches" className="hover:text-brand-primary transition-colors">
           Cases
         </Link>
         <ChevronRight className="w-3.5 h-3.5" />
-        <Link href={`/requests/${requestId}`} className="hover:text-brand-primary transition-colors">
+        <Link href={`/batches/${requestId}`} className="hover:text-brand-primary transition-colors">
           {caseReference}
         </Link>
         <ChevronRight className="w-3.5 h-3.5" />
@@ -260,7 +260,7 @@ export default function QAClient({ requestId, caseData, documents, withholdingIt
 
       {/* Back link */}
       <Link
-        href={`/requests/${requestId}`}
+        href={`/batches/${requestId}`}
         className="inline-flex items-center gap-1.5 text-sm text-txt-secondary hover:text-brand-primary transition-colors mb-4"
       >
         <ArrowLeft className="w-3.5 h-3.5" />
@@ -330,7 +330,7 @@ export default function QAClient({ requestId, caseData, documents, withholdingIt
           </span>
         </div>
         <Link
-          href={`/requests/${requestId}/export`}
+          href={`/batches/${requestId}/export`}
           className="btn-primary flex items-center gap-2"
         >
           Proceed to Export

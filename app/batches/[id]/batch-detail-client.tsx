@@ -1,15 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { statusConfig, docTypeConfig, type RequestStatus, type DocType } from "@/lib/db/mappers";
-import { workingDaysRemaining, deadlineColor, formatDate, addWorkingDays, cn, confidenceColor } from "@/lib/utils";
+import { docTypeConfig, type DocType } from "@/lib/db/mappers";
+import { formatDate, cn, confidenceColor } from "@/lib/utils";
 import { bulkExcludeDocuments, deleteDocument, bulkAssignReviewer } from "@/lib/actions/document-actions";
-import { extendDeadline } from "@/lib/actions/case-actions";
 import {
-  FileText, Mail, Search, Filter, Upload, CheckCircle,
-  XCircle, ChevronRight, ArrowRight, Trash2, UserPlus, CalendarPlus, Loader2,
+  FileText, Mail, Search, Filter, Upload,
+  XCircle, ChevronRight, ArrowRight, Trash2, UserPlus,
 } from "lucide-react";
 
 const docStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
@@ -17,14 +16,19 @@ const docStatusConfig: Record<string, { label: string; color: string; bg: string
   processing: { label: "Processing", color: "text-blue-700", bg: "bg-blue-50" },
   ready: { label: "Ready for Review", color: "text-amber-600", bg: "bg-amber-50" },
   "in-review": { label: "In Review", color: "text-blue-700", bg: "bg-blue-50" },
-  reviewed: { label: "Reviewed (Initial)", color: "text-purple-600", bg: "bg-purple-50" },
+  reviewed: { label: "Reviewed", color: "text-purple-600", bg: "bg-purple-50" },
   "signed-off": { label: "Signed Off", color: "text-green-700", bg: "bg-green-50" },
-  submitted: { label: "Submitted", color: "text-amber-700", bg: "bg-amber-50" },
-  approved: { label: "Approved", color: "text-green-700", bg: "bg-green-50" },
-  rejected: { label: "Rejected", color: "text-red-700", bg: "bg-red-50" },
-  released: { label: "Released", color: "text-brand-primary", bg: "bg-purple-50" },
   excluded: { label: "Excluded", color: "text-gray-500", bg: "bg-gray-100" },
   error: { label: "Error", color: "text-red-700", bg: "bg-red-50" },
+};
+
+const batchStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
+  draft: { label: "Draft", color: "text-gray-600", bg: "bg-gray-100" },
+  processing: { label: "Processing", color: "text-blue-700", bg: "bg-blue-50" },
+  "ready-for-review": { label: "Ready for Review", color: "text-amber-600", bg: "bg-amber-50" },
+  reviewed: { label: "Reviewed", color: "text-purple-600", bg: "bg-purple-50" },
+  exported: { label: "Exported", color: "text-green-700", bg: "bg-green-50" },
+  deleted: { label: "Deleted", color: "text-red-700", bg: "bg-red-50" },
 };
 
 function DocTypeIcon({ type }: { type: string }) {
@@ -34,16 +38,10 @@ function DocTypeIcon({ type }: { type: string }) {
   return <FileText className="w-4 h-4 text-red-500" />;
 }
 
-export interface CaseData {
+export interface BatchData {
   id: string;
   reference: string;
-  requesterName: string;
-  requesterType: string;
-  dateReceived: string;
-  deadline: string;
-  priority: "standard" | "urgent" | "extended";
-  department: string[];
-  description: string;
+  name: string;
   status: string;
   documentCount: number;
   reviewedCount: number;
@@ -52,7 +50,7 @@ export interface CaseData {
 
 export interface DocumentRow {
   id: string;
-  requestId: string;
+  batchId: string;
   name: string;
   type: string;
   pageCount: number;
@@ -66,15 +64,12 @@ export interface DocumentRow {
   totalProcessingMs?: number;
 }
 
-interface CaseDetailClientProps {
-  caseData: CaseData;
+interface BatchDetailClientProps {
+  batchData: BatchData;
   documents: DocumentRow[];
-  amberWarningDays?: number;
-  redWarningDays?: number;
-  extensionMaxDays?: number;
 }
 
-export default function CaseDetailClient({ caseData, documents, amberWarningDays, redWarningDays, extensionMaxDays }: CaseDetailClientProps) {
+export default function BatchDetailClient({ batchData, documents }: BatchDetailClientProps) {
   const router = useRouter();
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
@@ -83,17 +78,10 @@ export default function CaseDetailClient({ caseData, documents, amberWarningDays
   const [isDeleting, setIsDeleting] = useState(false);
   const [showAssign, setShowAssign] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
-  const [showExtendModal, setShowExtendModal] = useState(false);
-  const [extendDate, setExtendDate] = useState("");
-  const [extendReason, setExtendReason] = useState("");
-  const [extendError, setExtendError] = useState("");
-  const [isPendingExtend, startExtendTransition] = useTransition();
 
-  const request = caseData;
-  const cfg = statusConfig[request.status as RequestStatus];
-  const days = workingDaysRemaining(request.deadline);
-  const progress = request.documentCount > 0
-    ? Math.round((request.reviewedCount / request.documentCount) * 100)
+  const cfg = batchStatusConfig[batchData.status] ?? { label: batchData.status, color: "text-gray-600", bg: "bg-gray-100" };
+  const progress = batchData.documentCount > 0
+    ? Math.round((batchData.reviewedCount / batchData.documentCount) * 100)
     : 0;
 
   const filteredDocs = documents.filter((doc) => {
@@ -125,62 +113,24 @@ export default function CaseDetailClient({ caseData, documents, amberWarningDays
     <div className="p-6 max-w-[1400px]">
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 text-sm text-txt-secondary mb-6">
-        <Link href="/requests" className="hover:text-brand-primary transition-colors">
-          Cases
+        <Link href="/batches" className="hover:text-brand-primary transition-colors">
+          Batches
         </Link>
         <ChevronRight className="w-3.5 h-3.5" />
-        <span className="text-txt-primary font-medium font-mono">{request.reference}</span>
+        <span className="text-txt-primary font-medium font-mono">{batchData.reference}</span>
       </div>
 
-      {/* Case Header */}
+      {/* Batch Header */}
       <div className="card mb-6">
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-xl font-heading font-bold text-txt-primary font-mono">
-                {request.reference}
+              <h1 className="text-xl font-heading font-bold text-txt-primary">
+                {batchData.name}
               </h1>
               <span className={cn("badge", cfg.bg, cfg.color)}>{cfg.label}</span>
-              {request.priority === "urgent" && (
-                <span className="badge bg-red-100 text-red-700">Urgent</span>
-              )}
             </div>
-            <p className="text-sm text-txt-secondary max-w-3xl">{request.description}</p>
-            <div className="flex items-center gap-4 mt-3 text-xs text-txt-secondary">
-              <span>
-                <span className="font-medium text-txt-primary">Requester:</span> {request.requesterName} ({request.requesterType})
-              </span>
-              <span>
-                <span className="font-medium text-txt-primary">Department:</span> {request.department.join(", ")}
-              </span>
-              <span>
-                <span className="font-medium text-txt-primary">Received:</span> {formatDate(request.dateReceived)}
-              </span>
-            </div>
-          </div>
-          <div className="text-right ml-6 flex-shrink-0">
-            <div className={cn("text-lg font-bold", deadlineColor(days, { amberDays: amberWarningDays, redDays: redWarningDays }))}>
-              {days < 0
-                ? `${Math.abs(days)}d overdue`
-                : days === 0
-                ? "Due today"
-                : `${days}d remaining`}
-            </div>
-            <div className="flex items-center justify-end gap-2">
-              <div className="text-sm text-txt-secondary">{formatDate(request.deadline)}</div>
-              <button
-                className="btn-ghost text-xs flex items-center gap-1"
-                onClick={() => {
-                  setExtendDate("");
-                  setExtendReason("");
-                  setExtendError("");
-                  setShowExtendModal(true);
-                }}
-              >
-                <CalendarPlus className="w-3.5 h-3.5" />
-                Extend
-              </button>
-            </div>
+            <p className="text-sm text-txt-secondary font-mono">{batchData.reference}</p>
           </div>
         </div>
         {/* Progress bar */}
@@ -192,7 +142,7 @@ export default function CaseDetailClient({ caseData, documents, amberWarningDays
             />
           </div>
           <span className="text-sm text-txt-secondary whitespace-nowrap">
-            {request.reviewedCount} / {request.documentCount} reviewed ({progress}%)
+            {batchData.reviewedCount} / {batchData.documentCount} reviewed ({progress}%)
           </span>
         </div>
       </div>
@@ -200,38 +150,26 @@ export default function CaseDetailClient({ caseData, documents, amberWarningDays
       {/* Tab Navigation */}
       <div className="flex items-center gap-1 border-b border-border mb-6">
         <Link
-          href={`/requests/${request.id}`}
+          href={`/batches/${batchData.id}`}
           className="px-4 py-2.5 text-sm font-medium text-brand-primary border-b-2 border-brand-primary -mb-px"
         >
           Documents
         </Link>
         <Link
-          href={`/requests/${request.id}/pipeline`}
-          className="px-4 py-2.5 text-sm font-medium text-txt-secondary hover:text-txt-primary transition-colors"
-        >
-          Pipeline
-        </Link>
-        <Link
-          href={`/requests/${request.id}/schedule`}
-          className="px-4 py-2.5 text-sm font-medium text-txt-secondary hover:text-txt-primary transition-colors"
-        >
-          Schedule
-        </Link>
-        <Link
-          href={`/requests/${request.id}/audit`}
+          href={`/batches/${batchData.id}/audit`}
           className="px-4 py-2.5 text-sm font-medium text-txt-secondary hover:text-txt-primary transition-colors"
         >
           Audit Trail
         </Link>
         <Link
-          href={`/requests/${request.id}/export`}
+          href={`/batches/${batchData.id}/export`}
           className="px-4 py-2.5 text-sm font-medium text-txt-secondary hover:text-txt-primary transition-colors"
         >
           Export
         </Link>
         <div className="flex-1" />
         <Link
-          href={`/requests/${request.id}/ingest`}
+          href={`/batches/${batchData.id}/ingest`}
           className="btn-primary flex items-center gap-2 text-xs mb-1"
         >
           <Upload className="w-3.5 h-3.5" />
@@ -239,7 +177,7 @@ export default function CaseDetailClient({ caseData, documents, amberWarningDays
         </Link>
       </div>
 
-      {/* Search within documents */}
+      {/* Search */}
       <div className="flex items-center gap-3 mb-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-txt-secondary" />
@@ -301,7 +239,7 @@ export default function CaseDetailClient({ caseData, documents, amberWarningDays
                   </td>
                   <td className="px-4 py-3">
                     <Link
-                      href={`/requests/${request.id}/review/${doc.id}`}
+                      href={`/batches/${batchData.id}/review/${doc.id}`}
                       className="flex items-center gap-2"
                     >
                       <DocTypeIcon type={doc.type} />
@@ -312,17 +250,17 @@ export default function CaseDetailClient({ caseData, documents, amberWarningDays
                     </Link>
                   </td>
                   <td className="px-4 py-3">
-                    <Link href={`/requests/${request.id}/review/${doc.id}`}>
+                    <Link href={`/batches/${batchData.id}/review/${doc.id}`}>
                       <span className={cn("badge text-xs", tCfg.color)}>{tCfg.label}</span>
                     </Link>
                   </td>
                   <td className="px-4 py-3">
-                    <Link href={`/requests/${request.id}/review/${doc.id}`}>
+                    <Link href={`/batches/${batchData.id}/review/${doc.id}`}>
                       <span className={cn("badge", dCfg.bg, dCfg.color)}>{dCfg.label}</span>
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <Link href={`/requests/${request.id}/review/${doc.id}`}>
+                    <Link href={`/batches/${batchData.id}/review/${doc.id}`}>
                       {doc.detectionCount > 0 ? (
                         <span className="font-medium text-txt-primary">{doc.detectionCount}</span>
                       ) : (
@@ -331,7 +269,7 @@ export default function CaseDetailClient({ caseData, documents, amberWarningDays
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <Link href={`/requests/${request.id}/review/${doc.id}`}>
+                    <Link href={`/batches/${batchData.id}/review/${doc.id}`}>
                       {doc.avgConfidence > 0 ? (
                         <span className={cn("font-medium text-sm", `text-${confColor}`)}>
                           {doc.avgConfidence}%
@@ -342,7 +280,7 @@ export default function CaseDetailClient({ caseData, documents, amberWarningDays
                     </Link>
                   </td>
                   <td className="px-4 py-3">
-                    <Link href={`/requests/${request.id}/review/${doc.id}`}>
+                    <Link href={`/batches/${batchData.id}/review/${doc.id}`}>
                       {doc.assignee ? (
                         <span className="text-txt-primary">{doc.assignee}</span>
                       ) : (
@@ -351,12 +289,12 @@ export default function CaseDetailClient({ caseData, documents, amberWarningDays
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-xs text-txt-secondary">
-                    <Link href={`/requests/${request.id}/review/${doc.id}`}>
+                    <Link href={`/batches/${batchData.id}/review/${doc.id}`}>
                       {formatDate(doc.updatedAt)}
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-center text-xs text-txt-secondary">
-                    <Link href={`/requests/${request.id}/review/${doc.id}`}>
+                    <Link href={`/batches/${batchData.id}/review/${doc.id}`}>
                       {doc.totalProcessingMs != null ? (
                         <span className="font-mono">{(doc.totalProcessingMs / 1000).toFixed(1)}s</span>
                       ) : (
@@ -416,7 +354,7 @@ export default function CaseDetailClient({ caseData, documents, amberWarningDays
             Assign Reviewer
           </button>
           <button
-            onClick={() => router.push(`/requests/${caseData.id}/bulk-review`)}
+            onClick={() => router.push(`/batches/${batchData.id}/bulk-review`)}
             className="text-sm hover:underline flex items-center gap-1.5"
           >
             <ArrowRight className="w-4 h-4" />
@@ -473,89 +411,6 @@ export default function CaseDetailClient({ caseData, documents, amberWarningDays
         </div>
       )}
 
-      {/* Extend Deadline Modal */}
-      {showExtendModal && (() => {
-        const currentDeadline = new Date(request.deadline);
-        const maxExtDate = addWorkingDays(currentDeadline, extensionMaxDays ?? 40);
-        const minDate = new Date(currentDeadline);
-        minDate.setDate(minDate.getDate() + 1);
-        return (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={() => setShowExtendModal(false)}>
-            <div className="bg-white rounded-card shadow-xl p-6 w-[420px]" onClick={(e) => e.stopPropagation()}>
-              <h3 className="text-lg font-heading font-bold text-txt-primary mb-3">Extend Deadline</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-txt-primary block mb-1">Current Deadline</label>
-                  <div className="text-sm text-txt-secondary">{formatDate(request.deadline)}</div>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-txt-primary block mb-1">Maximum Extension Date</label>
-                  <div className="text-sm text-txt-secondary">{formatDate(maxExtDate)}</div>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-txt-primary block mb-1">New Deadline</label>
-                  <input
-                    type="date"
-                    className="input-field w-full"
-                    value={extendDate}
-                    min={minDate.toISOString().split("T")[0]}
-                    max={maxExtDate.toISOString().split("T")[0]}
-                    onChange={(e) => setExtendDate(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-txt-primary block mb-1">Reason for Extension</label>
-                  <textarea
-                    className="input-field w-full h-24 resize-none"
-                    placeholder="Reason for extension under s 14 LGOIMA..."
-                    value={extendReason}
-                    onChange={(e) => setExtendReason(e.target.value)}
-                  />
-                </div>
-                <p className="text-xs text-txt-secondary">
-                  Under s 14 LGOIMA, extensions require notification to the requester with reasons.
-                </p>
-                {extendError && (
-                  <p className="text-xs text-red-600">{extendError}</p>
-                )}
-                <div className="flex items-center gap-2 justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setShowExtendModal(false)}
-                    className="btn-secondary text-sm"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    disabled={isPendingExtend || !extendDate || !extendReason.trim()}
-                    className="btn-primary text-sm flex items-center gap-1.5"
-                    onClick={() => {
-                      setExtendError("");
-                      startExtendTransition(async () => {
-                        try {
-                          await extendDeadline({
-                            caseId: request.id,
-                            newDeadline: extendDate,
-                            reason: extendReason.trim(),
-                          });
-                          setShowExtendModal(false);
-                          router.refresh();
-                        } catch (err) {
-                          setExtendError(err instanceof Error ? err.message : "Extension failed");
-                        }
-                      });
-                    }}
-                  >
-                    {isPendingExtend && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                    {isPendingExtend ? "Extending..." : "Extend Deadline"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
       {/* Assign Reviewer Modal */}
       {showAssign && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={() => setShowAssign(false)}>
@@ -587,7 +442,7 @@ export default function CaseDetailClient({ caseData, documents, amberWarningDays
               <input
                 name="reviewerEmail"
                 type="email"
-                placeholder="reviewer@council.govt.nz"
+                placeholder="reviewer@example.com"
                 className="input-field w-full mb-4"
                 required
               />

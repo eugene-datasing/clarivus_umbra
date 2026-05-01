@@ -1,22 +1,16 @@
-import { getCases } from "@/lib/data/cases";
-import { getLGOIMAConfig } from "@/lib/data/org-config";
-import CasesListClient from "./cases-list-client";
+import { getBatches } from "@/lib/data/batches";
+import BatchesListClient from "./batches-list-client";
 
-export default async function RequestsPage() {
-  const [cases, lgoimaConfig] = await Promise.all([
-    getCases(),
-    getLGOIMAConfig(),
-  ]);
-  const totalCount = cases.length;
-  const activeCount = cases.filter((r) => r.status !== "released" && r.status !== "draft").length;
+export default async function BatchesPage() {
+  const batches = await getBatches();
+  const totalCount = batches.length;
+  const activeCount = batches.filter((b) => b.status !== "exported" && b.status !== "draft").length;
 
   return (
-    <CasesListClient
-      cases={cases}
+    <BatchesListClient
+      batches={batches}
       totalCount={totalCount}
       activeCount={activeCount}
-      amberWarningDays={lgoimaConfig.amberWarningDays}
-      redWarningDays={lgoimaConfig.redWarningDays}
     />
   );
 }

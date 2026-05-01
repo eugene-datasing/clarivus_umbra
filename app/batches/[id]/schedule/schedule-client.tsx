@@ -20,15 +20,15 @@ interface WithholdingItem {
   page: number;
 }
 
-interface CaseData {
+interface BatchData {
   id: string;
   reference: string;
-  description: string;
+  name: string;
 }
 
 interface ScheduleClientProps {
   requestId: string;
-  caseData: CaseData | null;
+  batchData: BatchData | null;
   withholdingItems: WithholdingItem[];
 }
 
@@ -39,21 +39,19 @@ const tabs = [
   { label: "Export", href: "export" },
 ];
 
-export default function ScheduleClient({ requestId, caseData, withholdingItems }: ScheduleClientProps) {
+export default function ScheduleClient({ requestId, batchData, withholdingItems }: ScheduleClientProps) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
-  const caseReference = caseData?.reference ?? "Unknown";
-  const caseDescription = caseData?.description ?? "";
+  const caseReference = batchData?.reference ?? "Unknown";
+  const batchName = batchData?.name ?? "";
 
   // Collect unique grounds for the covering statement
   const allGrounds = Array.from(new Set(withholdingItems.map((item) => item.ground).filter(Boolean))) as string[];
 
   const [coveringStatement, setCoveringStatement] = useState(
-    `Dear Requester,
+    `Withholding schedule for batch ${caseReference}${batchName ? ` ("${batchName}")` : ""}.
 
-Thank you for your request under the Local Government Official Information and Meetings Act 1987 (LGOIMA) for information relating to ${caseDescription || "the requested matter"}.
-
-The Council has decided to grant your request in part. Some information has been withheld under the following sections of the LGOIMA:
+The following grounds were applied during review:
 
 ${allGrounds.map((g) => `- ${g}`).join("\n")}
 
@@ -72,11 +70,11 @@ The reasons for each withholding are set out in the schedule below.`
     <div className="p-6 max-w-[1400px]">
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 text-sm text-txt-secondary mb-6">
-        <Link href="/requests" className="hover:text-brand-primary transition-colors">
+        <Link href="/batches" className="hover:text-brand-primary transition-colors">
           Cases
         </Link>
         <ChevronRight className="w-3.5 h-3.5" />
-        <Link href={`/requests/${requestId}`} className="hover:text-brand-primary transition-colors">
+        <Link href={`/batches/${requestId}`} className="hover:text-brand-primary transition-colors">
           {caseReference}
         </Link>
         <ChevronRight className="w-3.5 h-3.5" />
@@ -88,7 +86,7 @@ The reasons for each withholding are set out in the schedule below.`
         {tabs.map((tab) => (
           <Link
             key={tab.href}
-            href={tab.href ? `/requests/${requestId}/${tab.href}` : `/requests/${requestId}`}
+            href={tab.href ? `/batches/${requestId}/${tab.href}` : `/batches/${requestId}`}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
               tab.href === "schedule"
                 ? "border-brand-primary text-brand-primary"
@@ -107,7 +105,7 @@ The reasons for each withholding are set out in the schedule below.`
             Withholding Schedule
           </h1>
           <p className="text-sm text-txt-secondary mt-1">
-            {caseReference} — {caseDescription}
+            {caseReference} — {batchName}
           </p>
         </div>
         <span className="badge bg-amber-50 text-amber-700">

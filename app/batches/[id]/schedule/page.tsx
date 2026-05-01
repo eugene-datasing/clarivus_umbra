@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
-import { getCase } from "@/lib/data/cases";
+import { getBatch } from "@/lib/data/batches";
 import { getWithholdingItems } from "@/lib/data/detections";
 import { requireUser } from "@/lib/auth/session";
-import { authorizeForCase } from "@/lib/auth/authorize";
+import { authorizeForBatch } from "@/lib/auth/authorize";
 import ScheduleClient from "./schedule-client";
 
 export default async function WithholdingSchedulePage({
@@ -12,21 +12,21 @@ export default async function WithholdingSchedulePage({
 }) {
   const { id } = await params;
   const user = await requireUser();
-  await authorizeForCase(user, id);
+  await authorizeForBatch(user, id);
 
-  const [caseData, withholdingItems] = await Promise.all([
-    getCase(id),
+  const [batchData, withholdingItems] = await Promise.all([
+    getBatch(id),
     getWithholdingItems(id),
   ]);
 
-  if (!caseData) {
+  if (!batchData) {
     notFound();
   }
 
   return (
     <ScheduleClient
       requestId={id}
-      caseData={caseData}
+      batchData={batchData}
       withholdingItems={withholdingItems}
     />
   );

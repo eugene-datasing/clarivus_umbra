@@ -376,9 +376,9 @@ export default function ExportClient({
     <div className="p-6 max-w-[1400px]">
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 text-sm text-txt-secondary mb-6">
-        <Link href="/requests" className="hover:text-brand-primary transition-colors">Cases</Link>
+        <Link href="/batches" className="hover:text-brand-primary transition-colors">Cases</Link>
         <ChevronRight className="w-3.5 h-3.5" />
-        <Link href={`/requests/${requestId}`} className="hover:text-brand-primary transition-colors font-mono">{caseReference}</Link>
+        <Link href={`/batches/${requestId}`} className="hover:text-brand-primary transition-colors font-mono">{caseReference}</Link>
         <ChevronRight className="w-3.5 h-3.5" />
         <span className="text-txt-primary font-medium">Export</span>
       </div>
@@ -388,7 +388,7 @@ export default function ExportClient({
         {tabs.map((tab) => (
           <Link
             key={tab.href}
-            href={tab.href ? `/requests/${requestId}/${tab.href}` : `/requests/${requestId}`}
+            href={tab.href ? `/batches/${requestId}/${tab.href}` : `/batches/${requestId}`}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
               tab.href === "export"
                 ? "border-brand-primary text-brand-primary"
@@ -533,7 +533,7 @@ export default function ExportClient({
                       {doc.acceptedCount > 0 ? doc.acceptedCount : "--"}
                       {doc.missingGrounds > 0 && (
                         <Link
-                          href={`/requests/${requestId}/review/${doc.id}`}
+                          href={`/batches/${requestId}/review/${doc.id}`}
                           onClick={(e) => e.stopPropagation()}
                           className="ml-1.5 inline-flex items-center gap-0.5 text-[11px] font-sans font-medium text-red-600 bg-red-50 px-1.5 py-0.5 rounded hover:bg-red-100 transition-colors"
                           title="Open review page to assign grounds"

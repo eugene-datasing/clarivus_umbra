@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { getAuditLog } from "@/lib/data/audit";
-import { getCase } from "@/lib/data/cases";
+import { getBatch } from "@/lib/data/batches";
 import { requireUser } from "@/lib/auth/session";
-import { authorizeForCase } from "@/lib/auth/authorize";
+import { authorizeForBatch } from "@/lib/auth/authorize";
 import AuditClient from "./audit-client";
 
 export default async function AuditTrailPage({
@@ -12,21 +12,21 @@ export default async function AuditTrailPage({
 }) {
   const { id } = await params;
   const user = await requireUser();
-  await authorizeForCase(user, id);
+  await authorizeForBatch(user, id);
 
-  const [caseData, auditEntries] = await Promise.all([
-    getCase(id),
+  const [batchData, auditEntries] = await Promise.all([
+    getBatch(id),
     getAuditLog(id),
   ]);
 
-  if (!caseData) {
+  if (!batchData) {
     notFound();
   }
 
   return (
     <AuditClient
       requestId={id}
-      caseData={caseData}
+      batchData={batchData}
       auditEntries={auditEntries}
     />
   );

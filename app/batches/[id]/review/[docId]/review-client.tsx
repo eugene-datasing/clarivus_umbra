@@ -95,7 +95,7 @@ export interface Detection {
 
 export interface ReviewClientProps {
   requestId: string;
-  caseId: string;
+  batchId: string;
   docId: string;
   docName: string;
   docStatus: string;
@@ -278,7 +278,7 @@ function TypeSelector({
 
 export default function ReviewClient({
   requestId,
-  caseId,
+  batchId,
   docId,
   docName,
   docStatus: initialDocStatus,
@@ -453,10 +453,10 @@ export default function ReviewClient({
   const hasPrev = currentDocIndex > 0;
   const hasNext = currentDocIndex < documentIds.length - 1;
   const prevHref = hasPrev
-    ? `/requests/${requestId}/review/${documentIds[currentDocIndex - 1]}`
+    ? `/batches/${requestId}/review/${documentIds[currentDocIndex - 1]}`
     : undefined;
   const nextHref = hasNext
-    ? `/requests/${requestId}/review/${documentIds[currentDocIndex + 1]}`
+    ? `/batches/${requestId}/review/${documentIds[currentDocIndex + 1]}`
     : undefined;
 
   // ----- Derived -----
@@ -1419,7 +1419,7 @@ export default function ReviewClient({
         {/* Left: back + doc info */}
         <div className="flex items-center gap-3 min-w-0">
           <Link
-            href={`/requests/${requestId}`}
+            href={`/batches/${requestId}`}
             className="btn-ghost flex items-center gap-1.5 shrink-0"
           >
             <ArrowLeft size={15} />
@@ -1434,7 +1434,7 @@ export default function ReviewClient({
             {currentDocIndex + 1} of {documentIds.length}
           </span>
           <Link
-            href={`/requests/${requestId}/review/${docId}/compare`}
+            href={`/batches/${requestId}/review/${docId}/compare`}
             className="btn-ghost flex items-center gap-1 text-[10px] shrink-0"
             title="Compare version snapshots"
           >
@@ -2271,7 +2271,7 @@ export default function ReviewClient({
         <AILearningPanel
           detectionId={aiLearningDetection.id}
           detectionText={aiLearningDetection.text}
-          caseId={caseId}
+          batchId={batchId}
           onClose={() => setAiLearningDetection(null)}
           onCrossDocCreated={() => router.refresh()}
           panelHeight={panelHeight}
