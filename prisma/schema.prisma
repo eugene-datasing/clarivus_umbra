@@ -40,13 +40,6 @@ model Batch {
   id             String   @id @default(cuid())
   reference      String   @unique
   name           String   // user-supplied batch name (e.g. "May submission responses"); per US-002. Length enforced at Zod layer in later phases.
-  requesterName  String
-  requesterType  String
-  dateReceived   DateTime
-  deadline       DateTime
-  priority       String   @default("standard")
-  departments    String[]
-  description    String
   status         String   @default("draft")
 
   // Denormalized counters
