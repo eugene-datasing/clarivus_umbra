@@ -37,7 +37,7 @@ export interface CostRecoveryDocumentItem {
 }
 
 export interface CostRecoveryData {
-  caseId: string;
+  batchId: string;
   caseReference: string;
   requesterName: string;
   dateReceived: string;
@@ -66,13 +66,13 @@ export interface CostRecoveryData {
 // Data fetcher
 // ---------------------------------------------------------------------------
 
-export async function getCostRecoveryData(caseId: string): Promise<CostRecoveryData> {
-  const caseData = await prisma.case.findUniqueOrThrow({
-    where: { id: caseId },
+export async function getCostRecoveryData(batchId: string): Promise<CostRecoveryData> {
+  const batchData = await prisma.batch.findUniqueOrThrow({
+    where: { id: batchId },
   });
 
   const documents = await prisma.document.findMany({
-    where: { caseId },
+    where: { batchId },
     orderBy: { name: "asc" },
     include: {
       detections: {
@@ -124,10 +124,10 @@ export async function getCostRecoveryData(caseId: string): Promise<CostRecoveryD
   const pageCount = documents.reduce((sum, doc) => sum + doc.pageCount, 0);
 
   return {
-    caseId,
-    caseReference: caseData.reference,
-    requesterName: caseData.requesterName,
-    dateReceived: caseData.dateReceived.toISOString().split("T")[0],
+    batchId,
+    caseReference: batchData.reference,
+    requesterName: batchData.requesterName,
+    dateReceived: batchData.dateReceived.toISOString().split("T")[0],
 
     automatedProcessingHours: round2(automatedProcessingHours),
     humanReviewHours: round2(humanReviewHours),

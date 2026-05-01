@@ -8,15 +8,15 @@ import { prisma } from "@/lib/db/prisma";
 import { getOrgBranding } from "@/lib/data/org-config";
 import { verifyAuditIntegrity } from "@/lib/data/audit";
 
-export async function buildAuditTrailPdf(caseId: string): Promise<Uint8Array> {
-  const [caseData, orgBranding, integrityResult] = await Promise.all([
-    prisma.case.findUniqueOrThrow({ where: { id: caseId } }),
+export async function buildAuditTrailPdf(batchId: string): Promise<Uint8Array> {
+  const [batchData, orgBranding, integrityResult] = await Promise.all([
+    prisma.batch.findUniqueOrThrow({ where: { id: batchId } }),
     getOrgBranding(),
-    verifyAuditIntegrity(caseId),
+    verifyAuditIntegrity(batchId),
   ]);
 
   const entries = await prisma.auditEntry.findMany({
-    where: { caseId },
+    where: { batchId },
     orderBy: { timestamp: "asc" },
   });
 
@@ -39,7 +39,7 @@ export async function buildAuditTrailPdf(caseId: string): Promise<Uint8Array> {
     color: rgb(0, 0, 0),
   });
   yPos -= 20;
-  page.drawText(`Case: ${caseData.reference}`, {
+  page.drawText(`Case: ${batchData.reference}`, {
     x: margin,
     y: yPos,
     size: 11,
@@ -206,7 +206,7 @@ export async function buildAuditTrailPdf(caseId: string): Promise<Uint8Array> {
     color: rgb(0.6, 0.6, 0.6),
   });
 
-  pdfDoc.setTitle(`Audit Trail — ${caseData.reference}`);
+  pdfDoc.setTitle(`Audit Trail — ${batchData.reference}`);
   pdfDoc.setCreator("Veil LGOIMA Disclosure Platform");
   pdfDoc.setProducer(orgBranding.footerText || "Veil LGOIMA Disclosure Platform");
 

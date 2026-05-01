@@ -34,9 +34,9 @@ export async function getDetectionStats(documentId: string) {
   return { total, accepted, rejected, pending };
 }
 
-export async function getGroupedDetectionsForCase(caseId: string) {
+export async function getGroupedDetectionsForCase(batchId: string) {
   const detections = await prisma.detection.findMany({
-    where: { document: { caseId } },
+    where: { document: { batchId } },
     include: { document: { select: { name: true } } },
     orderBy: [{ type: "asc" }, { confidence: "desc" }],
   });
@@ -77,10 +77,10 @@ export async function getDetectionHistory(detectionId: string) {
  * for client-side confidence-threshold filtering.  The client uses
  * this to drive an interactive slider without server round-trips.
  */
-export async function getThresholdPreview(caseId: string) {
+export async function getThresholdPreview(batchId: string) {
   const detections = await prisma.detection.findMany({
     where: {
-      document: { caseId },
+      document: { batchId },
       status: "pending",
     },
     select: {
@@ -96,10 +96,10 @@ export async function getThresholdPreview(caseId: string) {
   return detections;
 }
 
-export async function getWithholdingItems(caseId: string) {
+export async function getWithholdingItems(batchId: string) {
   const acceptedDetections = await prisma.detection.findMany({
     where: {
-      document: { caseId },
+      document: { batchId },
       status: "accepted",
     },
     include: { document: { select: { name: true } } },

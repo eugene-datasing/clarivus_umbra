@@ -39,23 +39,11 @@ const optionalGroundIdSchema = z
   .optional();
 
 // ---------------------------------------------------------------------------
-// Case
+// Batch
 // ---------------------------------------------------------------------------
 
-export const createCaseSchema = z.object({
-  requesterName: z.string().min(1, "Requester name is required").max(200),
-  requesterType: z.string().min(1).max(50),
-  dateReceived: z.string().refine((s) => !isNaN(Date.parse(s)), "Invalid date"),
-  deadline: z.string().refine((s) => !isNaN(Date.parse(s)), "Invalid date"),
-  priority: z.string().min(1).max(20),
-  departments: z.array(z.string().min(1)).min(1, "At least one department is required"),
-  description: z.string().min(1, "Description is required").max(10000),
-});
-
-export const extendDeadlineSchema = z.object({
-  caseId: z.string().min(1, "Case ID is required"),
-  newDeadline: z.string().refine((s) => !isNaN(Date.parse(s)), "Invalid date"),
-  reason: z.string().min(1, "Extension reason is required under s 14 LGOIMA").max(2000),
+export const createBatchSchema = z.object({
+  name: z.string().min(1, "Batch name is required").max(80),
 });
 
 // ---------------------------------------------------------------------------
@@ -85,12 +73,12 @@ export const bulkDetectionSchema = z.object({
 });
 
 export const confidenceThresholdSchema = z.object({
-  caseId: z.string().min(1, "Case ID is required"),
+  batchId: z.string().min(1, "Batch ID is required"),
   threshold: z.number().int().min(0).max(100),
 });
 
 export const bulkApplyGroundToSimilarSchema = z.object({
-  caseId: z.string().min(1, "Case ID is required"),
+  batchId: z.string().min(1, "Batch ID is required"),
   entityText: z.string().min(1, "Entity text is required").max(5000),
   ground: groundIdSchema,
   action: z.enum(["accept", "reject"]),
@@ -106,7 +94,7 @@ export const acceptRemainingSchema = z.object({
 });
 
 export const bulkApplyGroundByTypeSchema = z.object({
-  caseId: z.string().min(1, "Case ID is required"),
+  batchId: z.string().min(1, "Batch ID is required"),
   detectionType: z.string().min(1, "Detection type is required").max(100),
   ground: groundIdSchema,
   action: z.enum(["accept", "reject"]),

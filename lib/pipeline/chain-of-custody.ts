@@ -87,18 +87,18 @@ function formatFileSize(bytes: number): string {
 // ---------------------------------------------------------------------------
 
 export async function buildChainOfCustodyReport(
-  caseId: string,
+  batchId: string,
   generatedBy: string,
 ): Promise<ChainOfCustodyResult> {
-  const [caseData, orgBranding] = await Promise.all([
-    prisma.case.findUniqueOrThrow({ where: { id: caseId } }),
+  const [batchData, orgBranding] = await Promise.all([
+    prisma.batch.findUniqueOrThrow({ where: { id: batchId } }),
     getOrgBranding(),
   ]);
 
   // Fetch all documents and all audit entries for the case
   const [documents, allAuditEntries] = await Promise.all([
     prisma.document.findMany({
-      where: { caseId },
+      where: { batchId },
       orderBy: { name: "asc" },
       include: {
         detections: {
@@ -107,7 +107,7 @@ export async function buildChainOfCustodyReport(
       },
     }),
     prisma.auditEntry.findMany({
-      where: { caseId },
+      where: { batchId },
       orderBy: { timestamp: "asc" },
     }),
   ]);
@@ -156,14 +156,14 @@ export async function buildChainOfCustodyReport(
   });
 
   ctx.yPos -= 28;
-  drawText(ctx, `Case Reference: ${caseData.reference}`, {
+  drawText(ctx, `Case Reference: ${batchData.reference}`, {
     size: 12,
     font: boldFont,
     color: rgb(0.2, 0.2, 0.2),
   });
 
   ctx.yPos -= 18;
-  drawText(ctx, `Requester: ${caseData.requesterName}`, {
+  drawText(ctx, `Requester: ${batchData.requesterName}`, {
     size: 10,
     color: rgb(0.3, 0.3, 0.3),
   });
@@ -453,10 +453,10 @@ export async function buildChainOfCustodyReport(
   });
 
   // PDF metadata
-  pdfDoc.setTitle(`Chain of Custody — ${caseData.reference}`);
+  pdfDoc.setTitle(`Chain of Custody — ${batchData.reference}`);
   pdfDoc.setCreator("Veil LGOIMA Disclosure Platform");
   pdfDoc.setProducer(orgBranding.footerText || "Veil LGOIMA Disclosure Platform");
-  pdfDoc.setSubject(`Chain of Custody Report for case ${caseData.reference}`);
+  pdfDoc.setSubject(`Chain of Custody Report for case ${batchData.reference}`);
 
   const pdfBytes = await pdfDoc.save();
 

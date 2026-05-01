@@ -335,7 +335,7 @@ export async function getRecordMetadata(
  * for all documents in a given case.
  */
 export async function syncDisposalSchedule(
-  caseId: string,
+  batchId: string,
 ): Promise<SyncDisposalResult> {
   if (!isRecordsConfigured()) {
     return {
@@ -347,11 +347,11 @@ export async function syncDisposalSchedule(
   try {
     const result = await apiPost<{ synced: number; errors: string[] }>(
       "/api/v1/disposal/sync",
-      { caseId },
+      { batchId },
     );
 
     log.info("Disposal schedule sync completed", {
-      caseId,
+      batchId,
       synced: result.synced,
       errorCount: result.errors.length,
     });
@@ -359,7 +359,7 @@ export async function syncDisposalSchedule(
     return result;
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : "Unknown error";
-    log.error("Failed to sync disposal schedule", { caseId, error: errorMessage });
+    log.error("Failed to sync disposal schedule", { batchId, error: errorMessage });
 
     return {
       synced: 0,

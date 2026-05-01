@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  createCaseSchema,
+  createBatchSchema,
   createManualDetectionSchema,
   createDepartmentSchema,
   createRuleSchema,
@@ -13,42 +13,21 @@ import {
   updateRuleSchema,
 } from "../schemas";
 
-describe("createCaseSchema", () => {
-  const valid = {
-    requesterName: "Jane Smith",
-    requesterType: "individual",
-    dateReceived: "2025-01-15",
-    deadline: "2025-02-15",
-    priority: "high",
-    departments: ["Corporate Services"],
-    description: "LGOIMA request for meeting minutes",
-  };
-
-  it("accepts valid data", () => {
-    expect(() => createCaseSchema.parse(valid)).not.toThrow();
+describe("createBatchSchema", () => {
+  it("accepts a valid batch name", () => {
+    expect(() => createBatchSchema.parse({ name: "May submission responses" })).not.toThrow();
   });
 
-  it("rejects empty requesterName", () => {
-    expect(() =>
-      createCaseSchema.parse({ ...valid, requesterName: "" }),
-    ).toThrow();
+  it("rejects an empty name", () => {
+    expect(() => createBatchSchema.parse({ name: "" })).toThrow();
   });
 
-  it("rejects empty departments array", () => {
-    expect(() =>
-      createCaseSchema.parse({ ...valid, departments: [] }),
-    ).toThrow();
+  it("rejects a name longer than 80 chars", () => {
+    expect(() => createBatchSchema.parse({ name: "X".repeat(81) })).toThrow();
   });
 
-  it("rejects invalid dateReceived", () => {
-    expect(() =>
-      createCaseSchema.parse({ ...valid, dateReceived: "not-a-date" }),
-    ).toThrow();
-  });
-
-  it("rejects missing description", () => {
-    const { description, ...noDesc } = valid;
-    expect(() => createCaseSchema.parse(noDesc)).toThrow();
+  it("accepts a name at exactly 80 chars", () => {
+    expect(() => createBatchSchema.parse({ name: "X".repeat(80) })).not.toThrow();
   });
 });
 
@@ -219,45 +198,45 @@ describe("applyGroundSchema", () => {
 });
 
 describe("confidenceThresholdSchema", () => {
-  it("accepts valid caseId and threshold", () => {
+  it("accepts valid batchId and threshold", () => {
     expect(() =>
-      confidenceThresholdSchema.parse({ caseId: "c1", threshold: 85 }),
+      confidenceThresholdSchema.parse({ batchId: "c1", threshold: 85 }),
     ).not.toThrow();
   });
 
   it("accepts threshold of 0", () => {
     expect(() =>
-      confidenceThresholdSchema.parse({ caseId: "c1", threshold: 0 }),
+      confidenceThresholdSchema.parse({ batchId: "c1", threshold: 0 }),
     ).not.toThrow();
   });
 
   it("accepts threshold of 100", () => {
     expect(() =>
-      confidenceThresholdSchema.parse({ caseId: "c1", threshold: 100 }),
+      confidenceThresholdSchema.parse({ batchId: "c1", threshold: 100 }),
     ).not.toThrow();
   });
 
   it("rejects threshold above 100", () => {
     expect(() =>
-      confidenceThresholdSchema.parse({ caseId: "c1", threshold: 101 }),
+      confidenceThresholdSchema.parse({ batchId: "c1", threshold: 101 }),
     ).toThrow();
   });
 
   it("rejects negative threshold", () => {
     expect(() =>
-      confidenceThresholdSchema.parse({ caseId: "c1", threshold: -1 }),
+      confidenceThresholdSchema.parse({ batchId: "c1", threshold: -1 }),
     ).toThrow();
   });
 
   it("rejects non-integer threshold", () => {
     expect(() =>
-      confidenceThresholdSchema.parse({ caseId: "c1", threshold: 85.5 }),
+      confidenceThresholdSchema.parse({ batchId: "c1", threshold: 85.5 }),
     ).toThrow();
   });
 
-  it("rejects empty caseId", () => {
+  it("rejects empty batchId", () => {
     expect(() =>
-      confidenceThresholdSchema.parse({ caseId: "", threshold: 85 }),
+      confidenceThresholdSchema.parse({ batchId: "", threshold: 85 }),
     ).toThrow();
   });
 });
@@ -320,47 +299,6 @@ describe("updateRuleSchema", () => {
   });
 });
 
-describe("createCaseSchema — additional edge cases", () => {
-  const valid = {
-    requesterName: "Jane Smith",
-    requesterType: "individual",
-    dateReceived: "2025-01-15",
-    deadline: "2025-02-15",
-    priority: "high",
-    departments: ["Corporate Services"],
-    description: "LGOIMA request for meeting minutes",
-  };
-
-  it("rejects requesterName exceeding 200 chars", () => {
-    expect(() =>
-      createCaseSchema.parse({ ...valid, requesterName: "X".repeat(201) }),
-    ).toThrow();
-  });
-
-  it("rejects description exceeding 10000 chars", () => {
-    expect(() =>
-      createCaseSchema.parse({ ...valid, description: "X".repeat(10001) }),
-    ).toThrow();
-  });
-
-  it("accepts description at exactly 10000 chars", () => {
-    expect(() =>
-      createCaseSchema.parse({ ...valid, description: "X".repeat(10000) }),
-    ).not.toThrow();
-  });
-
-  it("accepts ISO date format for dateReceived", () => {
-    expect(() =>
-      createCaseSchema.parse({ ...valid, dateReceived: "2025-12-31T23:59:59.000Z" }),
-    ).not.toThrow();
-  });
-
-  it("rejects departments with empty string entries", () => {
-    expect(() =>
-      createCaseSchema.parse({ ...valid, departments: [""] }),
-    ).toThrow();
-  });
-});
 
 describe("createManualDetectionSchema — additional edge cases", () => {
   const valid = {

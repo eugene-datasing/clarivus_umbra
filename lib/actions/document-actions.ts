@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { requireUser } from "@/lib/auth/session";
-import { authorizeForCase, authorizeForDocument } from "@/lib/auth/authorize";
+import { authorizeForBatch, authorizeForDocument } from "@/lib/auth/authorize";
 import { createAuditEntry } from "@/lib/data/audit";
 import { getStorage } from "@/lib/storage";
 import { logger } from "@/lib/logger";
@@ -18,14 +18,14 @@ export async function bulkExcludeDocuments(documentIds: string[]) {
   // Authorize for the case of the first document (all should belong to same case)
   const firstDoc = await prisma.document.findUnique({
     where: { id: documentIds[0] },
-    select: { caseId: true },
+    select: { batchId: true },
   });
   if (!firstDoc) throw new Error("Document not found");
-  await authorizeForCase(user, firstDoc.caseId);
+  await authorizeForBatch(user, firstDoc.batchId);
 
   const docs = await prisma.document.findMany({
     where: { id: { in: documentIds } },
-    select: { id: true, name: true, caseId: true, status: true },
+    select: { id: true, name: true, batchId: true, status: true },
   });
 
   const updated = await prisma.document.updateMany({
@@ -39,7 +39,7 @@ export async function bulkExcludeDocuments(documentIds: string[]) {
     type: "status",
     description: `Excluded ${updated.count} document(s) from review`,
     target: docs.map((d) => d.name).join(", "),
-    caseId: firstDoc.caseId,
+    batchId: firstDoc.batchId,
   });
 
   return { success: true, count: updated.count };
@@ -54,7 +54,7 @@ export async function restoreExcludedDocument(documentId: string) {
 
   const doc = await prisma.document.findUnique({
     where: { id: documentId },
-    select: { id: true, name: true, caseId: true, status: true },
+    select: { id: true, name: true, batchId: true, status: true },
   });
   if (!doc) throw new Error("Document not found");
   if (doc.status !== "excluded") throw new Error("Document is not excluded");
@@ -71,7 +71,7 @@ export async function restoreExcludedDocument(documentId: string) {
     type: "status",
     description: `Restored excluded document: "${doc.name}"`,
     target: doc.name,
-    caseId: doc.caseId,
+    batchId: doc.batchId,
   });
 
   return { success: true };
@@ -91,7 +91,7 @@ export async function deleteDocument(documentId: string) {
     select: {
       id: true,
       name: true,
-      caseId: true,
+      batchId: true,
       originalPath: true,
       detectionCount: true,
     },
@@ -132,7 +132,7 @@ export async function deleteDocument(documentId: string) {
 
     // Update case counts
     await tx.case.update({
-      where: { id: doc.caseId },
+      where: { id: doc.batchId },
       data: {
         documentCount: { decrement: 1 },
         redactionCount: { decrement: doc.detectionCount },
@@ -156,7 +156,7 @@ export async function deleteDocument(documentId: string) {
     type: "status",
     description: `Deleted document: "${doc.name}"`,
     target: doc.name,
-    caseId: doc.caseId,
+    batchId: doc.batchId,
   });
 
   return { success: true };
@@ -171,10 +171,10 @@ export async function bulkAssignReviewer(documentIds: string[], reviewerEmail: s
 
   const firstDoc = await prisma.document.findUnique({
     where: { id: documentIds[0] },
-    select: { caseId: true },
+    select: { batchId: true },
   });
   if (!firstDoc) throw new Error("Document not found");
-  await authorizeForCase(user, firstDoc.caseId);
+  await authorizeForBatch(user, firstDoc.batchId);
 
   // Look up the reviewer
   const reviewer = await prisma.user.findUnique({
@@ -200,7 +200,7 @@ export async function bulkAssignReviewer(documentIds: string[], reviewerEmail: s
     type: "review",
     description: `Assigned ${updated.count} document(s) to ${reviewer.name}`,
     target: docs.map((d) => d.name).join(", "),
-    caseId: firstDoc.caseId,
+    batchId: firstDoc.batchId,
   });
 
   return { success: true, count: updated.count };

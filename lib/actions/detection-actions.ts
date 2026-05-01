@@ -5,7 +5,7 @@ import { createAuditEntry } from "@/lib/data/audit";
 import { maskEntityText, stripPiiPatterns } from "@/lib/data/audit-sanitize";
 import { createSnapshot } from "@/lib/pipeline/version-snapshot";
 import { requireUser } from "@/lib/auth/session";
-import { authorizeForDocument, authorizeForDetection } from "@/lib/auth/authorize";
+import { authorizeForBatch, authorizeForDocument, authorizeForDetection } from "@/lib/auth/authorize";
 import { isAdmin } from "@/lib/auth/roles";
 import {
   acceptDetectionSchema,
@@ -19,8 +19,7 @@ import {
   changeDetectionTypeSchema,
   acceptRemainingSchema,
 } from "@/lib/validation/schemas";
-import { authorizeForCase } from "@/lib/auth/authorize";
-import { recomputeCaseStatus } from "@/lib/data/cases";
+import { recomputeBatchStatus } from "@/lib/data/batches";
 import { normaliseGroundToId } from "@/lib/lgoima-grounds";
 
 // ---------------------------------------------------------------------------
@@ -107,7 +106,7 @@ export async function markDocumentInReview(documentId: string) {
   await authorizeForDocument(user, documentId);
   const doc = await prisma.document.findUnique({
     where: { id: documentId },
-    select: { status: true, name: true, caseId: true },
+    select: { status: true, name: true, batchId: true },
   });
   if (!doc) return { success: false };
 
@@ -124,10 +123,10 @@ export async function markDocumentInReview(documentId: string) {
     type: "status",
     description: `Started review of document: "${doc.name}"`,
     target: doc.name,
-    caseId: doc.caseId,
+    batchId: doc.batchId,
   });
 
-  await recomputeCaseStatus(doc.caseId);
+  await recomputeBatchStatus(doc.batchId);
 
   return { success: true };
 }
@@ -141,7 +140,7 @@ export async function submitForSeniorReview(documentId: string) {
   await authorizeForDocument(user, documentId);
   const doc = await prisma.document.findUnique({
     where: { id: documentId },
-    select: { status: true, name: true, caseId: true },
+    select: { status: true, name: true, batchId: true },
   });
   if (!doc) throw new Error("Document not found");
 
@@ -163,10 +162,10 @@ export async function submitForSeniorReview(documentId: string) {
     type: "status",
     description: `Reviewer signed off document: "${doc.name}"`,
     target: doc.name,
-    caseId: doc.caseId,
+    batchId: doc.batchId,
   });
 
-  await recomputeCaseStatus(doc.caseId);
+  await recomputeBatchStatus(doc.batchId);
 
   return { success: true };
 }
@@ -180,7 +179,7 @@ export async function signOffDocument(documentId: string) {
   await authorizeForDocument(user, documentId);
   const doc = await prisma.document.findUnique({
     where: { id: documentId },
-    select: { status: true, name: true, caseId: true },
+    select: { status: true, name: true, batchId: true },
   });
   if (!doc) throw new Error("Document not found");
 
@@ -202,10 +201,10 @@ export async function signOffDocument(documentId: string) {
     type: "status",
     description: `Signed off document: "${doc.name}"`,
     target: doc.name,
-    caseId: doc.caseId,
+    batchId: doc.batchId,
   });
 
-  await recomputeCaseStatus(doc.caseId);
+  await recomputeBatchStatus(doc.batchId);
 
   return { success: true };
 }
@@ -218,7 +217,7 @@ export async function requestChanges(documentId: string, reason?: string) {
   await authorizeForDocument(user, documentId);
   const doc = await prisma.document.findUnique({
     where: { id: documentId },
-    select: { status: true, name: true, caseId: true },
+    select: { status: true, name: true, batchId: true },
   });
   if (!doc) throw new Error("Document not found");
 
@@ -231,7 +230,7 @@ export async function requestChanges(documentId: string, reason?: string) {
     data: { status: "in-review" },
   });
 
-  await recomputeCaseStatus(doc.caseId);
+  await recomputeBatchStatus(doc.batchId);
 
   await createAuditEntry({
     userName: user.name,
@@ -239,7 +238,7 @@ export async function requestChanges(documentId: string, reason?: string) {
     type: "status",
     description: `Requested changes on document: "${doc.name}"`,
     target: doc.name,
-    caseId: doc.caseId,
+    batchId: doc.batchId,
     detail: reason ? stripPiiPatterns(reason) : undefined,
   });
 
@@ -256,7 +255,7 @@ export async function acceptDetection(detectionId: string, ground?: string) {
   await authorizeForDetection(user, validId);
   const detection = await prisma.detection.findUnique({
     where: { id: validId },
-    include: { document: { select: { name: true, caseId: true } } },
+    include: { document: { select: { name: true, batchId: true } } },
   });
   if (!detection) throw new Error("Detection not found");
 
@@ -284,7 +283,7 @@ export async function acceptDetection(detectionId: string, ground?: string) {
     type: "review",
     description: `Accepted detection (${detection.type || "unknown"})`,
     target: detection.document.name,
-    caseId: detection.document.caseId,
+    batchId: detection.document.batchId,
     detail: `Detection ${validId}, Confidence: ${detection.confidence}%, Ground: ${appliedGround}`,
   });
 
@@ -299,7 +298,7 @@ export async function rejectDetection(detectionId: string, reason?: string) {
   await authorizeForDetection(user, validId);
   const detection = await prisma.detection.findUnique({
     where: { id: validId },
-    include: { document: { select: { name: true, caseId: true } } },
+    include: { document: { select: { name: true, batchId: true } } },
   });
   if (!detection) throw new Error("Detection not found");
 
@@ -323,7 +322,7 @@ export async function rejectDetection(detectionId: string, reason?: string) {
     type: "review",
     description: `Rejected detection (${detection.type || "unknown"})`,
     target: detection.document.name,
-    caseId: detection.document.caseId,
+    batchId: detection.document.batchId,
     detail: validReason ? `Reason: ${stripPiiPatterns(validReason)}` : `Detection ${validId}`,
   });
 
@@ -398,7 +397,7 @@ export async function bulkAcceptDetections(detectionIds: string[], ground?: stri
     select: {
       id: true,
       documentId: true,
-      document: { select: { caseId: true } },
+      document: { select: { batchId: true } },
       appliedGround: true,
       suggestedGround: true,
     },
@@ -407,12 +406,12 @@ export async function bulkAcceptDetections(detectionIds: string[], ground?: stri
   if (detections.length === 0) return { count: 0 };
 
   // All detections must belong to the same case
-  const caseIds = new Set(detections.map((d) => d.document.caseId));
-  if (caseIds.size !== 1) {
+  const batchIds = new Set(detections.map((d) => d.document.batchId));
+  if (batchIds.size !== 1) {
     throw new Error("All detections in a bulk operation must belong to the same case");
   }
-  const caseId = detections[0].document.caseId;
-  await authorizeForCase(user, caseId);
+  const batchId = detections[0].document.batchId;
+  await authorizeForBatch(user, batchId);
 
   // Resolve the ground each row should be accepted with.
   //
@@ -479,7 +478,7 @@ export async function bulkAcceptDetections(detectionIds: string[], ground?: stri
     type: "review",
     description: `Bulk accepted ${acceptedCount} detection(s)`,
     target: "Bulk Review",
-    caseId,
+    batchId,
     detail: `${acceptedCount} detection(s)${validGround ? `, Ground: ${validGround}` : ""}`,
   });
 
@@ -493,17 +492,17 @@ export async function bulkRejectDetections(detectionIds: string[]) {
   // Fetch all detections and verify they belong to the same authorized case
   const detections = await prisma.detection.findMany({
     where: { id: { in: validIds } },
-    select: { id: true, documentId: true, document: { select: { caseId: true } } },
+    select: { id: true, documentId: true, document: { select: { batchId: true } } },
   });
 
   if (detections.length === 0) return { count: 0 };
 
-  const caseIds = new Set(detections.map((d) => d.document.caseId));
-  if (caseIds.size !== 1) {
+  const batchIds = new Set(detections.map((d) => d.document.batchId));
+  if (batchIds.size !== 1) {
     throw new Error("All detections in a bulk operation must belong to the same case");
   }
-  const caseId = detections[0].document.caseId;
-  await authorizeForCase(user, caseId);
+  const batchId = detections[0].document.batchId;
+  await authorizeForBatch(user, batchId);
 
   const authorizedIds = detections.map((d) => d.id);
   const result = await prisma.detection.updateMany({
@@ -526,7 +525,7 @@ export async function bulkRejectDetections(detectionIds: string[]) {
     type: "review",
     description: `Bulk rejected ${result.count} detection(s)`,
     target: "Bulk Review",
-    caseId,
+    batchId,
   });
 
   return { count: result.count };
@@ -541,12 +540,12 @@ export async function bulkRejectDetections(detectionIds: string[]) {
  * Each detection gets its suggestedGround applied as appliedGround.
  * Admin-only.
  */
-export async function applyConfidenceThreshold(caseId: string, threshold: number) {
-  const { caseId: validCaseId, threshold: validThreshold } =
-    confidenceThresholdSchema.parse({ caseId, threshold });
+export async function applyConfidenceThreshold(batchId: string, threshold: number) {
+  const { batchId: validBatchId, threshold: validThreshold } =
+    confidenceThresholdSchema.parse({ batchId, threshold });
 
   const user = await requireUser();
-  await authorizeForCase(user, validCaseId);
+  await authorizeForBatch(user, validBatchId);
 
   if (!isAdmin(user.role)) {
     throw new Error("Access denied: only admins can apply confidence thresholds");
@@ -555,7 +554,7 @@ export async function applyConfidenceThreshold(caseId: string, threshold: number
   // Find all pending detections above the threshold
   const detections = await prisma.detection.findMany({
     where: {
-      document: { caseId: validCaseId },
+      document: { batchId: validBatchId },
       status: "pending",
       confidence: { gt: validThreshold },
     },
@@ -603,7 +602,7 @@ export async function applyConfidenceThreshold(caseId: string, threshold: number
     type: "review",
     description: `Applied confidence threshold ${validThreshold}%: ${detections.length} detection(s) auto-accepted`,
     target: "Bulk Review",
-    caseId: validCaseId,
+    batchId: validBatchId,
     detail: `Threshold: >${validThreshold}%, Documents affected: ${docIds.length}`,
   });
 
@@ -619,25 +618,25 @@ export async function applyConfidenceThreshold(caseId: string, threshold: number
  * the given entityText, and apply the ground + status.
  */
 export async function bulkApplyGroundToSimilar(
-  caseId: string,
+  batchId: string,
   entityText: string,
   ground: string,
   action: "accept" | "reject",
 ): Promise<{ updatedCount: number }> {
   const validated = bulkApplyGroundToSimilarSchema.parse({
-    caseId,
+    batchId,
     entityText,
     ground,
     action,
   });
 
   const user = await requireUser();
-  await authorizeForCase(user, validated.caseId);
+  await authorizeForBatch(user, validated.batchId);
 
   // Find all pending detections in this case whose text matches (case-insensitive)
   const detections = await prisma.detection.findMany({
     where: {
-      document: { caseId: validated.caseId },
+      document: { batchId: validated.batchId },
       status: "pending",
     },
     select: {
@@ -702,7 +701,7 @@ export async function bulkApplyGroundToSimilar(
     type: "review",
     description: `Bulk ${newStatus} ${matching.length} detection(s) matching ${maskedEntity}`,
     target: "Bulk Review",
-    caseId: validated.caseId,
+    batchId: validated.batchId,
     detail: `Entity: ${maskedEntity}, Ground: ${validated.ground}, Action: ${validated.action}`,
   });
 
@@ -718,25 +717,25 @@ export async function bulkApplyGroundToSimilar(
  * ground + status.
  */
 export async function bulkApplyGroundByType(
-  caseId: string,
+  batchId: string,
   detectionType: string,
   ground: string,
   action: "accept" | "reject",
 ): Promise<{ updatedCount: number }> {
   const validated = bulkApplyGroundByTypeSchema.parse({
-    caseId,
+    batchId,
     detectionType,
     ground,
     action,
   });
 
   const user = await requireUser();
-  await authorizeForCase(user, validated.caseId);
+  await authorizeForBatch(user, validated.batchId);
 
   // Find all pending detections of this type in this case
   const detections = await prisma.detection.findMany({
     where: {
-      document: { caseId: validated.caseId },
+      document: { batchId: validated.batchId },
       status: "pending",
       type: validated.detectionType,
     },
@@ -793,7 +792,7 @@ export async function bulkApplyGroundByType(
     type: "review",
     description: `Bulk ${newStatus} ${detections.length} detection(s) of type "${validated.detectionType}"`,
     target: "Bulk Review",
-    caseId: validated.caseId,
+    batchId: validated.batchId,
     detail: `Type: "${validated.detectionType}", Ground: ${validated.ground}, Action: ${validated.action}`,
   });
 
@@ -857,7 +856,7 @@ export async function acceptRemainingDetections(
 
   const doc = await prisma.document.findUnique({
     where: { id: validated.documentId },
-    select: { name: true, caseId: true },
+    select: { name: true, batchId: true },
   });
   if (!doc) throw new Error("Document not found");
 
@@ -908,7 +907,7 @@ export async function acceptRemainingDetections(
     type: "review",
     description: `Bulk accepted ${toAccept.length} remaining detection(s)${skippedIds.length > 0 ? `, skipped ${skippedIds.length} without ground` : ""}`,
     target: doc.name,
-    caseId: doc.caseId,
+    batchId: doc.batchId,
     detail: `Accepted: ${toAccept.length}, Skipped: ${skippedIds.length}`,
   });
 

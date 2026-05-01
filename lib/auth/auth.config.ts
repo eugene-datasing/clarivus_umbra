@@ -37,7 +37,6 @@ export const authConfig = {
       if (user) {
         token.role = (user as { role?: string }).role ?? "reviewer";
         token.userId = (user as { id?: string }).id;
-        token.departmentId = (user as { departmentId?: string | null }).departmentId ?? null;
       }
       return token;
     },
@@ -45,7 +44,6 @@ export const authConfig = {
       if (session.user) {
         (session.user as { role?: string }).role = token.role as string;
         (session.user as { id?: string }).id = token.userId as string;
-        (session.user as { departmentId?: string | null }).departmentId = (token.departmentId as string | null) ?? null;
       }
       return session;
     },

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { createAuditEntry } from "@/lib/data/audit";
 import { rebuildContentJson } from "@/lib/pipeline/rebuild-content";
 import { requireUser } from "@/lib/auth/session";
-import { authorizeForDocument, authorizeForDetection, authorizeForCase } from "@/lib/auth/authorize";
+import { authorizeForDocument, authorizeForDetection, authorizeForBatch } from "@/lib/auth/authorize";
 import { createManualDetectionSchema } from "@/lib/validation/schemas";
 import { calculateBBoxAll, type WordLayout } from "@/lib/pipeline/bbox";
 
@@ -28,7 +28,7 @@ export async function createManualDetection(input: CreateManualDetectionInput) {
 
   const doc = await prisma.document.findUnique({
     where: { id: validated.documentId },
-    select: { name: true, caseId: true },
+    select: { name: true, batchId: true },
   });
   if (!doc) throw new Error("Document not found");
 
@@ -176,7 +176,7 @@ export async function createManualDetection(input: CreateManualDetectionInput) {
     // action — siblings share the same training signal.
     await tx.feedbackExample.create({
       data: {
-        caseId: doc.caseId,
+        batchId: doc.batchId,
         documentId: validated.documentId,
         detectionId: det.id,
         type: validated.type,
@@ -199,7 +199,7 @@ export async function createManualDetection(input: CreateManualDetectionInput) {
     // redactionCount on Case track the same thing post-2026-04-27 fix
     // (one row = one redaction).
     await tx.case.update({
-      where: { id: doc.caseId },
+      where: { id: doc.batchId },
       data: { redactionCount: { increment: totalNewRows } },
     });
 
@@ -217,7 +217,7 @@ export async function createManualDetection(input: CreateManualDetectionInput) {
     type: "manual_detection",
     description: `Manually added detection (${validated.type})`,
     target: doc.name,
-    caseId: doc.caseId,
+    batchId: doc.batchId,
     detail: `Detection ${detection.id}, Page: ${validated.page}${validated.ground ? `, Ground: ${validated.ground}` : ""}`,
   });
 
@@ -234,7 +234,7 @@ export async function deleteManualDetection(detectionId: string) {
 
   const detection = await prisma.detection.findUnique({
     where: { id: detectionId },
-    include: { document: { select: { name: true, caseId: true, detectionCount: true } } },
+    include: { document: { select: { name: true, batchId: true, detectionCount: true } } },
   });
   if (!detection) throw new Error("Detection not found");
 
@@ -243,7 +243,7 @@ export async function deleteManualDetection(detectionId: string) {
   }
 
   const documentId = detection.documentId;
-  const caseId = detection.document.caseId;
+  const batchId = detection.document.batchId;
 
   // Wrap all DB writes in a transaction for atomicity
   await prisma.$transaction(async (tx) => {
@@ -271,13 +271,13 @@ export async function deleteManualDetection(detectionId: string) {
     }
 
     // Decrement case redaction count (prevent going negative)
-    const caseData = await tx.case.findUnique({
-      where: { id: caseId },
+    const batchData = await tx.case.findUnique({
+      where: { id: batchId },
       select: { redactionCount: true },
     });
-    if (caseData && caseData.redactionCount > 0) {
+    if (batchData && batchData.redactionCount > 0) {
       await tx.case.update({
-        where: { id: caseId },
+        where: { id: batchId },
         data: { redactionCount: { decrement: 1 } },
       });
     }
@@ -294,7 +294,7 @@ export async function deleteManualDetection(detectionId: string) {
     type: "manual_detection_deleted",
     description: `Deleted manual detection (${detection.type})`,
     target: detection.document.name,
-    caseId,
+    batchId,
     detail: `Detection ${detectionId}, Page: ${detection.page}`,
   });
 
@@ -358,10 +358,10 @@ interface CrossDocMatch {
 
 export async function scanCrossDocument(
   detectionId: string,
-  caseId: string,
+  batchId: string,
 ): Promise<{ matches: CrossDocMatch[] }> {
   const user = await requireUser();
-  await authorizeForCase(user, caseId);
+  await authorizeForBatch(user, batchId);
   const detection = await prisma.detection.findUnique({
     where: { id: detectionId },
     select: { text: true, documentId: true },
@@ -376,7 +376,7 @@ export async function scanCrossDocument(
   // Search DocumentPage text across all docs in this case (excluding current doc)
   const pages = await prisma.documentPage.findMany({
     where: {
-      document: { caseId },
+      document: { batchId },
       documentId: { not: detection.documentId },
       text: { contains: searchText, mode: "insensitive" },
     },

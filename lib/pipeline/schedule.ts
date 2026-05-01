@@ -23,20 +23,20 @@ export interface ScheduleResult {
  * Groups accepted detections by ground, then by document.
  */
 export async function buildWithholdingSchedule(
-  caseId: string,
+  batchId: string,
   options: { includeReasoning?: boolean; documentIds?: string[] } = {},
 ): Promise<ScheduleResult> {
   const { includeReasoning = false, documentIds } = options;
 
-  const [caseData, orgBranding] = await Promise.all([
-    prisma.case.findUniqueOrThrow({ where: { id: caseId } }),
+  const [batchData, orgBranding] = await Promise.all([
+    prisma.batch.findUniqueOrThrow({ where: { id: batchId } }),
     getOrgBranding(),
   ]);
 
   // Scope detections to selected documents if provided
   const documentFilter = documentIds
     ? { documentId: { in: documentIds }, status: "accepted" as const }
-    : { document: { caseId }, status: "accepted" as const };
+    : { document: { batchId }, status: "accepted" as const };
 
   const acceptedDetections = await prisma.detection.findMany({
     where: documentFilter,
@@ -75,7 +75,7 @@ export async function buildWithholdingSchedule(
     color: rgb(0, 0, 0),
   });
   yPos -= 30;
-  page.drawText(`Case: ${caseData.reference}`, {
+  page.drawText(`Case: ${batchData.reference}`, {
     x: margin,
     y: yPos,
     size: 12,
@@ -83,7 +83,7 @@ export async function buildWithholdingSchedule(
     color: rgb(0.3, 0.3, 0.3),
   });
   yPos -= 18;
-  page.drawText(`Requester: ${caseData.requesterName}`, {
+  page.drawText(`Requester: ${batchData.requesterName}`, {
     x: margin,
     y: yPos,
     size: 10,
@@ -268,7 +268,7 @@ export async function buildWithholdingSchedule(
     color: rgb(0.6, 0.6, 0.6),
   });
 
-  pdfDoc.setTitle(`Withholding Schedule — ${caseData.reference}`);
+  pdfDoc.setTitle(`Withholding Schedule — ${batchData.reference}`);
   pdfDoc.setCreator("Veil LGOIMA Disclosure Platform");
   pdfDoc.setProducer(orgBranding.footerText || "Veil LGOIMA Disclosure Platform");
 

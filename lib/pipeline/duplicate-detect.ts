@@ -69,7 +69,7 @@ function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
  */
 export async function detectDuplicates(
   docId: string,
-  caseId: string,
+  batchId: string,
   fullText: string,
 ): Promise<DuplicateResult> {
   const contentHash = computeContentHash(fullText);
@@ -77,7 +77,7 @@ export async function detectDuplicates(
   // Check for exact duplicates (same hash, same case, different document)
   const exactMatch = await prisma.document.findFirst({
     where: {
-      caseId,
+      batchId,
       contentHash,
       id: { not: docId },
     },
@@ -112,7 +112,7 @@ export async function detectDuplicates(
       type: "duplicate_detected",
       description: `Exact duplicate detected: "${currentDoc?.name}" matches "${exactMatch.name}"`,
       target: currentDoc?.name || docId,
-      caseId,
+      batchId,
       detail: `Content hash: ${contentHash.slice(0, 16)}..., Group: ${group}`,
     });
 
@@ -132,7 +132,7 @@ export async function detectDuplicates(
     // Load other documents in the same case that have been processed
     const otherDocs = await prisma.document.findMany({
       where: {
-        caseId,
+        batchId,
         id: { not: docId },
         contentHash: { not: null },
       },
@@ -178,7 +178,7 @@ export async function detectDuplicates(
           type: "duplicate_detected",
           description: `Near-duplicate detected: "${currentDoc?.name}" is ${Math.round(similarity * 100)}% similar to "${other.name}"`,
           target: currentDoc?.name || docId,
-          caseId,
+          batchId,
           detail: `Jaccard similarity: ${(similarity * 100).toFixed(1)}%, Group: ${group}`,
         });
 

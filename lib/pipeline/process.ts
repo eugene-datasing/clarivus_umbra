@@ -15,7 +15,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma";
-import { recomputeCaseStatus } from "@/lib/data/cases";
+import { recomputeBatchStatus } from "@/lib/data/batches";
 import { getStorage } from "@/lib/storage";
 import { extractText, OCRUnavailableError, ExtractionCorruptionError } from "./extract";
 import { validateFile } from "./file-validator";
@@ -84,7 +84,7 @@ export async function processDocument(docId: string): Promise<void> {
       throw new Error(`Document not found: ${docId}`);
     }
 
-    const caseId = doc.caseId;
+    const batchId = doc.batchId;
 
     // ------------------------------------------------------------------
     // Timing instrumentation (WP13)
@@ -104,7 +104,7 @@ export async function processDocument(docId: string): Promise<void> {
     // ------------------------------------------------------------------
     const ext = getExtension(doc.name);
     const storageKey =
-      doc.originalPath || `${caseId}/${docId}/original${ext}`;
+      doc.originalPath || `${batchId}/${docId}/original${ext}`;
 
     log.info("Downloading file", { docId, storageKey });
 
@@ -157,7 +157,7 @@ export async function processDocument(docId: string): Promise<void> {
         type: "document_error",
         description: `File validation failed: corrupted or unreadable file`,
         target: doc.name,
-        caseId,
+        batchId,
         detail: [
           `Detected type: ${validation.fileInfo.detectedType}`,
           `Declared type: ${validation.fileInfo.declaredType}`,
@@ -190,7 +190,7 @@ export async function processDocument(docId: string): Promise<void> {
         type: "document_error",
         description: `File is encrypted or password-protected`,
         target: doc.name,
-        caseId,
+        batchId,
         detail: [
           `Detected type: ${validation.fileInfo.detectedType}`,
           `Warnings: ${validation.warnings.join("; ")}`,
@@ -211,7 +211,7 @@ export async function processDocument(docId: string): Promise<void> {
     // 2.7 Build canonical PDF (Phase 1, April 2026 — viewer rework)
     // ------------------------------------------------------------------
     // One canonical PDF per document, persisted alongside the original at
-    // {caseId}/{docId}/canonical.pdf. For PDF input it's a pass-through of
+    // {batchId}/{docId}/canonical.pdf. For PDF input it's a pass-through of
     // the original buffer; for Office formats it's the LibreOffice
     // conversion; for .eml/.msg it's the email transcript PDF. Types
     // outside the supported set (images, audio, video) skip cleanly —
@@ -239,7 +239,7 @@ export async function processDocument(docId: string): Promise<void> {
         if (canonicalPdfResult.source === "original" && doc.originalPath) {
           canonicalPdfKey = doc.originalPath;
         } else {
-          canonicalPdfKey = `${caseId}/${docId}/canonical.pdf`;
+          canonicalPdfKey = `${batchId}/${docId}/canonical.pdf`;
           await storage.upload(
             canonicalPdfKey,
             canonicalPdfResult.pdfBuffer,
@@ -372,7 +372,7 @@ export async function processDocument(docId: string): Promise<void> {
           type: "document_error",
           description: `Extraction failed: file corrupted or unreadable`,
           target: doc.name,
-          caseId,
+          batchId,
           detail: corruptionMsg,
         });
 
@@ -411,7 +411,7 @@ export async function processDocument(docId: string): Promise<void> {
         const attDoc = await prisma.$transaction(async (tx) => {
           const doc = await tx.document.create({
             data: {
-              caseId,
+              batchId,
               name: att.filename,
               fileType: attFileType,
               mimeType: att.contentType,
@@ -420,13 +420,13 @@ export async function processDocument(docId: string): Promise<void> {
             },
           });
           await tx.case.update({
-            where: { id: caseId },
+            where: { id: batchId },
             data: { documentCount: { increment: 1 } },
           });
           return doc;
         });
 
-        const attStorageKey = `${caseId}/${attDoc.id}/original${attExt || ".bin"}`;
+        const attStorageKey = `${batchId}/${attDoc.id}/original${attExt || ".bin"}`;
         await storage.upload(attStorageKey, att.content, att.contentType);
         await prisma.document.update({
           where: { id: attDoc.id },
@@ -527,7 +527,7 @@ export async function processDocument(docId: string): Promise<void> {
     // 5.5 Duplicate detection
     // ------------------------------------------------------------------
     log.info("Checking for duplicates", { docId });
-    const dupResult = await detectDuplicates(docId, caseId, extraction.totalText);
+    const dupResult = await detectDuplicates(docId, batchId, extraction.totalText);
     if (dupResult.isExactDuplicate) {
       log.info("Exact duplicate detected", { docId, duplicateGroup: dupResult.duplicateGroup });
     } else if (dupResult.nearDuplicateOf) {
@@ -1014,7 +1014,7 @@ export async function processDocument(docId: string): Promise<void> {
 
       // 11. Update case counters
       await tx.case.update({
-        where: { id: caseId },
+        where: { id: batchId },
         data: {
           redactionCount: {
             increment: totalDetections,
@@ -1032,7 +1032,7 @@ export async function processDocument(docId: string): Promise<void> {
       type: "document_processed",
       description: `Document processed: ${extraction.pages.length} page(s), ${totalDetections} detection(s) found`,
       target: doc.name,
-      caseId,
+      batchId,
       detail: [
         `File type: ${doc.fileType}`,
         `Pages: ${extraction.pages.length}`,
@@ -1046,7 +1046,7 @@ export async function processDocument(docId: string): Promise<void> {
     });
 
     // Recompute case status (ingesting -> in-review when all docs ready)
-    await recomputeCaseStatus(caseId);
+    await recomputeBatchStatus(batchId);
 
     log.info("Document processing complete", { docId, totalProcessingMs });
     trackEvent("document_processed", { docId });

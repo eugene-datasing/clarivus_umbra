@@ -90,7 +90,7 @@ async function setProgress(exportId: string, update: Partial<ExportProgress>) {
  *   includes all signed-off documents for the case.
  */
 export async function generateExportPackage(
-  caseId: string,
+  batchId: string,
   packageType: PackageType,
   options: {
     includeCoverLetter?: boolean;
@@ -103,7 +103,7 @@ export async function generateExportPackage(
   // Create the ExportJob in DB
   const job = await prisma.exportJob.create({
     data: {
-      caseId,
+      batchId,
       packageType,
       status: "generating",
       progress: 0,
@@ -115,7 +115,7 @@ export async function generateExportPackage(
   const exportId = job.id;
 
   // Run async — do not await
-  doGenerate(exportId, caseId, packageType, options).catch((err) => {
+  doGenerate(exportId, batchId, packageType, options).catch((err) => {
     logger.error("Export generation failed:", { error: String(err) });
     setProgress(exportId, {
       status: "error",
@@ -128,7 +128,7 @@ export async function generateExportPackage(
 
 async function doGenerate(
   exportId: string,
-  caseId: string,
+  batchId: string,
   packageType: PackageType,
   options: {
     includeCoverLetter?: boolean;
@@ -138,13 +138,13 @@ async function doGenerate(
     generatedBy?: string;
   },
 ) {
-  const caseData = await prisma.case.findUniqueOrThrow({ where: { id: caseId } });
+  const batchData = await prisma.batch.findUniqueOrThrow({ where: { id: batchId } });
 
   // If explicit document IDs were provided, use those (already validated by API route).
   // Otherwise fall back to all signed-off documents for the case.
   const documentWhere = options.documentIds
-    ? { id: { in: options.documentIds }, caseId }
-    : { caseId, status: { in: ["signed-off", "reviewed"] } };
+    ? { id: { in: options.documentIds }, batchId }
+    : { batchId, status: { in: ["signed-off", "reviewed"] } };
 
   const documents = await prisma.document.findMany({
     where: documentWhere,
@@ -220,7 +220,7 @@ async function doGenerate(
   });
   const includeReasoning = packageType === "ombudsman" || packageType === "internal";
   const selectedDocIds = documents.map((d) => d.id);
-  const schedule = await buildWithholdingSchedule(caseId, { includeReasoning, documentIds: selectedDocIds });
+  const schedule = await buildWithholdingSchedule(batchId, { includeReasoning, documentIds: selectedDocIds });
   zipParts.push({ name: `withholding_schedule.pdf`, data: schedule.pdfBytes });
   completed++;
 
@@ -230,7 +230,7 @@ async function doGenerate(
       progress: Math.round((completed / totalSteps) * 80),
       currentStep: "Generating covering letter",
     });
-    const coverLetter = await buildCoverLetterPdf(caseId, {
+    const coverLetter = await buildCoverLetterPdf(batchId, {
       includeRightOfReview: options.includeRightOfReview !== false,
       documentIds: selectedDocIds,
     });
@@ -244,7 +244,7 @@ async function doGenerate(
       progress: Math.round((completed / totalSteps) * 80),
       currentStep: "Generating audit trail",
     });
-    const auditPdf = await buildAuditTrailPdf(caseId);
+    const auditPdf = await buildAuditTrailPdf(batchId);
     zipParts.push({ name: `audit_trail.pdf`, data: auditPdf });
   }
 
@@ -255,7 +255,7 @@ async function doGenerate(
       currentStep: "Generating chain-of-custody report",
     });
     const custodyReport = await buildChainOfCustodyReport(
-      caseId,
+      batchId,
       options.generatedBy ?? "System",
     );
     zipParts.push({ name: `chain_of_custody.pdf`, data: custodyReport.pdfBytes });
@@ -282,7 +282,7 @@ async function doGenerate(
     const verifyLines: string[] = [
       `Redaction Verification Report`,
       `Generated: ${new Date().toISOString()}`,
-      `Case: ${caseData.reference}`,
+      `Case: ${batchData.reference}`,
       `Overall: ${allPassed ? "PASSED" : "WARNINGS FOUND"}`,
       ``,
     ];
@@ -315,8 +315,8 @@ async function doGenerate(
         description: allPassed
           ? `Redaction verification passed for ${verificationResults.length} document(s)`
           : `Redaction verification completed with warnings for ${verificationResults.filter((v) => !v.result.passed).length} of ${verificationResults.length} document(s)`,
-        target: caseData.reference,
-        caseId,
+        target: batchData.reference,
+        batchId,
         detail: verificationResults
           .map((v) => `${v.docName}: ${v.result.passed ? "PASS" : `${v.result.leaksFound} issue(s)`}`)
           .join("; "),
@@ -341,8 +341,8 @@ async function doGenerate(
   const sha256 = createHash("sha256").update(zipBuffer).digest("hex");
 
   // 9. Store the ZIP
-  const filename = `${caseData.reference}_${packageType}_${new Date().toISOString().split("T")[0]}.zip`;
-  const storageKey = `exports/${caseId}/${exportId}/${filename}`;
+  const filename = `${batchData.reference}_${packageType}_${new Date().toISOString().split("T")[0]}.zip`;
+  const storageKey = `exports/${batchId}/${exportId}/${filename}`;
   await storage.upload(storageKey, zipBuffer, "application/zip");
 
   // 10. Audit entry
@@ -352,8 +352,8 @@ async function doGenerate(
       userRole: "system",
       type: "export-generated",
       description: `${packageType} export package generated: ${filename}`,
-      target: caseData.reference,
-      caseId,
+      target: batchData.reference,
+      batchId,
       detail: `SHA-256: ${sha256}`,
     },
   });
@@ -475,7 +475,7 @@ function splitIntoBatches(
  * If total pages fall below the batch threshold, falls back to a single-batch export.
  */
 export async function batchExport(
-  caseId: string,
+  batchId: string,
   packageType: PackageType,
   options: {
     includeCoverLetter?: boolean;
@@ -491,8 +491,8 @@ export async function batchExport(
 
   // Fetch documents with page counts
   const documentWhere = options.documentIds
-    ? { id: { in: options.documentIds }, caseId }
-    : { caseId, status: { in: ["signed-off", "reviewed"] } };
+    ? { id: { in: options.documentIds }, batchId }
+    : { batchId, status: { in: ["signed-off", "reviewed"] } };
 
   const documents = await prisma.document.findMany({
     where: documentWhere,
@@ -507,7 +507,7 @@ export async function batchExport(
     // Create a single ExportJob with batchGroupId
     const job = await prisma.exportJob.create({
       data: {
-        caseId,
+        batchId,
         packageType,
         status: "generating",
         progress: 0,
@@ -519,7 +519,7 @@ export async function batchExport(
     });
 
     // Run standard generation on this job
-    doGenerate(job.id, caseId, packageType, options).catch((err) => {
+    doGenerate(job.id, batchId, packageType, options).catch((err) => {
       logger.error("Export generation failed:", { error: String(err) });
       setProgress(job.id, {
         status: "error",
@@ -542,7 +542,7 @@ export async function batchExport(
     const batch = docBatches[i];
     const job = await prisma.exportJob.create({
       data: {
-        caseId,
+        batchId,
         packageType,
         status: "pending",
         progress: 0,
@@ -556,7 +556,7 @@ export async function batchExport(
   }
 
   // Run batch generation in background
-  doBatchGenerate(batchGroupId, caseId, packageType, docBatches, exportIds, options).catch(
+  doBatchGenerate(batchGroupId, batchId, packageType, docBatches, exportIds, options).catch(
     (err) => {
       logger.error("Batch export generation failed:", { error: String(err) });
       // Mark all pending jobs in this batch as errored
@@ -572,7 +572,7 @@ export async function batchExport(
 
 async function doBatchGenerate(
   batchGroupId: string,
-  caseId: string,
+  batchId: string,
   packageType: PackageType,
   docBatches: { id: string; name: string; pageCount: number }[][],
   exportIds: string[],
@@ -583,7 +583,7 @@ async function doBatchGenerate(
     generatedBy?: string;
   },
 ) {
-  const caseData = await prisma.case.findUniqueOrThrow({ where: { id: caseId } });
+  const batchData = await prisma.batch.findUniqueOrThrow({ where: { id: batchId } });
 
   for (let i = 0; i < docBatches.length; i++) {
     const batch = docBatches[i];
@@ -596,7 +596,7 @@ async function doBatchGenerate(
     });
 
     try {
-      await doGenerate(exportId, caseId, packageType, {
+      await doGenerate(exportId, batchId, packageType, {
         ...options,
         documentIds: batch.map((d) => d.id),
       });
@@ -612,13 +612,13 @@ async function doBatchGenerate(
   // Store manifest in each batch's storage location
   const storage = getStorage();
   const manifest = {
-    caseReference: caseData.reference,
+    caseReference: batchData.reference,
     totalBatches: docBatches.length,
     generatedAt: new Date().toISOString(),
     generatedBy: options.generatedBy ?? "System",
     batches: docBatches.map((batch, i) => ({
       batchNumber: i + 1,
-      filename: `${caseData.reference}_batch_${i + 1}.zip`,
+      filename: `${batchData.reference}_batch_${i + 1}.zip`,
       documents: batch.map((d) => d.name),
       pageCount: batch.reduce((s, d) => s + d.pageCount, 0),
     })),

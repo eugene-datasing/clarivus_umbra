@@ -89,7 +89,7 @@ export async function invokeFixturePipeline(
 
   // Isolate from prod seed data: one case per invocation.
   const bench = `bench-${runLabel}`;
-  const testCase = await prisma.case.create({
+  const testCase = await prisma.batch.create({
     data: {
       reference: `BENCH-${runLabel}`.slice(0, 100),
       requesterName: "Bench Suite",
@@ -111,7 +111,7 @@ export async function invokeFixturePipeline(
   try {
     const doc = await prisma.document.create({
       data: {
-        caseId: testCase.id,
+        batchId: testCase.id,
         name: `${bench}${ext}`,
         fileType,
         mimeType,
@@ -178,7 +178,7 @@ export async function invokeFixturePipeline(
         .catch(() => {});
       await prisma.document.delete({ where: { id: docId } }).catch(() => {});
     }
-    await prisma.case.delete({ where: { id: testCase.id } }).catch(() => {});
+    await prisma.batch.delete({ where: { id: testCase.id } }).catch(() => {});
     if (originalKey) await storage.delete(originalKey).catch(() => {});
     if (canonicalKey) await storage.delete(canonicalKey).catch(() => {});
     if (ownsPrisma) await prisma.$disconnect().catch(() => {});

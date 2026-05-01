@@ -1,15 +1,15 @@
 import { prisma } from "@/lib/db/prisma";
 
-export async function getDocumentsForCase(caseId: string) {
+export async function getDocumentsForCase(batchId: string) {
   const docs = await prisma.document.findMany({
-    where: { caseId },
+    where: { batchId },
     include: { assignee: true },
     orderBy: { updatedAt: "desc" },
   });
 
   return docs.map((d) => ({
     id: d.id,
-    requestId: d.caseId,
+    requestId: d.batchId,
     name: d.name,
     type: d.fileType,
     pageCount: d.pageCount,
@@ -33,7 +33,7 @@ export async function getDocument(id: string) {
 
   return {
     id: d.id,
-    requestId: d.caseId,
+    requestId: d.batchId,
     name: d.name,
     type: d.fileType,
     pageCount: d.pageCount,
@@ -50,9 +50,9 @@ export async function getDocument(id: string) {
   };
 }
 
-export async function getDocumentIdsForCase(caseId: string): Promise<string[]> {
+export async function getDocumentIdsForCase(batchId: string): Promise<string[]> {
   const docs = await prisma.document.findMany({
-    where: { caseId },
+    where: { batchId },
     select: { id: true },
     orderBy: { name: "asc" },
   });
@@ -76,7 +76,7 @@ export async function getQueueDocuments() {
 
   return docs.map((d) => ({
     id: d.id,
-    requestId: d.caseId,
+    requestId: d.batchId,
     requestReference: d.case.reference,
     name: d.name,
     type: d.fileType,

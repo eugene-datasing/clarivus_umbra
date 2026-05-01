@@ -140,10 +140,10 @@ export interface CaseProcessingMetrics {
 }
 
 export async function getCaseProcessingMetrics(
-  caseId: string,
+  batchId: string,
 ): Promise<CaseProcessingMetrics> {
   const docs = await prisma.document.findMany({
-    where: { caseId },
+    where: { batchId },
     select: {
       id: true,
       name: true,

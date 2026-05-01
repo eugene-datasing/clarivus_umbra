@@ -52,7 +52,6 @@ const providers: Provider[] = [
         name: user.name,
         email: user.email ?? undefined,
         role: user.role,
-        departmentId: user.departmentId,
       };
     },
   }),
@@ -166,7 +165,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               name: invitation?.name ?? user.name ?? email.split("@")[0],
               email,
               role: bootstrapRole,
-              departmentId: invitation?.departmentId ?? null,
               azureAdOid: oid || null,
             },
           });
@@ -180,11 +178,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
         }
 
-        // Attach local DB id, role, and departmentId to the user object so the
+        // Attach local DB id and role to the user object so the
         // jwt callback can read them.
         user.id = dbUser.id;
         (user as { role?: string }).role = dbUser.role;
-        (user as { departmentId?: string | null }).departmentId = dbUser.departmentId;
       }
 
       return true;
@@ -199,30 +196,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
      * for both credentials and Azure AD flows, so the base callback works
      * as-is.
      *
-     * On every token refresh, re-read the user's current role and
-     * departmentId from the database so that changes (profile save, role
-     * promotion, admin edits) take effect without requiring sign-out.
-     * This is a single indexed SELECT by PK — negligible overhead.
+     * On every token refresh, re-read the user's current role from the
+     * database so that role promotions / admin edits take effect without
+     * requiring sign-out. This is a single indexed SELECT by PK —
+     * negligible overhead.
      */
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user }) {
       if (user) {
         token.role = (user as { role?: string }).role ?? "reviewer";
         token.userId = (user as { id?: string }).id;
-        token.departmentId = (user as { departmentId?: string | null }).departmentId ?? null;
       }
 
-      // Always re-read role and departmentId from the database so that
-      // changes (profile save, role promotion, admin edits) take effect
-      // without requiring a full sign-out/sign-in cycle. This runs on
-      // every session access but is a single indexed SELECT by PK.
+      // Always re-read role from the database so that changes (profile
+      // save, role promotion, admin edits) take effect without requiring
+      // a full sign-out/sign-in cycle.
       if (token.userId) {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.userId as string },
-          select: { role: true, departmentId: true },
+          select: { role: true },
         });
         if (dbUser) {
           token.role = dbUser.role;
-          token.departmentId = dbUser.departmentId ?? null;
         }
       }
 

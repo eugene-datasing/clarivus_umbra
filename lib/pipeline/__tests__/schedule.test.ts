@@ -56,7 +56,7 @@ function makeDetection(id: string, ground: string, docName: string, page: number
 describe("buildWithholdingSchedule", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (prisma.case.findUniqueOrThrow as ReturnType<typeof vi.fn>).mockResolvedValue(mockCase);
+    (prisma.batch.findUniqueOrThrow as ReturnType<typeof vi.fn>).mockResolvedValue(mockCase);
   });
 
   it("produces a valid PDF with zero detections", async () => {
@@ -131,7 +131,7 @@ describe("buildWithholdingSchedule", () => {
     expect(prisma.detection.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          document: { caseId: "case-1" },
+          document: { batchId: "case-1" },
           status: "accepted",
         }),
       }),

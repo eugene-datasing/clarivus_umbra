@@ -38,7 +38,7 @@ vi.mock("@/lib/auth/session", () => ({
 vi.mock("@/lib/auth/authorize", () => ({
   authorizeForDocument: (...args: unknown[]) => mockAuthorizeForDocument(...args),
   authorizeForDetection: vi.fn(),
-  authorizeForCase: vi.fn(),
+  authorizeForBatch: vi.fn(),
 }));
 
 vi.mock("@/lib/data/audit", () => ({
@@ -89,7 +89,7 @@ import { createManualDetection } from "../manual-detection-actions";
 
 const fakeUser = { id: "u1", name: "Test User", role: "admin" };
 const documentId = "doc-1";
-const caseId = "case-1";
+const batchId = "case-1";
 
 const baseInput = {
   documentId,
@@ -120,7 +120,7 @@ function setupDefaults() {
   mockDocumentFindUnique.mockResolvedValue({
     id: documentId,
     name: "Test Doc",
-    caseId,
+    batchId,
   });
   // tx.detection.create returns a row with a distinct id per call —
   // the FIRST call creates the original row (`det-new`), subsequent
@@ -438,7 +438,7 @@ describe("createManualDetection — Bug 5 fix (long text + multi-line)", () => {
 
     expect(mockCaseUpdate).toHaveBeenCalledTimes(1);
     expect(mockCaseUpdate.mock.calls[0][0]).toMatchObject({
-      where: { id: caseId },
+      where: { id: batchId },
       data: { redactionCount: { increment: 2 } },
     });
   });

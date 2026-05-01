@@ -28,7 +28,7 @@ export interface GroundFrequency {
 export interface ComplianceSummaryData {
   generatedAt: string;
   totalCases: number;
-  casesByStatus: Record<string, number>;
+  batchesByStatus: Record<string, number>;
   totalDocuments: number;
   totalDetections: number;
   totalAccepted: number;
@@ -39,7 +39,7 @@ export interface ComplianceSummaryData {
 }
 
 export async function computeComplianceSummary(): Promise<ComplianceSummaryData> {
-  const cases = await prisma.case.findMany({
+  const cases = await prisma.batch.findMany({
     orderBy: { dateReceived: "desc" },
     include: {
       documents: {
@@ -57,7 +57,7 @@ export async function computeComplianceSummary(): Promise<ComplianceSummaryData>
     },
   });
 
-  const casesByStatus: Record<string, number> = {};
+  const batchesByStatus: Record<string, number> = {};
   const groundCounts = new Map<string, number>();
   let totalDocuments = 0;
   let totalDetections = 0;
@@ -69,7 +69,7 @@ export async function computeComplianceSummary(): Promise<ComplianceSummaryData>
 
   for (const c of cases) {
     // Status distribution
-    casesByStatus[c.status] = (casesByStatus[c.status] || 0) + 1;
+    batchesByStatus[c.status] = (batchesByStatus[c.status] || 0) + 1;
 
     // Document and detection counts
     const docCount = c.documents.length;
@@ -126,7 +126,7 @@ export async function computeComplianceSummary(): Promise<ComplianceSummaryData>
   return {
     generatedAt: new Date().toISOString(),
     totalCases: cases.length,
-    casesByStatus,
+    batchesByStatus,
     totalDocuments,
     totalDetections,
     totalAccepted,

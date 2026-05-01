@@ -93,7 +93,7 @@ describe.skipIf(!RUN)("Phase 1 canonical PDF — real pipeline", () => {
 
         const doc = await prisma.document.create({
           data: {
-            caseId: CASE_ID,
+            batchId: CASE_ID,
             name: `integration-${fixture.label}-${Date.now()}${ext}`,
             fileType: fixture.fileType,
             mimeType: fixture.mimeType,
@@ -167,7 +167,7 @@ describe.skipIf(!RUN)("Phase 2 DOCX detection coverage", () => {
 
     const doc = await prisma.document.create({
       data: {
-        caseId: CASE_ID,
+        batchId: CASE_ID,
         name: `phase2-integration-${Date.now()}${ext}`,
         fileType,
         mimeType,
@@ -342,7 +342,7 @@ describe.skipIf(!RUN)("Phase 2 detection-coverage follow-up", () => {
 
     const doc = await prisma.document.create({
       data: {
-        caseId: CASE_ID,
+        batchId: CASE_ID,
         name: `detection-coverage-${Date.now()}.pdf`,
         fileType: "PDF",
         mimeType: "application/pdf",

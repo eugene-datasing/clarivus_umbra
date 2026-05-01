@@ -6,7 +6,7 @@
  *
  * Usage:
  *   import { logger } from "@/lib/logger";
- *   logger.info("Pipeline started", { docId, caseId });
+ *   logger.info("Pipeline started", { docId, batchId });
  *
  *   const pipelineLog = logger.child({ module: "pipeline" });
  *   pipelineLog.info("Extraction complete", { pages: 5 });

@@ -132,7 +132,7 @@ export async function buildComplianceSummaryReport(): Promise<ComplianceSummaryR
   drawText(ctx, "CASES BY STATUS", { size: 14, font: boldFont });
   ctx.yPos -= 18;
 
-  for (const [status, count] of Object.entries(data.casesByStatus)) {
+  for (const [status, count] of Object.entries(data.batchesByStatus)) {
     ensureSpace(ctx, 16);
     const label = STATUS_LABELS[status] || status;
     drawText(ctx, label, { size: 9, color: rgb(0.3, 0.3, 0.3) });

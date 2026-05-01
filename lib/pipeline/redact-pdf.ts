@@ -116,7 +116,7 @@ async function redactCanonicalPdf(documentId: string): Promise<RedactedResult> {
   if (usableBboxes.length > 0) {
     try {
       const tier1Result = await redactOriginalPdf(
-        { id: doc.id, caseId: doc.caseId, originalPath: doc.canonicalPdfPath },
+        { id: doc.id, batchId: doc.batchId, originalPath: doc.canonicalPdfPath },
         usableBboxes,
       );
 
@@ -247,7 +247,7 @@ async function redactLegacy(documentId: string): Promise<RedactedResult> {
 // ---------------------------------------------------------------------------
 
 async function redactOriginalPdf(
-  doc: { id: string; caseId: string; originalPath: string | null },
+  doc: { id: string; batchId: string; originalPath: string | null },
   detections: Array<{
     posX: number;
     posY: number;

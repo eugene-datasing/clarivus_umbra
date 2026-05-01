@@ -49,9 +49,9 @@ export interface SimulationResult {
 // Data fetcher
 // ---------------------------------------------------------------------------
 
-export async function getQASimulation(caseId: string): Promise<SimulationResult> {
+export async function getQASimulation(batchId: string): Promise<SimulationResult> {
   const documents = await prisma.document.findMany({
-    where: { caseId },
+    where: { batchId },
     orderBy: { name: "asc" },
     include: {
       detections: {

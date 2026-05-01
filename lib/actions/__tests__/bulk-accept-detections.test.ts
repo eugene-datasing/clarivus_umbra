@@ -27,9 +27,9 @@ vi.mock("@/lib/auth/session", () => ({
 }));
 
 vi.mock("@/lib/auth/authorize", () => ({
-  authorizeForCase: (...args: unknown[]) => mockAuthorizeForCase(...args),
+  authorizeForBatch: (...args: unknown[]) => mockAuthorizeForCase(...args),
   // Other authorize helpers are imported elsewhere in detection-actions
-  // but bulkAcceptDetections only calls authorizeForCase.
+  // but bulkAcceptDetections only calls authorizeForBatch.
   authorizeForDocument: vi.fn(),
   authorizeForDetection: vi.fn(),
 }));
@@ -47,8 +47,8 @@ vi.mock("@/lib/pipeline/version-snapshot", () => ({
   createSnapshot: vi.fn(),
 }));
 
-vi.mock("@/lib/data/cases", () => ({
-  recomputeCaseStatus: vi.fn(),
+vi.mock("@/lib/data/batches", () => ({
+  recomputeBatchStatus: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({
@@ -85,7 +85,7 @@ vi.mock("@/lib/db/prisma", () => ({
 
 import { bulkAcceptDetections } from "../detection-actions";
 
-const caseId = "case-1";
+const batchId = "case-1";
 const docId = "doc-1";
 const fakeUser = { id: "u1", name: "Test User", role: "admin" };
 
@@ -132,21 +132,21 @@ describe("bulkAcceptDetections — per-row appliedGround normalisation (Bug 2 ro
       {
         id: "d1",
         documentId: docId,
-        document: { caseId },
+        document: { batchId },
         appliedGround: null,
         suggestedGround: "s7(2)(a)",
       },
       {
         id: "d2",
         documentId: docId,
-        document: { caseId },
+        document: { batchId },
         appliedGround: null,
         suggestedGround: "s7(2)(ba)",
       },
       {
         id: "d3",
         documentId: docId,
-        document: { caseId },
+        document: { batchId },
         appliedGround: null,
         suggestedGround: "s6(a)",
       },
@@ -184,14 +184,14 @@ describe("bulkAcceptDetections — per-row appliedGround normalisation (Bug 2 ro
       {
         id: "d1",
         documentId: docId,
-        document: { caseId },
+        document: { batchId },
         appliedGround: null,
         suggestedGround: "s7(2)(a)",
       },
       {
         id: "d2",
         documentId: docId,
-        document: { caseId },
+        document: { batchId },
         appliedGround: null,
         suggestedGround: "s6(a)",
       },
@@ -217,7 +217,7 @@ describe("bulkAcceptDetections — per-row appliedGround normalisation (Bug 2 ro
       {
         id: "d1",
         documentId: docId,
-        document: { caseId },
+        document: { batchId },
         appliedGround: "s7_2a", // already set by a prior single-accept
         suggestedGround: "s6(a)",
       },
@@ -241,7 +241,7 @@ describe("bulkAcceptDetections — per-row appliedGround normalisation (Bug 2 ro
       {
         id: "d1",
         documentId: docId,
-        document: { caseId },
+        document: { batchId },
         appliedGround: null,
         suggestedGround: null,
       },
@@ -265,14 +265,14 @@ describe("bulkAcceptDetections — per-row appliedGround normalisation (Bug 2 ro
       {
         id: "d1",
         documentId: docId,
-        document: { caseId },
+        document: { batchId },
         appliedGround: null,
         suggestedGround: "s7(2)(a)",
       },
       {
         id: "d2",
         documentId: docId,
-        document: { caseId },
+        document: { batchId },
         appliedGround: null,
         suggestedGround: "s6(a)",
       },
@@ -307,20 +307,20 @@ describe("bulkAcceptDetections — per-row appliedGround normalisation (Bug 2 ro
 
   it("rejects bulks spanning multiple cases (auth-boundary preserved from pre-fix)", async () => {
     // The cross-case guard pre-dates this PR — the per-row refactor
-    // must not weaken it. Two different caseIds in the result set
+    // must not weaken it. Two different batchIds in the result set
     // should still throw.
     mockFindMany.mockResolvedValue([
       {
         id: "d1",
         documentId: docId,
-        document: { caseId: "case-A" },
+        document: { batchId: "case-A" },
         appliedGround: null,
         suggestedGround: "s7(2)(a)",
       },
       {
         id: "d2",
         documentId: docId,
-        document: { caseId: "case-B" },
+        document: { batchId: "case-B" },
         appliedGround: null,
         suggestedGround: "s6(a)",
       },

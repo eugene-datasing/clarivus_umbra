@@ -32,11 +32,11 @@ export interface RecentExport {
 export async function getSummaryStats(): Promise<SummaryStats> {
   const [totalCases, documentsProcessed, totalDetections, pastDeadlineCases, completedPastDeadline] =
     await Promise.all([
-      prisma.case.count(),
+      prisma.batch.count(),
       prisma.document.count({ where: { status: { not: "pending" } } }),
       prisma.detection.count(),
-      prisma.case.count({ where: { deadline: { lt: new Date() } } }),
-      prisma.case.count({
+      prisma.batch.count({ where: { deadline: { lt: new Date() } } }),
+      prisma.batch.count({
         where: {
           deadline: { lt: new Date() },
           status: { in: ["complete", "exported"] },
