@@ -40,7 +40,7 @@ function buildMockPrisma(overrides: {
   };
 
   const mock = {
-    case: {
+    batch: {
       create: vi.fn(async () => {
         calls.caseCreate++;
         return { id: "case-123" };
@@ -114,6 +114,7 @@ function buildMockStorage() {
       calls.delete++;
     }),
     exists: vi.fn(async () => true),
+    listByPrefix: vi.fn(async () => [] as string[]),
   };
   return { storage, calls };
 }
