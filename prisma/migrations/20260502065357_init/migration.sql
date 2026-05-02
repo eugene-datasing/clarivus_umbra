@@ -233,17 +233,13 @@ CREATE TABLE "export_jobs" (
     "id" TEXT NOT NULL,
     "batchId" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'pending',
-    "packageType" TEXT NOT NULL DEFAULT 'requester',
     "progress" INTEGER NOT NULL DEFAULT 0,
     "currentStep" TEXT,
     "error" TEXT,
     "storageKey" TEXT,
     "sha256" TEXT,
     "filename" TEXT,
-    "documentIds" JSONB,
     "docResults" JSONB,
-    "batchGroupId" TEXT,
-    "batchNumber" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "completedAt" TIMESTAMP(3),
 
@@ -327,9 +323,6 @@ CREATE INDEX "user_invitations_status_idx" ON "user_invitations"("status");
 
 -- CreateIndex
 CREATE INDEX "export_jobs_batchId_idx" ON "export_jobs"("batchId");
-
--- CreateIndex
-CREATE INDEX "export_jobs_batchGroupId_idx" ON "export_jobs"("batchGroupId");
 
 -- AddForeignKey
 ALTER TABLE "documents" ADD CONSTRAINT "documents_assigneeId_fkey" FOREIGN KEY ("assigneeId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;

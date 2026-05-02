@@ -309,26 +309,21 @@ model UserInvitation {
 }
 
 model ExportJob {
-  id           String    @id @default(cuid())
-  batchId      String
-  status       String    @default("pending") // pending | generating | verifying | complete | error
-  packageType  String    @default("requester") // requester | internal | ombudsman — Phase 7 simplifies
-  progress     Int       @default(0) // 0-100
-  currentStep  String?
-  error        String?
-  storageKey   String?   // blob/local storage key for the ZIP
-  sha256       String?
-  filename     String?
-  documentIds  Json?     // string[] of included document IDs
-  docResults   Json?     // per-document success/failure log
-  batchGroupId String?   // groups multi-export runs (unrelated to Batch.id; Phase 7 may drop)
-  batchNumber  Int?      // 1-based index within a batch group
-  createdAt    DateTime  @default(now())
-  completedAt  DateTime?
+  id          String    @id @default(cuid())
+  batchId     String
+  status      String    @default("pending") // pending | generating | verifying | complete | error
+  progress    Int       @default(0) // 0-100
+  currentStep String?
+  error       String?
+  storageKey  String?   // blob/local storage key for the ZIP
+  sha256      String?
+  filename    String?
+  docResults  Json?     // per-document success/failure log
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
 
   batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
 
   @@index([batchId])
-  @@index([batchGroupId])
   @@map("export_jobs")
 }
