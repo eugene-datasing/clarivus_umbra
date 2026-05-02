@@ -17,6 +17,7 @@ export const SETTING_KEYS = {
   ACTIVATION_STATUS: "activation_status",
   INSTANCE_CONFIG: "instance_config",
   VIEWER_MODE: "VIEWER_MODE",
+  RETENTION_CONFIG: "retention_config",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
@@ -279,4 +280,60 @@ export const DEFAULT_VIEWER_MODE: ViewerMode = "pdf";
 
 export function isViewerMode(v: unknown): v is ViewerMode {
   return v === "html" || v === "pdf";
+}
+
+// ---------------------------------------------------------------------------
+// Retention config (Phase 6)
+// ---------------------------------------------------------------------------
+
+/**
+ * Retention + purge configuration. Drives both the soft-delete grace
+ * window applied by `softDeleteBatch` and the auto-retention sweep
+ * (Phase 6c) that promotes long-completed batches into the trash.
+ *
+ *   retentionDaysAfterCompletion — auto-soft-delete an exported
+ *     batch after this many days of inactivity.
+ *   gracePeriodDays — when a user (or auto-retention) soft-deletes a
+ *     batch, hard-delete is scheduled for now() + gracePeriodDays.
+ *     Admins can restore from the Trash within this window.
+ *   autoRetentionEnabled — master switch for the retention sweep.
+ */
+export interface RetentionConfig {
+  retentionDaysAfterCompletion: number;
+  gracePeriodDays: number;
+  autoRetentionEnabled: boolean;
+}
+
+export const DEFAULT_RETENTION_CONFIG: RetentionConfig = {
+  retentionDaysAfterCompletion: 14,
+  gracePeriodDays: 7,
+  autoRetentionEnabled: true,
+};
+
+export async function getRetentionConfig(): Promise<RetentionConfig> {
+  const stored = await getSetting<Partial<RetentionConfig>>(
+    SETTING_KEYS.RETENTION_CONFIG,
+    DEFAULT_RETENTION_CONFIG,
+  );
+  return {
+    retentionDaysAfterCompletion:
+      typeof stored.retentionDaysAfterCompletion === "number"
+        ? stored.retentionDaysAfterCompletion
+        : DEFAULT_RETENTION_CONFIG.retentionDaysAfterCompletion,
+    gracePeriodDays:
+      typeof stored.gracePeriodDays === "number"
+        ? stored.gracePeriodDays
+        : DEFAULT_RETENTION_CONFIG.gracePeriodDays,
+    autoRetentionEnabled:
+      typeof stored.autoRetentionEnabled === "boolean"
+        ? stored.autoRetentionEnabled
+        : DEFAULT_RETENTION_CONFIG.autoRetentionEnabled,
+  };
+}
+
+export async function setRetentionConfig(
+  config: RetentionConfig,
+  updatedBy: string,
+): Promise<void> {
+  await setSetting(SETTING_KEYS.RETENTION_CONFIG, config, updatedBy);
 }

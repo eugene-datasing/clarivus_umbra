@@ -3,12 +3,14 @@ import { prisma } from "@/lib/db/prisma";
 /**
  * List active (non-soft-deleted) batches.
  *
- * Soft-deleted batches are filtered out by default; admin Trash views should
- * call a dedicated helper (Phase 6) that includes them.
+ * Soft-deleted batches are filtered out by default. Admin views can pass
+ * `{ includeDeleted: true }` to receive everything; the Trash view should
+ * call `getBatchesInTrash()` instead, which inverts the filter.
  */
-export async function getBatches() {
+export async function getBatches(options: { includeDeleted?: boolean } = {}) {
+  const where = options.includeDeleted ? {} : { deletedAt: null };
   const batches = await prisma.batch.findMany({
-    where: { deletedAt: null },
+    where,
     orderBy: { createdAt: "desc" },
   });
 
@@ -20,8 +22,35 @@ export async function getBatches() {
     documentCount: b.documentCount,
     reviewedCount: b.reviewedCount,
     redactionCount: b.redactionCount,
+    deletedAt: b.deletedAt ? b.deletedAt.toISOString() : null,
+    purgeScheduledAt: b.purgeScheduledAt ? b.purgeScheduledAt.toISOString() : null,
     createdAt: b.createdAt.toISOString(),
     updatedAt: b.updatedAt.toISOString(),
+  }));
+}
+
+/**
+ * List soft-deleted batches that have not yet been hard-purged. Used
+ * by the admin Retention page's Trash table.
+ */
+export async function getBatchesInTrash() {
+  const batches = await prisma.batch.findMany({
+    where: { deletedAt: { not: null }, purgedAt: null },
+    orderBy: { deletedAt: "desc" },
+  });
+
+  return batches.map((b) => ({
+    id: b.id,
+    reference: b.reference,
+    name: b.name,
+    status: b.status,
+    documentCount: b.documentCount,
+    redactionCount: b.redactionCount,
+    deletedAt: b.deletedAt!.toISOString(),
+    purgeScheduledAt: b.purgeScheduledAt
+      ? b.purgeScheduledAt.toISOString()
+      : null,
+    purgeStatus: b.purgeStatus,
   }));
 }
 
