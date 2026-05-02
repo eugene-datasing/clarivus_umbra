@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildChainOfCustodyReport } from "@/lib/pipeline/chain-of-custody";
+import { buildAuditTimeline } from "@/lib/pipeline/audit-timeline";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeForBatch } from "@/lib/auth/authorize";
 import { logger } from "@/lib/logger";
@@ -18,18 +18,18 @@ export async function GET(request: NextRequest) {
 
     await authorizeForBatch(user, batchId);
 
-    const result = await buildChainOfCustodyReport(batchId, user.name);
+    const result = await buildAuditTimeline(batchId, user.name);
 
     return new NextResponse(new Uint8Array(result.pdfBytes), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="chain-of-custody-${batchId.slice(0, 8)}.pdf"`,
+        "Content-Disposition": `inline; filename="audit-timeline-${batchId.slice(0, 8)}.pdf"`,
       },
     });
   } catch (error) {
-    logger.error("Chain of custody report generation failed:", { error: String(error) });
+    logger.error("Audit timeline report generation failed:", { error: String(error) });
     return NextResponse.json(
-      { error: "Failed to generate chain of custody report" },
+      { error: "Failed to generate audit timeline report" },
       { status: 500 },
     );
   }
