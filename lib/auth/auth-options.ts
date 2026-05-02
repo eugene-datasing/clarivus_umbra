@@ -26,7 +26,7 @@ import { logger } from "@/lib/logger";
 // ---------------------------------------------------------------------------
 const providers: Provider[] = [
   Credentials({
-    name: "Veil Login",
+    name: "Umbra Login",
     credentials: {
       email: { label: "Email", type: "email" },
       password: { label: "Password", type: "password" },

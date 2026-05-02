@@ -1,5 +1,5 @@
 /**
- * Typed environment variable configuration for the Veil prototype.
+ * Typed environment variable configuration for the Umbra.
  *
  * Import `env` from this module instead of using `process.env` directly.
  * Validation runs on first import so the app fails fast if required

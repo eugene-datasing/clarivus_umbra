@@ -14,7 +14,7 @@ import {
 
 const navItems = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard, section: "main" },
-  { label: "Cases", href: "/batches", icon: FolderOpen, section: "main" },
+  { label: "Batches", href: "/batches", icon: FolderOpen, section: "main" },
   { label: "My Queue", href: "/queue", icon: ClipboardList, section: "main" },
   { label: "New Case", href: "/batches/new", icon: PlusCircle, section: "main" },
   { label: "Custom Rules", href: "/admin/rules", icon: Settings2, section: "admin" },
@@ -91,7 +91,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
     // Only highlight if this is the most-specific matching nav item.
-    // e.g. on /requests/new, highlight "New Case" (/requests/new) but NOT "Cases" (/requests).
+    // e.g. on /batches/new, highlight "New Batch" but NOT the Batches list link.
     if (!pathname.startsWith(href)) return false;
     const hasMoreSpecific = navItems.some(
       (other) => other.href !== href && other.href.startsWith(href) && pathname.startsWith(other.href)
@@ -139,8 +139,8 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
         </div>
         {!collapsed && (
           <div>
-            <div className="font-heading text-lg font-bold tracking-tight">Veil</div>
-            <div className="text-[10px] text-white/50 -mt-0.5 tracking-widest uppercase">Clarivus AI</div>
+            <div className="font-heading text-lg font-bold tracking-tight">Umbra</div>
+            <div className="text-[10px] text-white/50 -mt-0.5 tracking-widest uppercase">DataSing</div>
           </div>
         )}
       </div>

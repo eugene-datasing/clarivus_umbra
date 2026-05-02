@@ -56,7 +56,7 @@ export default function LoginClient({ ssoEnabled = false }: LoginClientProps) {
           <div className="w-14 h-14 rounded-full bg-brand-primary flex items-center justify-center mx-auto mb-4">
             <EyeOff className="w-7 h-7 text-white" />
           </div>
-          <h1 className="text-2xl font-heading font-bold text-txt-primary">Veil</h1>
+          <h1 className="text-2xl font-heading font-bold text-txt-primary">Umbra</h1>
           <p className="text-sm text-txt-secondary mt-1">
             AI-Powered Document Redaction Platform
           </p>

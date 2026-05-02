@@ -63,13 +63,13 @@ export async function getProcessingMetrics(): Promise<ProcessingMetrics> {
       },
     }),
 
-    // Recent 20 processed documents with case reference
+    // Recent 20 processed documents with batch reference
     prisma.document.findMany({
       where: {
         processingCompletedAt: { not: null },
       },
       include: {
-        case: { select: { reference: true } },
+        batch: { select: { reference: true } },
       },
       orderBy: { processingCompletedAt: "desc" },
       take: 20,
@@ -108,7 +108,7 @@ export async function getProcessingMetrics(): Promise<ProcessingMetrics> {
     recentDocuments: recentDocs.map((d) => ({
       id: d.id,
       name: d.name,
-      caseReference: d.case.reference,
+      caseReference: d.batch.reference,
       status: d.status,
       pageCount: d.pageCount,
       extractionMs: d.extractionMs,

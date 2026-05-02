@@ -107,7 +107,7 @@ export async function detectDuplicates(
     });
 
     await createAuditEntry({
-      userName: "Veil AI",
+      userName: "Umbra AI",
       userRole: "system",
       type: "duplicate_detected",
       description: `Exact duplicate detected: "${currentDoc?.name}" matches "${exactMatch.name}"`,
@@ -173,7 +173,7 @@ export async function detectDuplicates(
         });
 
         await createAuditEntry({
-          userName: "Veil AI",
+          userName: "Umbra AI",
           userRole: "system",
           type: "duplicate_detected",
           description: `Near-duplicate detected: "${currentDoc?.name}" is ${Math.round(similarity * 100)}% similar to "${other.name}"`,

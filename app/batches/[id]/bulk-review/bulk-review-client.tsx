@@ -48,8 +48,6 @@ interface EntityGroup {
   id: number;
   entity: string;
   type: string;
-  ground: string;
-  groundRef: string;
   docCount: number;
   occurrences: number;
   confidence: number;
@@ -68,7 +66,6 @@ interface ThresholdDetection {
   type: string;
   typeLabel: string;
   confidence: number;
-  suggestedGround: string | null;
   documentId: string;
 }
 
@@ -196,7 +193,7 @@ export default function BulkReviewClient({
   const handleAcceptAll = async (group: EntityGroup) => {
     setActionInProgress(group.id);
     try {
-      await bulkAcceptDetections(group.detectionIds, group.groundRef || undefined);
+      await bulkAcceptDetections(group.detectionIds);
       startTransition(() => router.refresh());
     } catch (err) {
       console.error("Bulk accept failed:", err);
@@ -782,12 +779,6 @@ export default function BulkReviewClient({
                     <span className="badge bg-blue-50 text-blue-700">
                       {group.type}
                     </span>
-                    <span className="font-mono text-xs bg-purple-50 text-brand-primary px-1.5 py-0.5 rounded">
-                      {group.groundRef}
-                    </span>
-                    <span>
-                      {group.ground}
-                    </span>
                     <span className="font-mono text-xs text-txt-secondary">
                       {group.confidence}% avg
                     </span>
@@ -861,9 +852,7 @@ export default function BulkReviewClient({
                           setBulkGroundEntity(null);
                         } else {
                           setBulkGroundEntity(group.id);
-                          setBulkGroundValue(
-                            lgoimaGrounds.find((g) => g.id === group.groundRef || g.reference === group.groundRef)?.id || "",
-                          );
+                          setBulkGroundValue("");
                           setBulkGroundAction("accept");
                         }
                       }}

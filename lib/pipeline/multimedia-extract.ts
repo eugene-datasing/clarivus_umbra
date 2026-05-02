@@ -1,5 +1,5 @@
 /**
- * Multimedia extraction module for the Veil document processing pipeline.
+ * Multimedia extraction module for the Umbra document processing pipeline.
  *
  * Supports:
  * - Audio files (MP3, WAV, M4A) via Azure Speech-to-Text

@@ -5,9 +5,7 @@ import { requireUser } from "@/lib/auth/session";
 import { authorizeForBatch } from "@/lib/auth/authorize";
 import BulkReviewClient from "./bulk-review-client";
 import { detectionTypeConfig, type DetectionType } from "@/lib/db/mappers";
-import { getGroundLabelMap } from "@/lib/lgoima-grounds";
 
-const groundLabels = getGroundLabelMap();
 
 export default async function BulkReviewPage({
   params,
@@ -37,8 +35,6 @@ export default async function BulkReviewPage({
     ([entity, dets], idx) => {
       const first = dets[0];
       const typeCfg = detectionTypeConfig[first.type as DetectionType];
-      const groundRef = first.appliedGround || first.suggestedGround || "";
-      const ground = groundLabels[groundRef] || groundRef || "Unspecified";
       const uniqueDocs = new Set(dets.map((d) => d.documentId));
 
       // Build snippets from up to 3 unique-document detections
@@ -82,8 +78,6 @@ export default async function BulkReviewPage({
         id: idx + 1,
         entity,
         type: typeCfg?.label || first.type,
-        ground,
-        groundRef,
         docCount: uniqueDocs.size,
         occurrences: dets.length,
         confidence: Math.round(
@@ -113,7 +107,6 @@ export default async function BulkReviewPage({
       type: d.type,
       typeLabel: typeCfg?.label || d.type,
       confidence: d.confidence,
-      suggestedGround: d.suggestedGround,
       documentId: d.documentId,
     };
   });

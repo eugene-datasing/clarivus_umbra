@@ -1,5 +1,5 @@
 /**
- * Backup and restore operations for the Veil platform.
+ * Backup and restore operations for the Umbra platform.
  *
  * Provides backup status monitoring, manual backup triggers, and
  * verification capabilities. In the prototype, backup operations are
@@ -48,7 +48,7 @@ export interface BackupEntry {
 /**
  * In-memory backup history for the prototype.
  * In production this would be sourced from Azure Backup vault metadata
- * and the Veil audit trail.
+ * and the Umbra audit trail.
  */
 const simulatedHistory: BackupEntry[] = [
   {

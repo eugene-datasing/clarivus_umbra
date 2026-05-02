@@ -92,7 +92,7 @@ export default function ActivateClient({ userName }: ActivateClientProps) {
           <div className="w-14 h-14 rounded-full bg-brand-primary flex items-center justify-center mx-auto mb-4">
             <EyeOff className="w-7 h-7 text-white" />
           </div>
-          <h1 className="text-2xl font-heading font-bold text-txt-primary">Veil</h1>
+          <h1 className="text-2xl font-heading font-bold text-txt-primary">Umbra</h1>
           <p className="text-sm text-txt-secondary mt-1">
             AI-Powered Document Redaction Platform
           </p>
@@ -106,7 +106,7 @@ export default function ActivateClient({ userName }: ActivateClientProps) {
                 Activated
               </h2>
               <p className="text-sm text-txt-secondary">
-                Your Veil instance is now active. Redirecting to setup...
+                Your Umbra instance is now active. Redirecting to setup...
               </p>
             </div>
           ) : (
@@ -135,7 +135,7 @@ export default function ActivateClient({ userName }: ActivateClientProps) {
               </div>
 
               <p className="text-sm text-txt-secondary mb-4">
-                Enter the activation code provided by DataSing to unlock this Veil instance.
+                Enter the activation code provided by DataSing to unlock this Umbra instance.
                 You will be set up as the initial administrator.
               </p>
 

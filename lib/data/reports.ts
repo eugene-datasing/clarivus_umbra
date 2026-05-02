@@ -35,7 +35,7 @@ export async function getSummaryStats(): Promise<SummaryStats> {
 
 /**
  * Detection-type breakdown across accepted detections — replaces the
- * Veil-era ground-usage breakdown post-Phase-5 (grounds dropped from
+ * Veil-era LGOIMA ground-usage breakdown post-Phase-5 (grounds dropped from
  * Detection).
  */
 export async function getDetectionTypeBreakdown(): Promise<DetectionTypeUsageItem[]> {

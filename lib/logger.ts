@@ -1,5 +1,5 @@
 /**
- * Structured logging for the Veil prototype.
+ * Structured logging for the Umbra.
  *
  * - Development: pretty-printed, human-readable console output.
  * - Production: single-line JSON for Azure Monitor / Log Analytics.

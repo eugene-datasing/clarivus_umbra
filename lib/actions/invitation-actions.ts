@@ -38,7 +38,6 @@ interface InviteUserParams {
   email: string;
   name: string;
   role: string;
-  departmentId?: string;
 }
 
 export async function inviteUser(
@@ -48,7 +47,7 @@ export async function inviteUser(
   requireInvitationAdmin(user.role);
 
   const email = params.email?.replace(/[\r\n]/g, "").trim();
-  const { name, role, departmentId } = params;
+  const { name, role } = params;
 
   // RFC 5322 simplified: local@domain with at least one dot in domain
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -93,7 +92,6 @@ export async function inviteUser(
       email: email.toLowerCase(),
       name: name.trim(),
       role,
-      departmentId: departmentId || null,
       invitedBy: user.id,
       token,
       expiresAt,
@@ -102,7 +100,7 @@ export async function inviteUser(
 
   // Send invitation email
   const orgIdentity = await getSetting<OrgIdentity>(SETTING_KEYS.ORG_IDENTITY, DEFAULT_ORG_IDENTITY);
-  const orgName = orgIdentity.name || "Veil";
+  const orgName = orgIdentity.name || "Umbra";
   const baseUrl = process.env.NEXTAUTH_URL || process.env.AUTH_URL || "http://localhost:3000";
 
   await sendInvitationEmail({
@@ -207,7 +205,7 @@ export async function resendInvitation(
 
   // Re-send invitation email
   const orgIdentity = await getSetting<OrgIdentity>(SETTING_KEYS.ORG_IDENTITY, DEFAULT_ORG_IDENTITY);
-  const orgName = orgIdentity.name || "Veil";
+  const orgName = orgIdentity.name || "Umbra";
   const baseUrl = process.env.NEXTAUTH_URL || process.env.AUTH_URL || "http://localhost:3000";
 
   await sendInvitationEmail({

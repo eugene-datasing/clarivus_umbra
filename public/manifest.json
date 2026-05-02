@@ -1,11 +1,11 @@
 {
-  "name": "Veil LGOIMA Disclosure Platform",
-  "short_name": "Veil",
+  "name": "Umbra",
+  "short_name": "Umbra",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#1e40af",
-  "description": "AI-powered document redaction and LGOIMA disclosure workflow",
+  "description": "PII redaction for NZ public-sector documents",
   "icons": [
     {
       "src": "/icon-192.png",

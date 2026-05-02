@@ -1,5 +1,5 @@
 /**
- * Content builder for the Veil review UI.
+ * Content builder for the Umbra review UI.
  *
  * Takes extracted pages and their associated detections and produces a
  * DocParagraph[] structure that the review page can render.  Each paragraph

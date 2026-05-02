@@ -1,5 +1,5 @@
 /**
- * Document-level classification step for the Veil pipeline.
+ * Document-level classification step for the Umbra pipeline.
  *
  * Runs a single, lightweight AI call to classify the document's nature before
  * the page-level detection batches.  The classification result is injected into

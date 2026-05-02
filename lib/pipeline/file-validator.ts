@@ -1,5 +1,5 @@
 /**
- * File validation module for the Veil document processing pipeline.
+ * File validation module for the Umbra document processing pipeline.
  *
  * Validates uploaded files for corruption, readability, and integrity before
  * they enter the processing pipeline.  All checks use Buffer-level inspection

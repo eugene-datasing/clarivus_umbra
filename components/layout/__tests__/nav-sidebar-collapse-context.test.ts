@@ -27,7 +27,7 @@ describe("NavSidebarCollapseContext source — collapse-state contract", () => {
   const src = stripComments(readFileSync(CTX_PATH, "utf-8"));
 
   it("uses the canonical localStorage key 'veil:nav-sidebar-collapsed'", () => {
-    // Different namespacing here vs other Veil keys would risk silent
+    // Different namespacing here vs otherUmbra keys would risk silent
     // collision — pin the key so a refactor can't change it without
     // updating consumers.
     expect(src).toMatch(/STORAGE_KEY\s*=\s*"veil:nav-sidebar-collapsed"/);

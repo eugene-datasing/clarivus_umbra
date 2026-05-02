@@ -167,8 +167,8 @@ def main():
         "author": "",
         "subject": "",
         "keywords": "",
-        "creator": "Veil LGOIMA Disclosure Platform",
-        "producer": "Veil by DataSing",
+        "creator": "Umbra",
+        "producer": "Umbra by DataSing",
     })
 
     doc.save(output_path, garbage=4, deflate=True)

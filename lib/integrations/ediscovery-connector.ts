@@ -215,7 +215,7 @@ export async function getEDiscoveryStatus(): Promise<EDiscoveryStatus> {
 }
 
 /**
- * Create an eDiscovery matter from a Veil case reference.
+ * Create an eDiscovery matter from aUmbra case reference.
  */
 export async function createMatter(
   caseReference: string,
@@ -259,7 +259,7 @@ export async function createMatter(
 }
 
 /**
- * Export documents from Veil to an eDiscovery matter.
+ * Export documents from Umbra to an eDiscovery matter.
  */
 export async function exportToMatter(
   matterId: string,

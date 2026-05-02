@@ -1,5 +1,5 @@
 /**
- * Text extraction module for the Veil document processing pipeline.
+ * Text extraction module for the Umbra document processing pipeline.
  *
  * Supports:
  * - PDF and images via Azure Document Intelligence (prebuilt-read)

@@ -1,5 +1,5 @@
 /**
- * Application Insights integration for the Veil prototype.
+ * Application Insights integration for the Umbra.
  *
  * Conditionally initialises Azure Application Insights when the
  * APPLICATIONINSIGHTS_CONNECTION_STRING env var is set.  All exported

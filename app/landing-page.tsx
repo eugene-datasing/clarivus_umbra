@@ -95,7 +95,7 @@ const PAIN_POINTS = [
   {
     Icon: Clock,
     title: "Deadline pressure",
-    text: "20 working days per request. Every OIA and LGOIMA response is a ticking clock.",
+    text: "20 working days per request. Every public-information response is a ticking clock.",
   },
   {
     Icon: AlertTriangle,
@@ -112,7 +112,7 @@ const FEATURES = [
   },
   {
     Icon: Scale,
-    title: "Full OIA & LGOIMA Compliance",
+    title: "Full audit-trail compliance",
     text: "Every redaction linked to statutory grounds (s6, s7, s9, s17). Public interest consideration enforced where required. Withholding schedules generated automatically. Reviewers cannot export without linking redactions to statutory grounds.",
   },
   {
@@ -142,7 +142,7 @@ const SCREENSHOTS = [
     src: "/screenshots/dashboard.png",
     label: "Dashboard Overview",
     description: "Active cases, document counts, deadlines, and team activity at a glance",
-    alt: "Veil dashboard showing active OIA and LGOIMA cases, document counts, deadlines, and recent activity feed",
+    alt: "Umbra dashboard showing active redaction batches, document counts, deadlines, and recent activity feed",
   },
   {
     src: "/screenshots/document-review-report.png",
@@ -173,7 +173,7 @@ const STEPS = [
   {
     Icon: Brain,
     title: "AI Analysis",
-    text: "AI models analyse every page with contextual reasoning. Each detection includes confidence scores, suggested withholding grounds under OIA or LGOIMA, and public interest considerations.",
+    text: "AI models analyse every page with contextual reasoning. Each detection includes confidence scores, suggested withholding grounds with NZ-context detection, and public interest considerations.",
   },
   {
     Icon: CheckCircle,
@@ -300,14 +300,14 @@ export default function LandingPage() {
                   scrolled ? "text-txt-primary" : "text-white"
                 }`}
               >
-                Veil
+                Umbra
               </span>
               <span
                 className={`hidden sm:inline text-[11px] font-body tracking-wide uppercase transition-colors duration-300 ${
                   scrolled ? "text-txt-secondary" : "text-white/60"
                 }`}
               >
-                A Clarivus Product
+                A DataSing Product
               </span>
             </div>
           </div>
@@ -468,14 +468,14 @@ export default function LandingPage() {
             >
               Not Just Redaction.
               <br />
-              <span className="text-white/50">Defensible OIA &amp; LGOIMA Disclosure.</span>
+              <span className="text-white/50">Defensible PII redaction.</span>
             </h1>
 
             <p
               className="mt-7 text-lg sm:text-xl text-white/65 leading-relaxed max-w-2xl font-body"
               style={{ animation: "fade-in-up 0.7s ease-out 0.24s both" }}
             >
-              Veil automates the detection, review, and release of official information&nbsp;&mdash;
+              Umbra automates the detection, review, and release of official information&nbsp;&mdash;
               transforming weeks of manual processing into hours of intelligent, auditable workflow.
             </p>
           </div>
@@ -531,7 +531,7 @@ export default function LandingPage() {
               <div style={{ transform: "rotateX(2deg)" }}>
                 <Image
                   src="/screenshots/dashboard.png"
-                  alt="Veil dashboard showing active OIA and LGOIMA cases, document counts, deadlines, and team activity feed"
+                  alt="Umbra dashboard showing active redaction batches, document counts, deadlines, and team activity feed"
                   width={1897}
                   height={1368}
                   className="w-full h-auto"
@@ -567,7 +567,7 @@ export default function LandingPage() {
           <div className="max-w-2xl mb-14">
             <p className="text-sm font-semibold text-brand-primary uppercase tracking-wider mb-3">The Challenge</p>
             <h2 className="font-heading text-3xl sm:text-4xl font-bold text-txt-primary leading-tight">
-              The Growing OIA &amp; LGOIMA Challenge
+              The Growing Redaction Challenge
             </h2>
             <p className="mt-4 text-txt-secondary text-base leading-relaxed">
               Government agencies and councils across New Zealand face compounding pressures. Growing request volumes,
@@ -609,12 +609,12 @@ export default function LandingPage() {
           <div className="max-w-2xl mx-auto text-center mb-16">
             <p className="text-sm font-semibold text-brand-primary uppercase tracking-wider mb-3">Capabilities</p>
             <h2 className="font-heading text-3xl sm:text-4xl font-bold text-txt-primary leading-tight">
-              Purpose-Built for OIA &amp; LGOIMA&nbsp;&mdash;
+              Purpose-Built for NZ public-sector redaction&nbsp;&mdash;
               <br className="hidden sm:block" />
               Not Generic Compliance Software
             </h2>
             <p className="mt-4 text-txt-secondary text-base leading-relaxed">
-              Where generic redaction tools stop at highlighting and removing text, Veil provides
+              Where generic redaction tools stop at highlighting and removing text, Umbra provides
               the complete statutory workflow.
             </p>
           </div>
@@ -657,7 +657,7 @@ export default function LandingPage() {
           <div className="max-w-2xl mx-auto text-center mb-16">
             <p className="text-sm font-semibold text-brand-primary uppercase tracking-wider mb-3">Product</p>
             <h2 className="font-heading text-3xl sm:text-4xl font-bold text-txt-primary">
-              See Veil in Action
+              See Umbra in Action
             </h2>
           </div>
 
@@ -692,7 +692,7 @@ export default function LandingPage() {
           </div>
 
           <p className="text-center text-xs text-txt-secondary/50 mt-8">
-            Live screenshots from the Veil platform &mdash; veil.datasing.nz
+            Live screenshots from the Umbra platform &mdash; veil.datasing.nz
           </p>
         </div>
       </section>
@@ -802,7 +802,7 @@ export default function LandingPage() {
             <Quote className="w-10 h-10 text-brand-primary/15 absolute top-8 left-8" aria-hidden="true" />
             <blockquote className="relative">
               <p className="font-heading text-xl sm:text-2xl text-txt-primary leading-relaxed font-medium">
-                Veil&apos;s audit trail will withstand Ombudsman investigation. Every action logged.
+                Umbra&apos;s audit trail will withstand Ombudsman investigation. Every action logged.
                 Every decision captured. Every ground recorded. Defensibility is not an afterthought&nbsp;&mdash;
                 it&apos;s built in.
               </p>
@@ -811,7 +811,7 @@ export default function LandingPage() {
                   <TrendingUp className="w-5 h-5 text-brand-primary" />
                 </div>
                 <div>
-                  <div className="text-sm font-semibold text-txt-primary">Veil Design Principle</div>
+                  <div className="text-sm font-semibold text-txt-primary">Umbra Design Principle</div>
                   <div className="text-xs text-txt-secondary">Auditability is not optional</div>
                 </div>
               </footer>
@@ -919,14 +919,14 @@ export default function LandingPage() {
                 Request a Demo
               </h2>
               <p className="mt-4 text-txt-secondary text-base leading-relaxed">
-                See how Veil can transform your OIA or LGOIMA disclosure workflow. We&apos;ll walk you through
+                See how Umbra can transform your OIA or LGOIMA redaction workflow. We&apos;ll walk you through
                 the platform with your team and discuss how it maps to your current process.
               </p>
 
               <div className="mt-8 space-y-4 text-sm text-txt-secondary">
                 <div className="flex items-start gap-3">
                   <CheckCircle className="w-4 h-4 text-brand-accent mt-0.5 flex-shrink-0" />
-                  <span>Live walkthrough of the full disclosure workflow</span>
+                  <span>Live walkthrough of the full redaction workflow</span>
                 </div>
                 <div className="flex items-start gap-3">
                   <CheckCircle className="w-4 h-4 text-brand-accent mt-0.5 flex-shrink-0" />
@@ -1025,7 +1025,7 @@ export default function LandingPage() {
                         id="demo-message"
                         rows={4}
                         className="input-field resize-none"
-                        placeholder="Tell us about your disclosure workflow or any specific requirements..."
+                        placeholder="Tell us about your redaction workflow or any specific requirements..."
                         value={form.message}
                         onChange={handleField("message")}
                       />
@@ -1070,7 +1070,7 @@ export default function LandingPage() {
                 height={28}
                 className="brightness-0 invert opacity-60"
               />
-              <span className="text-xs text-white/30">A DataSing Clarivus Product</span>
+              <span className="text-xs text-white/30">A DataSing Product</span>
             </div>
 
             <div className="flex flex-wrap gap-6 text-xs">
@@ -1094,7 +1094,7 @@ export default function LandingPage() {
 
           <div className="mt-8 pt-6 border-t border-white/[0.05] flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-white/25">
             <p>&copy; {new Date().getFullYear()} DataSing Ltd. All rights reserved.</p>
-            <p>Veil is part of the Clarivus AI suite.</p>
+            <p>Umbra is a DataSing product.</p>
           </div>
         </div>
       </footer>

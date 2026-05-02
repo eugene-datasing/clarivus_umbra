@@ -87,17 +87,12 @@ export async function invokeFixturePipeline(
   const runLabel =
     options.runLabel ?? `${fixtureName}-${Date.now().toString(36)}`;
 
-  // Isolate from prod seed data: one case per invocation.
+  // Isolate from prod seed data: one batch per invocation.
   const bench = `bench-${runLabel}`;
   const testCase = await prisma.batch.create({
     data: {
       reference: `BENCH-${runLabel}`.slice(0, 100),
-      requesterName: "Bench Suite",
-      requesterType: "internal-bench",
-      dateReceived: new Date(),
-      deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      departments: ["bench"],
-      description: `Bench fixture run: ${fixtureName}`,
+      name: `Bench fixture run: ${fixtureName}`,
       status: "draft",
     },
   });

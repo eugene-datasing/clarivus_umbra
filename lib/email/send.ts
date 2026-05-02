@@ -1,5 +1,5 @@
 /**
- * Email sending functions for Veil.
+ * Email sending functions for Umbra.
  *
  * Uses Azure Communication Services when configured.
  * Falls back to console.log in development when the connection string is not set.
@@ -30,7 +30,7 @@ interface SendInvitationParams {
 export async function sendInvitationEmail(params: SendInvitationParams): Promise<boolean> {
   const { recipientEmail, recipientName, orgName, inviterName, role, loginUrl } = params;
 
-  const subject = `You've been invited to Veil — ${orgName}`;
+  const subject = `You've been invited to Umbra — ${orgName}`;
   const html = invitationEmailHtml({ recipientName, orgName, inviterName, role, loginUrl });
   const text = invitationEmailText({ recipientName, orgName, inviterName, role, loginUrl });
 
@@ -47,7 +47,7 @@ interface SendWelcomeParams {
 export async function sendWelcomeEmail(params: SendWelcomeParams): Promise<boolean> {
   const { recipientEmail, recipientName, orgName, loginUrl } = params;
 
-  const subject = `Welcome to Veil — ${orgName}`;
+  const subject = `Welcome to Umbra — ${orgName}`;
   const html = welcomeEmailHtml({ recipientName, orgName, loginUrl });
   const text = welcomeEmailText({ recipientName, orgName, loginUrl });
 
@@ -66,7 +66,7 @@ interface SendDemoRequestParams {
 export async function sendDemoRequestNotification(params: SendDemoRequestParams): Promise<boolean> {
   const { name, email, organisation, message } = params;
 
-  const subject = `Veil Demo Request — ${organisation} (${name})`;
+  const subject = `Umbra Demo Request — ${organisation} (${name})`;
   const html = demoRequestEmailHtml({ name, email, organisation, message });
   const text = demoRequestEmailText({ name, email, organisation, message });
 

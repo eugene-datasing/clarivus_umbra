@@ -1,5 +1,5 @@
 /**
- * Document format conversion module for the Veil processing pipeline.
+ * Document format conversion module for the Umbra processing pipeline.
  *
  * Converts any supported document format into a standardized review format,
  * producing structured ContentBlocks that provide a consistent view for

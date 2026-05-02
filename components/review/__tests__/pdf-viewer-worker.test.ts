@@ -1,7 +1,7 @@
 /**
  * Regression guard — the pdf.js worker MUST load from the same origin.
  *
- * Rationale: Veil is pitched as a data-sovereignty platform; its CSP
+ * Rationale: Umbra is pitched as a data-sovereignty platform; its CSP
  * (next.config.ts) and air-gapped deploy story fall apart if the worker
  * script is pulled from unpkg.com or any other third-party CDN. Slice A
  * of the viewer rework replaced the unpkg CDN URL with a same-origin

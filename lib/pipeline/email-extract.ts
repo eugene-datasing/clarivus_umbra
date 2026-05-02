@@ -1,5 +1,5 @@
 /**
- * Email extraction module for the Veil document processing pipeline.
+ * Email extraction module for the Umbra document processing pipeline.
  *
  * Provides MSG (Outlook binary format) extraction using @kenjiuno/msgreader.
  *
@@ -256,7 +256,7 @@ function stripHtml(html: string): string {
 
 /**
  * Convert structured EmailContent into the ExtractedPage[] / ExtractionResult
- * format consumed by the rest of the Veil pipeline.
+ * format consumed by the rest of the Umbra pipeline.
  *
  * Page layout:
  *   Page 1: Email headers (From, To, CC, Date, Subject, Message-ID)

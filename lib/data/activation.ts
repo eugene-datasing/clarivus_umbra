@@ -1,7 +1,7 @@
 /**
  * Data access layer for the activation code system.
  *
- * Each Veil deployment starts in an unactivated state. A one-time activation
+ * Each Umbra deployment starts in an unactivated state. A one-time activation
  * code (delivered to the client by DataSing) must be redeemed before anyone
  * can log in or use the system.
  *

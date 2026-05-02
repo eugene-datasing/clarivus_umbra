@@ -812,8 +812,8 @@ async function generateTextPdf(
   }
 
   // Metadata
-  pdfDoc.setCreator("Veil LGOIMA Disclosure Platform");
-  pdfDoc.setProducer("Veil by DataSing");
+  pdfDoc.setCreator("Umbra");
+  pdfDoc.setProducer("Umbra by DataSing");
 
   const pdfBytes = await pdfDoc.save();
 

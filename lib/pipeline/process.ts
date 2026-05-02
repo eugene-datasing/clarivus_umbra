@@ -1,5 +1,5 @@
 /**
- * Main document processing orchestrator for the Veil pipeline.
+ * Main document processing orchestrator for the Umbra pipeline.
  *
  * Coordinates the full processing flow for a single document:
  *   1. Fetch document metadata from DB
@@ -60,7 +60,7 @@ function getExtension(filename: string): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Process a single document through the full Veil pipeline.
+ * Process a single document through the full Umbra pipeline.
  *
  * This function is designed to be called in a fire-and-forget manner from the
  * API route.  It manages its own error handling and will set the document
@@ -152,7 +152,7 @@ export async function processDocument(docId: string): Promise<void> {
       });
 
       await createAuditEntry({
-        userName: "Veil AI",
+        userName: "Umbra AI",
         userRole: "system",
         type: "document_error",
         description: `File validation failed: corrupted or unreadable file`,
@@ -185,7 +185,7 @@ export async function processDocument(docId: string): Promise<void> {
       });
 
       await createAuditEntry({
-        userName: "Veil AI",
+        userName: "Umbra AI",
         userRole: "system",
         type: "document_error",
         description: `File is encrypted or password-protected`,
@@ -367,7 +367,7 @@ export async function processDocument(docId: string): Promise<void> {
         });
 
         await createAuditEntry({
-          userName: "Veil AI",
+          userName: "Umbra AI",
           userRole: "system",
           type: "document_error",
           description: `Extraction failed: file corrupted or unreadable`,
@@ -1009,7 +1009,7 @@ export async function processDocument(docId: string): Promise<void> {
     // 12. Audit trail
     // ------------------------------------------------------------------
     await createAuditEntry({
-      userName: "Veil AI",
+      userName: "Umbra AI",
       userRole: "system",
       type: "document_processed",
       description: `Document processed: ${extraction.pages.length} page(s), ${totalDetections} detection(s) found`,
