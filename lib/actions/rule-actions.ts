@@ -14,7 +14,7 @@ export async function createRule(data: {
   keywords: string;
   scope: string;
   priority: string;
-  suggestedGround?: string;
+  note?: string;
   description?: string;
 }) {
   const validated = createRuleSchema.parse(data);
@@ -29,7 +29,7 @@ export async function createRule(data: {
       keywords: validated.keywords,
       scope: validated.scope,
       priority: validated.priority,
-      suggestedGround: validated.suggestedGround ?? null,
+      note: validated.note ?? null,
       description: validated.description ?? "",
     },
   });
@@ -55,7 +55,7 @@ export async function updateRule(
     keywords?: string;
     scope?: string;
     priority?: string;
-    suggestedGround?: string | null;
+    note?: string | null;
     description?: string;
   },
 ) {
@@ -129,7 +129,7 @@ export async function importRules(
     keywords: string;
     scope?: string;
     priority?: string;
-    suggestedGround?: string;
+    note?: string;
     description?: string;
   }>,
 ): Promise<{ success: boolean; count?: number; error?: string }> {
@@ -151,7 +151,7 @@ export async function importRules(
       keywords: rule.keywords,
       scope: rule.scope || "All Documents",
       priority: rule.priority || "Medium",
-      suggestedGround: rule.suggestedGround,
+      note: rule.note,
       description: rule.description || "",
     });
     await prisma.customRule.create({ data: validated });

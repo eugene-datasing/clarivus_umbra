@@ -127,7 +127,8 @@ export const createRuleSchema = z.object({
   keywords: z.string().min(1, "Keywords are required").max(10000),
   scope: z.string().min(1).max(200),
   priority: z.enum(["Low", "Medium", "High", "Critical"]),
-  suggestedGround: optionalGroundIdSchema,
+  /** Free-form reviewer note. Phase 8 replaces the Veil-era LGOIMA-ground field. */
+  note: z.string().max(2000).optional(),
   description: z.string().max(2000).optional(),
 });
 

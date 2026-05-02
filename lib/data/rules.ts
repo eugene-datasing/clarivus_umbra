@@ -26,7 +26,7 @@ export async function getAllRules() {
     keywords: r.keywords,
     scope: r.scope,
     priority: r.priority,
-    suggestedGround: r.suggestedGround,
+    note: r.note,
     description: r.description,
     matchCount: r.matchCount,
   }));
@@ -44,7 +44,7 @@ export async function getActiveRules() {
     keywords: r.keywords,
     scope: r.scope,
     priority: r.priority,
-    suggestedGround: r.suggestedGround,
+    note: r.note,
   }));
   return sortByPriority(mapped);
 }

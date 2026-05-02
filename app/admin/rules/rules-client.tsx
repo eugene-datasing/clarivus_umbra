@@ -36,7 +36,7 @@ export interface RuleRow {
   keywords: string;
   scope: string;
   priority: string;
-  suggestedGround: string | null;
+  note: string | null;
   description: string;
   matchCount: number;
 }
@@ -72,6 +72,7 @@ export default function RulesClient({ rules }: RulesClientProps) {
   const [newMatchMode, setNewMatchMode] = useState("Exact");
   const [newKeywords, setNewKeywords] = useState("");
   const [newPriority, setNewPriority] = useState("Medium");
+  const [newNote, setNewNote] = useState("");
   const [newDescription, setNewDescription] = useState("");
 
   // Edit form state
@@ -80,6 +81,7 @@ export default function RulesClient({ rules }: RulesClientProps) {
   const [editMatchMode, setEditMatchMode] = useState("");
   const [editKeywords, setEditKeywords] = useState("");
   const [editPriority, setEditPriority] = useState("");
+  const [editNote, setEditNote] = useState("");
   const [editDescription, setEditDescription] = useState("");
 
   // Test panel state
@@ -89,14 +91,22 @@ export default function RulesClient({ rules }: RulesClientProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleExportRules = useCallback(() => {
-    const exportData = rules.map(({ id, name, type, status, matchMode, keywords, scope, priority, suggestedGround, description }) => ({
-      name, type, status, matchMode, keywords, scope, priority, suggestedGround, description,
+    const exportData = rules.map((r) => ({
+      name: r.name,
+      type: r.type,
+      status: r.status,
+      matchMode: r.matchMode,
+      keywords: r.keywords,
+      scope: r.scope,
+      priority: r.priority,
+      note: r.note,
+      description: r.description,
     }));
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "veil-detection-rules.json";
+    a.download = "umbra-detection-rules.json";
     a.click();
     URL.revokeObjectURL(url);
   }, [rules]);
@@ -134,6 +144,7 @@ export default function RulesClient({ rules }: RulesClientProps) {
     setEditMatchMode(rule.matchMode);
     setEditKeywords(rule.keywords);
     setEditPriority(rule.priority);
+    setEditNote(rule.note ?? "");
     setEditDescription(rule.description);
   }
 
@@ -149,11 +160,13 @@ export default function RulesClient({ rules }: RulesClientProps) {
         keywords: newKeywords,
         scope: "All Documents",
         priority: newPriority,
+        note: newNote.trim() || undefined,
         description: newDescription,
       });
       setShowNewRule(false);
       setNewName("");
       setNewKeywords("");
+      setNewNote("");
       setNewDescription("");
       startTransition(() => router.refresh());
     } finally {
@@ -171,6 +184,7 @@ export default function RulesClient({ rules }: RulesClientProps) {
         keywords: editKeywords,
         scope: "All Documents",
         priority: editPriority,
+        note: editNote.trim() || undefined,
         description: editDescription,
         ...(status ? { status } : {}),
       });
@@ -396,6 +410,18 @@ export default function RulesClient({ rules }: RulesClientProps) {
                 <option>Medium</option>
                 <option>Low</option>
               </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-txt-primary mb-1.5">
+                Note
+              </label>
+              <textarea
+                className="input-field min-h-[64px]"
+                value={newNote}
+                onChange={(e) => setNewNote(e.target.value)}
+                placeholder="Optional reviewer note — surfaced when this rule fires."
+                maxLength={2000}
+              />
             </div>
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
               <button
@@ -634,6 +660,18 @@ export default function RulesClient({ rules }: RulesClientProps) {
                 <option>Medium</option>
                 <option>Low</option>
               </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-txt-primary mb-1.5">
+                Note
+              </label>
+              <textarea
+                className="input-field min-h-[64px]"
+                value={editNote}
+                onChange={(e) => setEditNote(e.target.value)}
+                placeholder="Optional reviewer note — surfaced when this rule fires."
+                maxLength={2000}
+              />
             </div>
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
               <button

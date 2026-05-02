@@ -254,7 +254,6 @@ export async function suggestCustomRule(detectionId: string) {
       keywords: detection.text,
       scope: "All Documents",
       priority: "Medium",
-      suggestedGround: null,
       description: `Auto-suggested from manual detection by ${user.name}. Original type: ${detection.type}.`,
     },
   });

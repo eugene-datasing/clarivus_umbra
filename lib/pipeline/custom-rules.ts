@@ -53,7 +53,6 @@ function runRule(
     type: string;
     matchMode: string;
     keywords: string;
-    suggestedGround: string | null;
   },
   pages: PageInput[],
 ): CustomRuleMatch[] {
@@ -74,7 +73,6 @@ function runKeywordRule(
     type: string;
     matchMode: string;
     keywords: string;
-    suggestedGround: string | null;
   },
   pages: PageInput[],
 ): CustomRuleMatch[] {
@@ -141,7 +139,6 @@ function runRegexRule(
     name: string;
     type: string;
     keywords: string;
-    suggestedGround: string | null;
   },
   pages: PageInput[],
 ): CustomRuleMatch[] {
