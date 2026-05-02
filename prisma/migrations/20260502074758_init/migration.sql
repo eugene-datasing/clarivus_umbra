@@ -246,6 +246,20 @@ CREATE TABLE "export_jobs" (
     CONSTRAINT "export_jobs_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "purge_log" (
+    "id" TEXT NOT NULL,
+    "batchId" TEXT NOT NULL,
+    "batchRef" TEXT NOT NULL,
+    "archivePath" TEXT NOT NULL,
+    "totalEntries" INTEGER NOT NULL,
+    "chainValid" BOOLEAN NOT NULL,
+    "archivedBy" TEXT NOT NULL,
+    "archivedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "purge_log_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
 
@@ -323,6 +337,9 @@ CREATE INDEX "user_invitations_status_idx" ON "user_invitations"("status");
 
 -- CreateIndex
 CREATE INDEX "export_jobs_batchId_idx" ON "export_jobs"("batchId");
+
+-- CreateIndex
+CREATE INDEX "purge_log_archivedAt_idx" ON "purge_log"("archivedAt");
 
 -- AddForeignKey
 ALTER TABLE "documents" ADD CONSTRAINT "documents_assigneeId_fkey" FOREIGN KEY ("assigneeId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;

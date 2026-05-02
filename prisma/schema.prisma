@@ -327,3 +327,21 @@ model ExportJob {
   @@index([batchId])
   @@map("export_jobs")
 }
+
+// PurgeLog survives the cascade-delete of its source Batch (no FK).
+// Phase 6c's retention worker writes one row per purged batch with
+// the audit-archive blob path + integrity result. Phase 6a creates
+// the table; rows only start appearing once 6c lands.
+model PurgeLog {
+  id           String   @id @default(cuid())
+  batchId      String   // historical reference, no FK (the Batch is gone by now)
+  batchRef     String   // e.g. "BATCH-2026-014"
+  archivePath  String   // blob path produced by the retention worker
+  totalEntries Int      // audit-chain entry count at archive time
+  chainValid   Boolean  // outcome of the integrity verification step
+  archivedBy   String   // userId or "system"
+  archivedAt   DateTime @default(now())
+
+  @@index([archivedAt])
+  @@map("purge_log")
+}
