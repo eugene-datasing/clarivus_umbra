@@ -262,18 +262,29 @@ export default function RetentionClient({
         )}
       </div>
 
-      {/* Cross-batch audit log download placeholder */}
-      <div className="card p-4 bg-surface-bg/40 border-dashed">
+      {/* Cross-batch audit archive download */}
+      <div className="card p-4">
         <div className="flex items-start gap-3">
           <Info className="w-4 h-4 mt-1 text-txt-secondary" />
-          <div className="text-xs text-txt-secondary">
-            <span className="font-medium text-txt-primary">
-              Cross-batch audit log download
-            </span>
-            <span className="block mt-0.5">
-              Available after Phase 6c — will return a single ZIP of all archived
-              audit-log CSVs + integrity reports for purged batches.
-            </span>
+          <div className="flex-1">
+            <div className="text-sm font-medium text-txt-primary">
+              Cross-batch audit archive
+            </div>
+            <p className="text-xs text-txt-secondary mt-0.5 mb-3">
+              Download a single ZIP containing every archived audit chain
+              (JSONL + CSV + integrity + manifest) for purged batches. Each
+              chain is re-verified at download time and the verdict is recorded
+              in <span className="font-mono">verification-summary.json</span>{" "}
+              at the top of the ZIP.
+            </p>
+            <a
+              href="/api/admin/audit-archive/download"
+              download
+              className="btn-primary inline-flex items-center gap-2 text-xs"
+            >
+              <Info className="w-3.5 h-3.5" />
+              Download Audit Archive (ZIP)
+            </a>
           </div>
         </div>
       </div>
