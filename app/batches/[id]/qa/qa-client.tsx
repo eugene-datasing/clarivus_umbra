@@ -42,8 +42,8 @@ interface DocumentData {
 
 interface WithholdingItem {
   id: string;
-  ground: string | null;
   reasoning: string | null;
+  note: string | null;
   text: string;
 }
 
@@ -58,7 +58,6 @@ interface QAClientProps {
   batchData: BatchData | null;
   documents: DocumentData[];
   withholdingItems: WithholdingItem[];
-  s7Stats: { total: number; missingPi: number };
   pendingDetections: number;
   processedDocCount: number;
   verificationResult: VerificationData | null;
@@ -75,46 +74,28 @@ function buildQAGroups(
   batchData: BatchData | null,
   documents: DocumentData[],
   withholdingItems: WithholdingItem[],
-  s7Stats: { total: number; missingPi: number },
   pendingDetections: number,
   processedDocCount: number,
   verificationResult: VerificationData | null,
 ): QAGroup[] {
   const totalDocs = batchData?.documentCount ?? documents.length;
 
-  // Use real document status machine values
   const reviewedDocs = documents.filter((d) =>
-    ["reviewed", "signed-off"].includes(d.status)
+    ["reviewed", "signed-off"].includes(d.status),
   ).length;
-  const signedOffDocs = documents.filter((d) =>
-    d.status === "signed-off"
-  ).length;
+  const signedOffDocs = documents.filter((d) => d.status === "signed-off").length;
 
-  // Withholding checks
-  const itemsWithGround = withholdingItems.filter((w) => w.ground).length;
   const totalWithholding = withholdingItems.length;
-  const shortDescriptions = withholdingItems.filter((w) => w.text.split(/\s+/).length < 5).length;
+  const shortDescriptions = withholdingItems.filter(
+    (w) => w.text.split(/\s+/).length < 5,
+  ).length;
 
-  // Ground consistency (simple heuristic: flag if there are multiple different grounds)
-  const groundSet = new Set(withholdingItems.map((w) => w.ground).filter(Boolean));
-
-  // s7 public interest consideration
-  const s7PiStatus: QAItem["status"] =
-    s7Stats.total === 0 ? "pass" :
-    s7Stats.missingPi === 0 ? "pass" :
-    s7Stats.missingPi < s7Stats.total ? "warning" : "fail";
-  const s7PiDetail =
-    s7Stats.total === 0
-      ? "No s7 withholdings in this case"
-      : s7Stats.missingPi === 0
-        ? `All ${s7Stats.total} s7 withholdings include a documented public interest test`
-        : `${s7Stats.total - s7Stats.missingPi} / ${s7Stats.total} s7 withholdings have public interest consideration documented`;
-
-  // Metadata: check that all documents have been processed (not pending/processing/error)
-  const metadataStatus: QAItem["status"] = processedDocCount >= totalDocs ? "pass" : processedDocCount > 0 ? "warning" : "fail";
-  const metadataDetail = processedDocCount >= totalDocs
-    ? "All documents have been processed and PDF metadata is stripped on export"
-    : `${processedDocCount} / ${totalDocs} documents processed — unprocessed documents cannot be sanitised`;
+  const metadataStatus: QAItem["status"] =
+    processedDocCount >= totalDocs ? "pass" : processedDocCount > 0 ? "warning" : "fail";
+  const metadataDetail =
+    processedDocCount >= totalDocs
+      ? "All documents have been processed and PDF metadata is stripped on export"
+      : `${processedDocCount} / ${totalDocs} documents processed — unprocessed documents cannot be sanitised`;
 
   return [
     {
@@ -128,67 +109,36 @@ function buildQAGroups(
         {
           label: "All detections actioned",
           status: pendingDetections === 0 ? "pass" : "warning",
-          detail: pendingDetections === 0
-            ? "All detections have been accepted or rejected"
-            : `${pendingDetections} detection(s) still pending review`,
+          detail:
+            pendingDetections === 0
+              ? "All detections have been accepted or rejected"
+              : `${pendingDetections} detection(s) still pending review`,
         },
         {
           label: "All documents signed off",
           status: signedOffDocs >= totalDocs ? "pass" : signedOffDocs > 0 ? "warning" : "fail",
-          detail: signedOffDocs >= totalDocs
-            ? `All ${totalDocs} documents have been signed off`
-            : `${signedOffDocs} of ${totalDocs} documents signed off`,
+          detail:
+            signedOffDocs >= totalDocs
+              ? `All ${totalDocs} documents have been signed off`
+              : `${signedOffDocs} of ${totalDocs} documents signed off`,
         },
       ],
     },
     {
-      title: "STATUTORY COMPLIANCE",
+      title: "REDACTION SCHEDULE",
       items: [
         {
-          label: "All withheld items have assigned grounds",
-          status: totalWithholding > 0 && itemsWithGround >= totalWithholding ? "pass" : itemsWithGround > 0 ? "warning" : "fail",
-          detail: `${itemsWithGround} / ${totalWithholding} items have at least one LGOIMA ground assigned`,
-        },
-        {
-          label: "All s7 withholdings have public interest consideration",
-          status: s7PiStatus,
-          detail: s7PiDetail,
-        },
-        {
-          label: "All grounds are valid LGOIMA references",
-          status: "pass",
-          detail: "Cross-checked against LGOIMA s6, s7, and s17 ground definitions",
-        },
-        {
-          label: "Consistency check across similar entities",
-          status: groundSet.size > 3 ? "warning" : "pass",
-          detail: groundSet.size > 3
-            ? `Consistency warning: ${groundSet.size} distinct grounds applied — review for consistency across similar entity types`
-            : "Ground assignments are consistent across similar entity types",
-        },
-      ],
-    },
-    {
-      title: "WITHHOLDING SCHEDULE",
-      items: [
-        {
-          label: "Schedule generated and reviewed",
+          label: "Schedule generated",
           status: totalWithholding > 0 ? "pass" : "fail",
-          detail: `Schedule contains ${totalWithholding} withholding entries with grounds and reasons`,
-        },
-        {
-          label: "Covering statement completed",
-          status: totalWithholding > 0 ? "pass" : "warning",
-          detail: totalWithholding > 0
-            ? "Cover letter will be auto-generated with case details on export"
-            : "No withholding items — cover letter will note full release",
+          detail: `Schedule will list ${totalWithholding} accepted detection${totalWithholding === 1 ? "" : "s"}`,
         },
         {
           label: "Item descriptions are adequate",
           status: shortDescriptions > 0 ? "warning" : "pass",
-          detail: shortDescriptions > 0
-            ? `${shortDescriptions} items have short descriptions (fewer than 5 words) that may not meet Ombudsman standards`
-            : "All item descriptions meet minimum length requirements",
+          detail:
+            shortDescriptions > 0
+              ? `${shortDescriptions} items have short matched-text values (fewer than 5 words)`
+              : "All matched values meet minimum length expectations",
         },
       ],
     },
@@ -234,8 +184,24 @@ function buildQAGroups(
   ];
 }
 
-export default function QAClient({ requestId, batchData, documents, withholdingItems, s7Stats, pendingDetections, processedDocCount, verificationResult, simulation }: QAClientProps) {
-  const qaGroups = buildQAGroups(batchData, documents, withholdingItems, s7Stats, pendingDetections, processedDocCount, verificationResult);
+export default function QAClient({
+  requestId,
+  batchData,
+  documents,
+  withholdingItems,
+  pendingDetections,
+  processedDocCount,
+  verificationResult,
+  simulation,
+}: QAClientProps) {
+  const qaGroups = buildQAGroups(
+    batchData,
+    documents,
+    withholdingItems,
+    pendingDetections,
+    processedDocCount,
+    verificationResult,
+  );
 
   const caseReference = batchData?.reference ?? "Unknown";
 
@@ -389,7 +355,7 @@ export default function QAClient({ requestId, batchData, documents, withholdingI
             </h3>
             <div className="space-y-2">
               {simulation.warnings.map((warning, idx) => {
-                const isError = warning.type === "no-ground" || warning.type === "pending-detections";
+                const isError = warning.type === "pending-detections";
                 const bgColor = isError ? "bg-red-50" : "bg-amber-50";
                 const iconColor = isError ? "text-confidence-low" : "text-confidence-medium";
                 const WarnIcon = isError ? XCircle : AlertTriangle;
@@ -443,8 +409,7 @@ export default function QAClient({ requestId, batchData, documents, withholdingI
                 );
                 const hasErrors = simulation.warnings.some(
                   (w) =>
-                    w.documentName === doc.name &&
-                    (w.type === "no-ground" || w.type === "pending-detections"),
+                    w.documentName === doc.name && w.type === "pending-detections",
                 );
                 return (
                   <div
@@ -487,49 +452,21 @@ export default function QAClient({ requestId, batchData, documents, withholdingI
           </div>
         </div>
 
-        {/* Withholding schedule preview */}
+        {/* Redaction schedule preview */}
         <div>
           <h3 className="text-xs font-semibold tracking-wider text-txt-secondary uppercase mb-3">
-            Withholding Schedule Preview
+            Redaction Schedule Preview
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="bg-surface-bg rounded-lg p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <BarChart3 className="w-4 h-4 text-brand-primary" />
-                <span className="text-xs font-medium text-txt-primary">
-                  Schedule Entries
-                </span>
-              </div>
-              <div className="text-lg font-heading font-bold text-txt-primary">
-                {simulation.withholdingScheduleEntries}
-              </div>
-              <div className="text-[11px] text-txt-secondary mt-0.5">
-                items with statutory grounds
-              </div>
+          <div className="bg-surface-bg rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <BarChart3 className="w-4 h-4 text-brand-primary" />
+              <span className="text-xs font-medium text-txt-primary">Schedule Entries</span>
             </div>
-            <div className="bg-surface-bg rounded-lg p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <Shield className="w-4 h-4 text-brand-primary" />
-                <span className="text-xs font-medium text-txt-primary">
-                  Grounds Used
-                </span>
-              </div>
-              {simulation.groundsUsed.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5 mt-1">
-                  {simulation.groundsUsed.map((ground) => (
-                    <span
-                      key={ground}
-                      className="badge bg-brand-primary/10 text-brand-primary text-[10px]"
-                    >
-                      {ground}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-xs text-txt-secondary mt-1">
-                  No withholding grounds applied yet
-                </div>
-              )}
+            <div className="text-lg font-heading font-bold text-txt-primary">
+              {simulation.scheduleEntries}
+            </div>
+            <div className="text-[11px] text-txt-secondary mt-0.5">
+              accepted detections — schedule lists each by detection type and page
             </div>
           </div>
         </div>

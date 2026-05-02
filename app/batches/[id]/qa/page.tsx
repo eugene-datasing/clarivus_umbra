@@ -28,24 +28,8 @@ export default async function QAPage({
     notFound();
   }
 
-  // Count s7 detections and those missing public interest consideration
   const docIds = documents.map((d) => d.id);
-  const [s7Total, s7MissingPi, pendingDetections, processedDocs, verificationAudit] = await Promise.all([
-    prisma.detection.count({
-      where: {
-        documentId: { in: docIds },
-        status: "accepted",
-        appliedGround: { startsWith: "s7" },
-      },
-    }),
-    prisma.detection.count({
-      where: {
-        documentId: { in: docIds },
-        status: "accepted",
-        appliedGround: { startsWith: "s7" },
-        piConsideration: "",
-      },
-    }),
+  const [pendingDetections, processedDocs, verificationAudit] = await Promise.all([
     prisma.detection.count({
       where: {
         documentId: { in: docIds },
@@ -78,14 +62,17 @@ export default async function QAPage({
         detectionCount: d.detectionCount,
       }))}
       withholdingItems={withholdingItems}
-      s7Stats={{ total: s7Total, missingPi: s7MissingPi }}
       pendingDetections={pendingDetections}
       processedDocCount={processedDocs}
-      verificationResult={verificationAudit ? {
-        passed: verificationAudit.description.includes("passed"),
-        detail: verificationAudit.detail ?? "",
-        checkedAt: verificationAudit.timestamp.toISOString(),
-      } : null}
+      verificationResult={
+        verificationAudit
+          ? {
+              passed: verificationAudit.description.includes("passed"),
+              detail: verificationAudit.detail ?? "",
+              checkedAt: verificationAudit.timestamp.toISOString(),
+            }
+          : null
+      }
       simulation={simulation}
     />
   );
