@@ -25,7 +25,14 @@
     "test:e2e": "npm run test:e2e:seed && playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
-    "test:e2e:debug": "playwright test --debug"
+    "test:e2e:debug": "playwright test --debug",
+    "deploy:provision": "./scripts/deploy/provision.sh",
+    "deploy:build": "./scripts/deploy/build-and-push.sh",
+    "deploy:image": "./scripts/deploy/deploy-image.sh",
+    "deploy:migrate": "./scripts/deploy/migrate-db.sh",
+    "deploy:seed": "./scripts/deploy/seed.sh",
+    "deploy:smoke": "./scripts/deploy/smoke.sh",
+    "deploy": "npm run deploy:build && npm run deploy:image && npm run deploy:migrate && npm run deploy:smoke"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"
