@@ -1,31 +1,50 @@
 /**
- * Withholding schedule PDF generator.
+ * Redaction schedule PDF generator.
  *
- * Produces a formatted PDF listing all accepted detections grouped by
- * document and withholding ground, suitable for inclusion in LGOIMA
- * response packages.
+ * Lists every accepted detection in a batch grouped by detection
+ * type. Each row identifies the document, the page, and the
+ * detection type (no redacted text — see "Leakage rule" below).
+ * Reviewer notes (free-form `note` field) are surfaced when
+ * `includeReasoning` is set; the underlying redacted strings are
+ * never written to this artefact.
+ *
+ * Leakage rule (Phase 7 / Amendment A4): the redaction schedule is a
+ * circulated document. Including the redacted values — even masked —
+ * defeats the purpose of redaction by leaking the underlying
+ * information through the schedule itself. This generator MUST NOT
+ * write `Detection.text` (the matched payload) to the PDF. Type +
+ * page + count + optional reviewer note are sufficient for downstream
+ * reviewers to map a redaction back to its source.
  */
 
 import { PDFDocument, rgb } from "pdf-lib";
 import { embedFonts } from "./pdf-fonts";
 import { prisma } from "@/lib/db/prisma";
-import { getGroundById } from "@/lib/lgoima-grounds";
 import { getOrgBranding } from "@/lib/data/org-config";
 import { embedOrgLogo } from "./logo-helper";
 
-export interface ScheduleResult {
+export interface RedactionScheduleResult {
   pdfBytes: Uint8Array;
   itemCount: number;
 }
 
+interface ScheduleRow {
+  documentName: string;
+  page: number;
+  type: string;
+  note: string | null;
+}
+
 /**
- * Generate a withholding schedule PDF for a case.
- * Groups accepted detections by ground, then by document.
+ * Build a redaction schedule PDF. Detections are grouped by type, and
+ * within each type by document → page. Per row: document name, page
+ * number, optional reviewer note. The redacted text itself is never
+ * emitted.
  */
-export async function buildWithholdingSchedule(
+export async function buildRedactionSchedule(
   batchId: string,
   options: { includeReasoning?: boolean; documentIds?: string[] } = {},
-): Promise<ScheduleResult> {
+): Promise<RedactionScheduleResult> {
   const { includeReasoning = false, documentIds } = options;
 
   const [batchData, orgBranding] = await Promise.all([
@@ -33,28 +52,45 @@ export async function buildWithholdingSchedule(
     getOrgBranding(),
   ]);
 
-  // Scope detections to selected documents if provided
   const documentFilter = documentIds
     ? { documentId: { in: documentIds }, status: "accepted" as const }
     : { document: { batchId }, status: "accepted" as const };
 
   const acceptedDetections = await prisma.detection.findMany({
     where: documentFilter,
-    include: { document: { select: { name: true } } },
-    orderBy: [{ appliedGround: "asc" }, { document: { name: "asc" } }, { page: "asc" }],
+    select: {
+      type: true,
+      page: true,
+      note: true,
+      document: { select: { name: true } },
+    },
+    orderBy: [{ type: "asc" }, { document: { name: "asc" } }, { page: "asc" }],
   });
+
+  // Group by type. Within each type, rows are already ordered by
+  // (document name, page) thanks to the orderBy above.
+  const byType = new Map<string, ScheduleRow[]>();
+  for (const det of acceptedDetections) {
+    const row: ScheduleRow = {
+      documentName: det.document.name,
+      page: det.page,
+      type: det.type,
+      note: det.note ?? null,
+    };
+    const list = byType.get(det.type);
+    if (list) list.push(row);
+    else byType.set(det.type, [row]);
+  }
 
   const pdfDoc = await PDFDocument.create();
   const { regular: font, bold: boldFont } = await embedFonts(pdfDoc);
   const pageWidth = 595;
   const pageHeight = 842;
   const margin = 50;
-  const maxWidth = pageWidth - 2 * margin;
 
   let page = pdfDoc.addPage([pageWidth, pageHeight]);
   let yPos = pageHeight - margin;
 
-  // Organisation logo (top-right if available)
   const logo = await embedOrgLogo(pdfDoc);
   if (logo) {
     page.drawImage(logo.image, {
@@ -65,9 +101,9 @@ export async function buildWithholdingSchedule(
     });
   }
 
-  // ----- Title page -----
+  // ----- Title block -----
   yPos -= 60;
-  page.drawText("WITHHOLDING SCHEDULE", {
+  page.drawText("REDACTION SCHEDULE", {
     x: margin,
     y: yPos,
     size: 20,
@@ -75,7 +111,7 @@ export async function buildWithholdingSchedule(
     color: rgb(0, 0, 0),
   });
   yPos -= 30;
-  page.drawText(`Case: ${batchData.reference}`, {
+  page.drawText(`Batch: ${batchData.reference}`, {
     x: margin,
     y: yPos,
     size: 12,
@@ -83,23 +119,12 @@ export async function buildWithholdingSchedule(
     color: rgb(0.3, 0.3, 0.3),
   });
   yPos -= 18;
-  page.drawText(`Requester: ${batchData.requesterName}`, {
-    x: margin,
-    y: yPos,
-    size: 10,
-    font,
-    color: rgb(0.3, 0.3, 0.3),
-  });
+  page.drawText(
+    `Date Generated: ${new Date().toLocaleDateString("en-NZ", { day: "numeric", month: "long", year: "numeric" })}`,
+    { x: margin, y: yPos, size: 10, font, color: rgb(0.3, 0.3, 0.3) },
+  );
   yPos -= 16;
-  page.drawText(`Date Generated: ${new Date().toLocaleDateString("en-NZ", { day: "numeric", month: "long", year: "numeric" })}`, {
-    x: margin,
-    y: yPos,
-    size: 10,
-    font,
-    color: rgb(0.3, 0.3, 0.3),
-  });
-  yPos -= 16;
-  page.drawText(`Total Withholdings: ${acceptedDetections.length}`, {
+  page.drawText(`Total Redactions: ${acceptedDetections.length}`, {
     x: margin,
     y: yPos,
     size: 10,
@@ -107,7 +132,6 @@ export async function buildWithholdingSchedule(
     color: rgb(0.3, 0.3, 0.3),
   });
 
-  // Divider
   yPos -= 20;
   page.drawLine({
     start: { x: margin, y: yPos },
@@ -115,11 +139,10 @@ export async function buildWithholdingSchedule(
     thickness: 1,
     color: rgb(0.8, 0.8, 0.8),
   });
-  yPos -= 10;
+  yPos -= 20;
 
-  // Summary by ground
-  yPos -= 10;
-  page.drawText("Summary by Withholding Ground", {
+  // ----- Summary by type -----
+  page.drawText("Summary by Detection Type", {
     x: margin,
     y: yPos,
     size: 12,
@@ -128,25 +151,13 @@ export async function buildWithholdingSchedule(
   });
   yPos -= 20;
 
-  // Group detections by ground
-  const byGround = new Map<string, typeof acceptedDetections>();
-  for (const det of acceptedDetections) {
-    const groundId = det.appliedGround || det.suggestedGround || "unspecified";
-    if (!byGround.has(groundId)) byGround.set(groundId, []);
-    byGround.get(groundId)!.push(det);
-  }
-
-  for (const [groundId, dets] of byGround) {
+  for (const [type, rows] of byType) {
     if (yPos < margin + 40) {
       page = pdfDoc.addPage([pageWidth, pageHeight]);
       yPos = pageHeight - margin;
     }
 
-    const ground = getGroundById(groundId);
-    const ref = ground ? ground.reference : groundId;
-    const label = ground ? ground.label : "Unspecified";
-
-    page.drawText(`${ref} — ${label}: ${dets.length} item(s)`, {
+    page.drawText(`${type}: ${rows.length} item(s)`, {
       x: margin + 10,
       y: yPos,
       size: 10,
@@ -156,19 +167,14 @@ export async function buildWithholdingSchedule(
     yPos -= 16;
   }
 
-  // ----- Detail pages -----
   yPos -= 20;
 
-  for (const [groundId, dets] of byGround) {
-    // Section header
+  // ----- Detail by type -----
+  for (const [type, rows] of byType) {
     if (yPos < margin + 60) {
       page = pdfDoc.addPage([pageWidth, pageHeight]);
       yPos = pageHeight - margin;
     }
-
-    const ground = getGroundById(groundId);
-    const ref = ground ? ground.reference : groundId;
-    const label = ground ? ground.label : "Unspecified";
 
     page.drawLine({
       start: { x: margin, y: yPos },
@@ -178,75 +184,77 @@ export async function buildWithholdingSchedule(
     });
     yPos -= 18;
 
-    page.drawText(`${ref} — ${label}`, {
+    page.drawText(type, {
       x: margin,
       y: yPos,
       size: 13,
       font: boldFont,
       color: rgb(0.1, 0.1, 0.1),
     });
-    yPos -= 12;
+    yPos -= 18;
 
-    if (ground?.description) {
-      page.drawText(ground.description, {
-        x: margin,
-        y: yPos,
-        size: 9,
-        font,
-        color: rgb(0.4, 0.4, 0.4),
-      });
-      yPos -= 18;
-    } else {
-      yPos -= 6;
-    }
-
-    // Table header
-    page.drawText("Document", { x: margin, y: yPos, size: 8, font: boldFont, color: rgb(0.3, 0.3, 0.3) });
-    page.drawText("Page", { x: margin + 250, y: yPos, size: 8, font: boldFont, color: rgb(0.3, 0.3, 0.3) });
-    page.drawText("Type", { x: margin + 290, y: yPos, size: 8, font: boldFont, color: rgb(0.3, 0.3, 0.3) });
-    page.drawText("Withheld Text", { x: margin + 360, y: yPos, size: 8, font: boldFont, color: rgb(0.3, 0.3, 0.3) });
+    // Table header — note: NO "withheld text" column. The schedule
+    // never carries the underlying value.
+    page.drawText("Document", {
+      x: margin,
+      y: yPos,
+      size: 8,
+      font: boldFont,
+      color: rgb(0.3, 0.3, 0.3),
+    });
+    page.drawText("Page", {
+      x: margin + 320,
+      y: yPos,
+      size: 8,
+      font: boldFont,
+      color: rgb(0.3, 0.3, 0.3),
+    });
+    page.drawText("Note", {
+      x: margin + 380,
+      y: yPos,
+      size: 8,
+      font: boldFont,
+      color: rgb(0.3, 0.3, 0.3),
+    });
     yPos -= 14;
 
-    for (const det of dets) {
+    for (const row of rows) {
       if (yPos < margin + 30) {
         page = pdfDoc.addPage([pageWidth, pageHeight]);
         yPos = pageHeight - margin;
       }
 
-      const docName = det.document.name.length > 35
-        ? det.document.name.slice(0, 35) + "..."
-        : det.document.name;
-      const text = det.text.length > 30
-        ? det.text.slice(0, 30) + "..."
-        : det.text;
-
+      const docName =
+        row.documentName.length > 50
+          ? row.documentName.slice(0, 50) + "..."
+          : row.documentName;
       page.drawText(docName, { x: margin, y: yPos, size: 8, font, color: rgb(0, 0, 0) });
-      page.drawText(`p.${det.page}`, { x: margin + 250, y: yPos, size: 8, font, color: rgb(0.4, 0.4, 0.4) });
-      page.drawText(det.type, { x: margin + 290, y: yPos, size: 8, font, color: rgb(0.4, 0.4, 0.4) });
-      page.drawText(text, { x: margin + 360, y: yPos, size: 8, font, color: rgb(0.3, 0.3, 0.3) });
-      yPos -= 12;
+      page.drawText(`p.${row.page}`, {
+        x: margin + 320,
+        y: yPos,
+        size: 8,
+        font,
+        color: rgb(0.4, 0.4, 0.4),
+      });
 
-      if (includeReasoning && det.reasoning) {
-        if (yPos < margin + 20) {
-          page = pdfDoc.addPage([pageWidth, pageHeight]);
-          yPos = pageHeight - margin;
-        }
-        const reasoningText = `Reasoning: ${det.reasoning.length > 100 ? det.reasoning.slice(0, 100) + "..." : det.reasoning}`;
-        page.drawText(reasoningText, {
-          x: margin + 10,
+      if (includeReasoning && row.note) {
+        const truncated =
+          row.note.length > 60 ? row.note.slice(0, 60) + "..." : row.note;
+        page.drawText(truncated, {
+          x: margin + 380,
           y: yPos,
-          size: 7,
+          size: 8,
           font,
-          color: rgb(0.5, 0.5, 0.5),
+          color: rgb(0.3, 0.3, 0.3),
         });
-        yPos -= 12;
       }
+      yPos -= 12;
     }
 
     yPos -= 10;
   }
 
-  // Footer on last page
+  // ----- Footer -----
   if (yPos < margin + 30) {
     page = pdfDoc.addPage([pageWidth, pageHeight]);
     yPos = pageHeight - margin;
@@ -259,8 +267,8 @@ export async function buildWithholdingSchedule(
     color: rgb(0.8, 0.8, 0.8),
   });
   yPos -= 14;
-  const scheduleFooter = orgBranding.footerText || "Generated by Veil LGOIMA Disclosure Platform";
-  page.drawText(scheduleFooter, {
+  const footer = orgBranding.footerText || "Generated by Umbra";
+  page.drawText(footer, {
     x: margin,
     y: yPos,
     size: 7,
@@ -268,9 +276,9 @@ export async function buildWithholdingSchedule(
     color: rgb(0.6, 0.6, 0.6),
   });
 
-  pdfDoc.setTitle(`Withholding Schedule — ${batchData.reference}`);
-  pdfDoc.setCreator("Veil LGOIMA Disclosure Platform");
-  pdfDoc.setProducer(orgBranding.footerText || "Veil LGOIMA Disclosure Platform");
+  pdfDoc.setTitle(`Redaction Schedule — ${batchData.reference}`);
+  pdfDoc.setCreator("Umbra");
+  pdfDoc.setProducer(orgBranding.footerText || "Umbra");
 
   const pdfBytes = await pdfDoc.save();
 
