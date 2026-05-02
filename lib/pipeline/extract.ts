@@ -4,7 +4,7 @@
  * Supports:
  * - PDF and images via Azure Document Intelligence (prebuilt-read)
  * - DOCX via mammoth
- * - XLSX via xlsx
+ * - XLSX via exceljs
  * - EML via mailparser (RFC822 email)
  * - MSG via @kenjiuno/msgreader (Outlook binary format)
  * - TXT via plain UTF-8 decode
@@ -15,7 +15,7 @@ import {
   AzureKeyCredential,
 } from "@azure/ai-form-recognizer";
 import mammoth from "mammoth";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { simpleParser } from "mailparser";
 import {
   resilientDocIntelCall,
@@ -156,25 +156,64 @@ async function extractFromDocx(buffer: Buffer): Promise<ExtractionResult> {
 }
 
 /**
+ * Coerce an ExcelJS cell value to a plain display string.
+ * Handles Date, RichText, Hyperlink, Formula, and primitive values.
+ */
+function cellToString(value: ExcelJS.CellValue): string {
+  if (value == null) return "";
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "object") {
+    if ("text" in value) return String(value.text); // RichText / Hyperlink
+    if ("result" in value) return String(value.result ?? ""); // Formula
+    if ("error" in value) return String(value.error); // Error
+    return "";
+  }
+  return String(value);
+}
+
+/**
+ * RFC-4180 CSV cell escape: quote if the cell contains comma, double-quote,
+ * CR, or LF; double any embedded quotes.
+ */
+function escapeCsvCell(value: string): string {
+  if (/[",\r\n]/.test(value)) {
+    return '"' + value.replace(/"/g, '""') + '"';
+  }
+  return value;
+}
+
+/** Serialise an ExcelJS worksheet to RFC-4180 CSV (skipping fully-empty rows). */
+function worksheetToCsv(ws: ExcelJS.Worksheet): string {
+  const lines: string[] = [];
+  ws.eachRow({ includeEmpty: false }, (row) => {
+    const values = ((row.values as ExcelJS.CellValue[]) ?? []).slice(1);
+    const cells = values.map((v) => escapeCsvCell(cellToString(v)));
+    if (cells.some((c) => c.length > 0)) {
+      lines.push(cells.join(","));
+    }
+  });
+  return lines.join("\n");
+}
+
+/**
  * Extract text from an XLSX workbook.
  * Each worksheet becomes a separate "page".
  */
 async function extractFromXlsx(buffer: Buffer): Promise<ExtractionResult> {
-  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const workbook = new ExcelJS.Workbook();
+  // ExcelJS predates the @types/node 22 generic Buffer<ArrayBufferLike>; widen via
+  // Uint8Array to match its non-generic Buffer parameter type.
+  // @ts-expect-error — exceljs accepts NodeJS Buffers; @types/node generic mismatch
+  await workbook.xlsx.load(buffer);
   const pages: ExtractedPage[] = [];
 
-  for (let i = 0; i < workbook.SheetNames.length; i++) {
-    const sheetName = workbook.SheetNames[i];
-    const worksheet = workbook.Sheets[sheetName];
-
-    // Convert sheet to CSV-like text for downstream analysis
-    const text = XLSX.utils.sheet_to_csv(worksheet, { blankrows: false });
-
+  workbook.worksheets.forEach((worksheet, i) => {
+    const text = worksheetToCsv(worksheet);
     pages.push({
       pageNumber: i + 1,
-      text: `[Sheet: ${sheetName}]\n${text}`,
+      text: `[Sheet: ${worksheet.name}]\n${text}`,
     });
-  }
+  });
 
   const totalText = pages.map((p) => p.text).join("\n\n");
   return { pages, totalText };

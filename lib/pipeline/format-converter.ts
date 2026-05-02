@@ -15,7 +15,7 @@
  */
 
 import mammoth from "mammoth";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import type { ExtractedPage } from "./extract";
 import { logger } from "@/lib/logger";
 
@@ -96,7 +96,7 @@ export async function convertToReviewFormat(
         return await convertDocx(buffer, filename);
 
       case "XLSX":
-        return convertXlsx(buffer, filename);
+        return await convertXlsx(buffer, filename);
 
       case "EML":
       case "MSG":
@@ -251,17 +251,56 @@ async function convertDocx(
 // ---------------------------------------------------------------------------
 
 /**
+ * Coerce an ExcelJS cell value to a plain display string.
+ */
+function cellToString(value: ExcelJS.CellValue): string {
+  if (value == null) return "";
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "object") {
+    if ("text" in value) return String(value.text); // RichText / Hyperlink
+    if ("result" in value) return String(value.result ?? ""); // Formula
+    if ("error" in value) return String(value.error);
+    return "";
+  }
+  return String(value);
+}
+
+/** RFC-4180 CSV cell escape. */
+function escapeCsvCell(value: string): string {
+  if (/[",\r\n]/.test(value)) {
+    return '"' + value.replace(/"/g, '""') + '"';
+  }
+  return value;
+}
+
+/** Iterate worksheet rows as string[] (drops fully-empty rows). */
+function worksheetToRows(ws: ExcelJS.Worksheet): string[][] {
+  const rows: string[][] = [];
+  ws.eachRow({ includeEmpty: false }, (row) => {
+    const values = ((row.values as ExcelJS.CellValue[]) ?? []).slice(1);
+    const cells = values.map(cellToString);
+    if (cells.some((c) => c.length > 0)) {
+      rows.push(cells);
+    }
+  });
+  return rows;
+}
+
+/**
  * Convert an XLSX workbook to the review format.
  * Each worksheet becomes a ReviewPage with a table ContentBlock.
  */
-function convertXlsx(buffer: Buffer, filename: string): ConversionResult {
+async function convertXlsx(buffer: Buffer, filename: string): Promise<ConversionResult> {
   const notes: string[] = [];
-  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const workbook = new ExcelJS.Workbook();
+  // ExcelJS predates the @types/node 22 generic Buffer<ArrayBufferLike>; widen via
+  // Uint8Array to match its non-generic Buffer parameter type.
+  // @ts-expect-error — exceljs accepts NodeJS Buffers; @types/node generic mismatch
+  await workbook.xlsx.load(buffer);
   const reviewPages: ReviewPage[] = [];
 
-  for (let i = 0; i < workbook.SheetNames.length; i++) {
-    const sheetName = workbook.SheetNames[i];
-    const worksheet = workbook.Sheets[sheetName];
+  workbook.worksheets.forEach((worksheet, i) => {
+    const sheetName = worksheet.name;
     const blocks: ContentBlock[] = [];
 
     blocks.push({
@@ -270,20 +309,10 @@ function convertXlsx(buffer: Buffer, filename: string): ConversionResult {
       level: 2,
     });
 
-    const jsonData = XLSX.utils.sheet_to_json<string[]>(worksheet, {
-      header: 1,
-      blankrows: false,
-    });
+    const rows = worksheetToRows(worksheet);
 
-    if (jsonData.length > 0) {
-      const tableRows: string[] = [];
-      for (const row of jsonData) {
-        if (Array.isArray(row)) {
-          tableRows.push(
-            row.map((cell) => String(cell ?? "")).join("\t"),
-          );
-        }
-      }
+    if (rows.length > 0) {
+      const tableRows = rows.map((row) => row.join("\t"));
       blocks.push({
         type: "table",
         content: tableRows.join("\n"),
@@ -296,18 +325,20 @@ function convertXlsx(buffer: Buffer, filename: string): ConversionResult {
       notes.push('Sheet "' + sheetName + '" is empty.');
     }
 
-    const csvText = XLSX.utils.sheet_to_csv(worksheet, { blankrows: false });
+    const csvText = rows
+      .map((row) => row.map((cell) => escapeCsvCell(cell)).join(","))
+      .join("\n");
 
     reviewPages.push({
       pageNumber: i + 1,
       text: "[Sheet: " + sheetName + "]\n" + csvText,
       structuredContent: blocks,
     });
-  }
+  });
 
   log.info("XLSX conversion complete", {
     filename,
-    sheets: workbook.SheetNames.length,
+    sheets: workbook.worksheets.length,
   });
 
   return {
