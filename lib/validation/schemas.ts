@@ -54,6 +54,7 @@ export const detectionIdSchema = z.string().min(1, "Detection ID is required");
 
 export const acceptDetectionSchema = z.object({
   detectionId: detectionIdSchema,
+  /** @deprecated Phase 5 — ignored server-side, kept for client schema compatibility. */
   ground: optionalGroundIdSchema,
 });
 
@@ -62,26 +63,15 @@ export const rejectDetectionSchema = z.object({
   reason: z.string().max(2000).optional(),
 });
 
-export const applyGroundSchema = z.object({
-  detectionId: detectionIdSchema,
-  groundId: groundIdSchema,
-});
-
 export const bulkDetectionSchema = z.object({
   detectionIds: z.array(detectionIdSchema).min(1, "At least one detection is required").max(1000),
+  /** @deprecated Phase 5 — ignored server-side. */
   ground: optionalGroundIdSchema,
 });
 
 export const confidenceThresholdSchema = z.object({
   batchId: z.string().min(1, "Batch ID is required"),
   threshold: z.number().int().min(0).max(100),
-});
-
-export const bulkApplyGroundToSimilarSchema = z.object({
-  batchId: z.string().min(1, "Batch ID is required"),
-  entityText: z.string().min(1, "Entity text is required").max(5000),
-  ground: groundIdSchema,
-  action: z.enum(["accept", "reject"]),
 });
 
 export const changeDetectionTypeSchema = z.object({
@@ -93,13 +83,6 @@ export const acceptRemainingSchema = z.object({
   documentId: z.string().min(1, "Document ID is required"),
 });
 
-export const bulkApplyGroundByTypeSchema = z.object({
-  batchId: z.string().min(1, "Batch ID is required"),
-  detectionType: z.string().min(1, "Detection type is required").max(100),
-  ground: groundIdSchema,
-  action: z.enum(["accept", "reject"]),
-});
-
 // ---------------------------------------------------------------------------
 // Manual detection
 // ---------------------------------------------------------------------------
@@ -109,8 +92,10 @@ export const createManualDetectionSchema = z.object({
   text: z.string().min(1, "Detection text is required").max(5000),
   type: z.string().min(1, "Detection type is required").max(50),
   page: z.number().int().positive("Page must be a positive integer"),
+  /** @deprecated Phase 5 — ignored server-side. */
   ground: optionalGroundIdSchema,
   reasoning: z.string().max(2000).optional(),
+  note: z.string().max(2000).optional(),
 });
 
 // ---------------------------------------------------------------------------

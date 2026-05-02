@@ -15,7 +15,7 @@ import {
   CircuitOpenError,
 } from "@/lib/resilience/azure-services";
 import { logger } from "@/lib/logger";
-import { lgoimaGrounds, normaliseGroundToId } from "@/lib/lgoima-grounds";
+import { lgoimaGrounds } from "@/lib/lgoima-grounds";
 import type { DocumentClassification } from "./doc-classify";
 
 const log = logger.child({ module: "ai-detect" });
@@ -64,9 +64,7 @@ export interface AIDetection {
   text: string;
   confidence: number;
   page: number;
-  suggestedGround: string;
   reasoning: string;
-  piConsideration: string;
   aiExplanation: string;
 }
 
@@ -118,7 +116,7 @@ function getClient(deployment: string): AzureOpenAI {
 // ---------------------------------------------------------------------------
 
 /** All detection types the AI model can produce. */
-const ALL_AI_TYPES = [
+export const ALL_AI_TYPES = [
   "personal-name", "phone", "email-addr", "ird", "address",
   "bank-account", "nz-passport", "vehicle-reg",
   "commercial", "free-frank", "legal-privilege", "confidential",
@@ -348,9 +346,9 @@ Example 13 — Labelled employee number (type "confidential", ground s7(2)(a)):
 Input text (table row): | Employee number | EMP-2019-0847 |
 Output: { "type": "confidential", "text": "EMP-2019-0847", "confidence": 90, "page": 1, "suggestedGround": "s7(2)(a)", "reasoning": "Internal employee identifier that re-identifies an individual when cross-referenced with payroll / HR records", "piConsideration": "Employee numbers are not published and serve no public-transparency purpose; privacy prevails", "aiExplanation": "Employee number — internal identifier that can re-identify an individual; flag the value, not the label." }
 
-Example 14 — Labelled driver licence in a table (type "driver-licence", ground s7(2)(a)):
+Example 14 — Labelled driver licence in a table (type "nz-driver-licence", ground s7(2)(a)):
 Input text (table row): | NZ Driver Licence | HM847219 |
-Output: { "type": "driver-licence", "text": "HM847219", "confidence": 95, "page": 1, "suggestedGround": "s7(2)(a)", "reasoning": "NZ driver licence number — a statutory identifier", "piConsideration": "Driver licence numbers are sensitive identifiers frequently used for identity verification", "aiExplanation": "Driver licence — flag the value only, not the 'NZ Driver Licence' label." }
+Output: { "type": "nz-driver-licence", "text": "HM847219", "confidence": 95, "page": 1, "suggestedGround": "s7(2)(a)", "reasoning": "NZ driver licence number — a statutory identifier", "piConsideration": "Driver licence numbers are sensitive identifiers frequently used for identity verification", "aiExplanation": "Driver licence — flag the value only, not the 'NZ Driver Licence' label." }
 
 Example 15 — Third-party professional in document body (type "personal-name", ground s7(2)(a)):
 Input text: "Dr Sarah Liang of Central Medical Centre certified the complainant unfit to attend mediation on 14 March."
@@ -477,14 +475,8 @@ function validateDetection(raw: unknown): AIDetection | null {
         ? Math.max(0, Math.min(100, Math.round(obj.confidence)))
         : 50,
     page: typeof obj.page === "number" ? obj.page : 1,
-    suggestedGround:
-      typeof obj.suggestedGround === "string"
-        ? normaliseGroundToId(obj.suggestedGround)
-        : "",
     reasoning:
       typeof obj.reasoning === "string" ? obj.reasoning : "AI-detected content",
-    piConsideration:
-      typeof obj.piConsideration === "string" ? obj.piConsideration : "",
     aiExplanation:
       typeof obj.aiExplanation === "string"
         ? obj.aiExplanation

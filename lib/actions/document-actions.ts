@@ -100,38 +100,23 @@ export async function deleteDocument(documentId: string) {
 
   // Delete all related records in a transaction
   await prisma.$transaction(async (tx) => {
-    // Delete feedback examples linked to detections
-    await tx.feedbackExample.deleteMany({
-      where: { detection: { documentId } },
-    });
-
-    // Delete detection history
     await tx.detectionHistory.deleteMany({
       where: { detection: { documentId } },
     });
 
-    // Delete detections
     await tx.detection.deleteMany({
       where: { documentId },
     });
 
-    // Delete document pages
     await tx.documentPage.deleteMany({
       where: { documentId },
     });
 
-    // Delete detection snapshots
-    await tx.detectionSnapshot.deleteMany({
-      where: { documentId },
-    });
-
-    // Delete the document itself
     await tx.document.delete({
       where: { id: documentId },
     });
 
-    // Update case counts
-    await tx.case.update({
+    await tx.batch.update({
       where: { id: doc.batchId },
       data: {
         documentCount: { decrement: 1 },

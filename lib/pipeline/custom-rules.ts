@@ -15,7 +15,6 @@ export interface CustomRuleMatch {
   text: string;
   page: number;
   confidence: number;
-  suggestedGround: string | null;
   reasoning: string;
 }
 
@@ -110,7 +109,6 @@ function runKeywordRule(
             text: matchedText,
             page: page.pageNumber,
             confidence: 75,
-            suggestedGround: rule.suggestedGround,
             reasoning: `Custom rule "${rule.name}" (fuzzy match)`,
           });
           startIdx = idx + keyword.length;
@@ -127,7 +125,6 @@ function runKeywordRule(
             text: m[0],
             page: page.pageNumber,
             confidence: 90,
-            suggestedGround: rule.suggestedGround,
             reasoning: `Custom rule "${rule.name}" (exact match)`,
           });
         }
@@ -167,7 +164,6 @@ function runRegexRule(
         text: m[0],
         page: page.pageNumber,
         confidence: 85,
-        suggestedGround: rule.suggestedGround,
         reasoning: `Custom rule "${rule.name}" (regex match)`,
       });
     }

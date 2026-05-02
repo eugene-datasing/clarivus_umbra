@@ -79,7 +79,6 @@ describe("detectWithAI — DOB surface-through", () => {
     const dob = detections[0];
     expect(dob.type).toBe("personal-name");
     expect(dob.text).toBe("22 September 1986");
-    expect(dob.suggestedGround).toBe("s7_2a");
     expect(dob.aiExplanation.toLowerCase()).toContain("dob");
     expect(dob.page).toBe(1);
   });

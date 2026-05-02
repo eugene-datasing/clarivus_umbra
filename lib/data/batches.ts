@@ -141,12 +141,14 @@ export async function recomputeBatchStatus(batchId: string) {
   });
   if (docs.length === 0) return;
 
-  const statuses = docs.map((d) => d.status);
+  const statuses: string[] = docs.map((d) => d.status);
   const hasProcessingOrPending = statuses.some((s) => s === "processing" || s === "pending");
   const allSignedOff = statuses.every((s) => s === "signed-off");
-  const allReady =
-    statuses.every((s) => s === "ready") &&
-    !statuses.some((s) => s === "in-review" || s === "reviewed" || s === "signed-off");
+  const everyReady = statuses.every((s) => s === "ready");
+  const noneInReviewOrLater = !statuses.some(
+    (s) => s === "in-review" || s === "reviewed" || s === "signed-off",
+  );
+  const allReady = everyReady && noneInReviewOrLater;
 
   let newStatus: string | null = null;
   if (hasProcessingOrPending) {

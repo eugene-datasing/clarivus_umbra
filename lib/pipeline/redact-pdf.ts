@@ -21,7 +21,6 @@ import { PDFDocument, rgb } from "pdf-lib";
 import { embedFonts } from "./pdf-fonts";
 import { prisma } from "@/lib/db/prisma";
 import { getStorage } from "@/lib/storage";
-import { getGroundById } from "@/lib/lgoima-grounds";
 import { execFile } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
@@ -253,8 +252,6 @@ async function redactOriginalPdf(
     posY: number;
     posW: number;
     posH: number;
-    appliedGround: string | null;
-    suggestedGround: string | null;
     page: number;
   }>,
 ): Promise<RedactedResult> {
@@ -411,46 +408,9 @@ export async function convertToPdfWithLibreOffice(
  *
  * Phases run transitively: A↔B and B↔C connection both contribute to
  * the same final group. Group survivor is the union of every member's
- * bbox; survivor ground is the most-restrictive across the group per
- * `GROUND_PRIORITY` below.
+ * bbox.
  */
 const CONTAINMENT_IOU_THRESHOLD = 0.9;
-
-/**
- * Most-restrictive-ground priority (lower index = more restrictive).
- * Order matches the LGOIMA-pathway hierarchy:
- *   - Section 6 (s6 a-d)            — conclusive grounds (must withhold).
- *   - Section 7(2)(g)                — legal professional privilege.
- *   - Section 7(2)(c)(i), (c)(ii)    — confidence grounds.
- *   - Section 7(2)(b)(i), (b)(ii)    — trade secrets / commercial.
- *   - Section 7(2)(h), (i)           — council commercial / negotiations.
- *   - Section 7(2)(f)(i), (f)(ii)    — free-frank / harassment-risk.
- *   - Section 7(2)(a)                — privacy of natural persons.
- *   - Section 17 (a-h)               — refusal grounds (lowest priority
- *                                      by default — these are usually
- *                                      whole-document refusals not
- *                                      per-bbox redactions).
- *
- * Tunable later if specific scenarios warrant adjustment. Grounds not
- * in the list fall through to the lowest priority (highest numeric
- * value).
- */
-const GROUND_PRIORITY: ReadonlyArray<string> = [
-  "s6a", "s6b", "s6c", "s6d",
-  "s7_2g",
-  "s7_2ci", "s7_2cii",
-  "s7_2bi", "s7_2bii",
-  "s7_2h", "s7_2i",
-  "s7_2fi", "s7_2fii",
-  "s7_2a",
-  "s17a", "s17b", "s17ci", "s17cii", "s17d", "s17e", "s17f", "s17g", "s17h",
-];
-
-function groundPriority(groundId: string | null | undefined): number {
-  if (!groundId) return Number.MAX_SAFE_INTEGER;
-  const idx = GROUND_PRIORITY.indexOf(groundId);
-  return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
-}
 
 interface CoordinateBox {
   page: number;
@@ -460,10 +420,7 @@ interface CoordinateBox {
   posH: number;
 }
 
-interface CoordinateDetection extends CoordinateBox {
-  appliedGround: string | null;
-  suggestedGround: string | null;
-}
+type CoordinateDetection = CoordinateBox;
 
 interface CoordinateRedaction extends CoordinateBox {
   label: string;
@@ -546,8 +503,7 @@ function unionRect(a: CoordinateBox, b: CoordinateBox): CoordinateBox {
  *     relationship.
  *   - Compute connected components via union-find.
  *   - For each component, emit one redaction entry. Bbox is the union
- *     of all members. Ground is the most-restrictive label across all
- *     members (per GROUND_PRIORITY).
+ *     of all members.
  *
  * Output is stable in input order — the first member of each
  * connected component dictates the output position. Rows on different
@@ -622,36 +578,13 @@ export function dedupeCoordinateRedactions(
       bbox = unionRect(bbox, detections[members[k]]);
     }
 
-    // Ground: most-restrictive across members (lowest priority index).
-    // The effective ground for a detection is `appliedGround` when set
-    // (the reviewer's chosen ground) and falls back to `suggestedGround`
-    // otherwise. We do NOT consider both fields per detection — when
-    // the reviewer accepts with a specific ground that's the
-    // authoritative answer, even if `suggestedGround` is more
-    // restrictive. (Pre-2026-04-27 the loop iterated both fields per
-    // member and the AI's `suggestedGround` could quietly override the
-    // reviewer's `appliedGround` choice during dedup.)
-    let bestPriority = Number.MAX_SAFE_INTEGER;
-    let bestGround: string | null = null;
-    for (const idx of members) {
-      const det = detections[idx];
-      const effective = det.appliedGround ?? det.suggestedGround;
-      if (!effective) continue;
-      const p = groundPriority(effective);
-      if (p < bestPriority) {
-        bestPriority = p;
-        bestGround = effective;
-      }
-    }
-
-    const ground = bestGround ? getGroundById(bestGround) : null;
     out.push({
       page: bbox.page,
       posX: bbox.posX,
       posY: bbox.posY,
       posW: bbox.posW,
       posH: bbox.posH,
-      label: ground ? ground.reference : (bestGround || ""),
+      label: "",
     });
   }
 
@@ -669,8 +602,6 @@ export const TEXT_SEARCH_MAX_LENGTH = 80;
 interface TextSearchDetection {
   text: string;
   page: number;
-  appliedGround: string | null;
-  suggestedGround: string | null;
 }
 
 interface TextSearchRedaction {
@@ -706,12 +637,10 @@ export function dedupeTextSearchRedactions(
     if (seen.has(key)) continue;
     seen.add(key);
 
-    const groundId = det.appliedGround || det.suggestedGround;
-    const ground = groundId ? getGroundById(groundId) : null;
     redactions.push({
       page: det.page,
       text: det.text,
-      label: ground ? ground.reference : (groundId || ""),
+      label: "",
     });
   }
   return redactions;
@@ -786,8 +715,6 @@ async function generateTextPdf(
   doc: { id: string },
   detections: Array<{
     text: string;
-    appliedGround: string | null;
-    suggestedGround: string | null;
     page: number;
   }>,
 ): Promise<RedactedResult> {
@@ -808,15 +735,9 @@ async function generateTextPdf(
 
   // Build a set of texts to redact per page
   const redactMap = new Map<number, Set<string>>();
-  const groundMap = new Map<string, string>();
   for (const det of detections) {
     if (!redactMap.has(det.page)) redactMap.set(det.page, new Set());
     redactMap.get(det.page)!.add(det.text);
-    const groundId = det.appliedGround || det.suggestedGround;
-    if (groundId) {
-      const ground = getGroundById(groundId);
-      groundMap.set(det.text, ground ? ground.reference : groundId);
-    }
   }
 
   for (const docPage of docPages) {
@@ -848,9 +769,7 @@ async function generateTextPdf(
       let processedLine = line;
       for (const redactText of pageRedactions) {
         if (processedLine.includes(redactText)) {
-          const groundRef = groundMap.get(redactText) || "";
-          const replacement = `[REDACTED${groundRef ? ` ${groundRef}` : ""}]`;
-          processedLine = processedLine.replace(redactText, replacement);
+          processedLine = processedLine.replace(redactText, "[REDACTED]");
         }
       }
 

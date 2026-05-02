@@ -54,19 +54,19 @@ describe("detectLabelAdjacent", () => {
   describe("driver licence", () => {
     it("matches 'Driver licence: EA123456'", () => {
       const matches = detectLabelAdjacent([makePage(1, "Driver licence: EA123456")]);
-      expect(firstMatch(matches, "driver-licence")?.text).toBe("EA123456");
+      expect(firstMatch(matches, "nz-driver-licence")?.text).toBe("EA123456");
     });
 
     it("matches 'NZ Driver Licence | HM847219' in a pipe-separated row", () => {
       const matches = detectLabelAdjacent([
         makePage(1, "| NZ Driver Licence | HM847219 |"),
       ]);
-      expect(firstMatch(matches, "driver-licence")?.text).toBe("HM847219");
+      expect(firstMatch(matches, "nz-driver-licence")?.text).toBe("HM847219");
     });
 
     it("matches 'DL number: BA847219'", () => {
       const matches = detectLabelAdjacent([makePage(1, "DL number: BA847219")]);
-      expect(firstMatch(matches, "driver-licence")?.text).toBe("BA847219");
+      expect(firstMatch(matches, "nz-driver-licence")?.text).toBe("BA847219");
     });
   });
 
@@ -319,7 +319,7 @@ describe("detectLabelAdjacent", () => {
       const pages = [
         makePage(1, "NZ driver licence\nEA123456"),
       ];
-      expect(detectLabelAdjacent(pages).find((m) => m.type === "driver-licence")?.text).toBe(
+      expect(detectLabelAdjacent(pages).find((m) => m.type === "nz-driver-licence")?.text).toBe(
         "EA123456",
       );
     });
@@ -343,7 +343,7 @@ describe("detectLabelAdjacent", () => {
 
     it("captures the driver licence", () => {
       const matches = detectLabelAdjacent([makePage(1, b1HeaderTable)]);
-      expect(firstMatch(matches, "driver-licence")?.text).toBe("EA123456");
+      expect(firstMatch(matches, "nz-driver-licence")?.text).toBe("EA123456");
     });
 
     it("captures the employee number and salary band distinctly (both confidential)", () => {
@@ -371,11 +371,6 @@ describe("detectLabelAdjacent", () => {
       expect(matches[0].confidence).toBe(95);
     });
 
-    it("assigns s7_2a suggestedGround to every entry", () => {
-      const matches = detectLabelAdjacent([makePage(1, "Date of birth: 14 June 1983")]);
-      expect(matches[0].suggestedGround).toBe("s7_2a");
-    });
-
     it("records which label variant triggered the match", () => {
       const matches = detectLabelAdjacent([makePage(1, "DOB: 14 June 1983")]);
       expect(matches[0].labelMatched.toLowerCase()).toBe("dob");
@@ -387,7 +382,7 @@ describe("detectLabelAdjacent", () => {
         [makePage(1, "Driver licence: EA123456\nAddress: 42 Whiteman St")],
         enabled,
       );
-      expect(matches.some((m) => m.type === "driver-licence")).toBe(false);
+      expect(matches.some((m) => m.type === "nz-driver-licence")).toBe(false);
       expect(matches.some((m) => m.type === "address")).toBe(true);
     });
 

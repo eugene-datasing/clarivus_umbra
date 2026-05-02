@@ -25,8 +25,6 @@ export interface PatternMatch {
   confidence: number;
   /** 1-based page number where the match was found */
   page: number;
-  /** Suggested LGOIMA withholding ground */
-  suggestedGround: string;
   /** Human-readable reasoning for the match */
   reasoning: string;
   /** Character offset of the match within the page text */
@@ -40,7 +38,6 @@ export interface PatternMatch {
 interface PatternDef {
   type: string;
   regex: RegExp;
-  suggestedGround: string;
   reasoning: string;
   /**
    * Optional context-word guard. When set, a regex match is only accepted
@@ -92,7 +89,6 @@ const PATTERNS: PatternDef[] = [
     // NZ bank account: BB-bbbb-AAAAAAA-SS (bank-branch-account-suffix).
     // Must run before phone/IRD to prevent partial matches.
     regex: /\b\d{2}[-\s]?\d{4}[-\s]?\d{6,8}[-\s]?\d{2,3}\b/g,
-    suggestedGround: "s7_2a",
     reasoning:
       "Matches an NZ bank account number pattern (bank-branch-account-suffix). Bank account numbers are sensitive financial identifiers that should be withheld to protect privacy.",
   },
@@ -102,7 +98,6 @@ const PATTERNS: PatternDef[] = [
     // Negative lookahead excludes NZ mobile prefixes (02x) which overlap
     // in 3-3-3 format (e.g. 021 544 908 is a cellphone, not an IRD).
     regex: /\b(?!02[0-9][-\s]?\d{3}[-\s]?\d{3}\b)\d{2,3}[-\s]?\d{3}[-\s]?\d{3}\b/g,
-    suggestedGround: "s7_2a",
     reasoning:
       "Matches an NZ IRD number pattern. IRD numbers are sensitive personal identifiers that should be withheld to protect individual privacy.",
   },
@@ -116,21 +111,18 @@ const PATTERNS: PatternDef[] = [
     // as separators inside the digit group and optionally wrapping the
     // prefix. Phase 1 item 1 of docs/detection-coverage-plan-2026-04.md.
     regex: /(?<![0-9-])\(?(?:\+?64|0)\)?[\s)(-]*(?:\d[\s)(-]*){7,9}(?![0-9-])/g,
-    suggestedGround: "s7_2a",
     reasoning:
       "Matches a New Zealand phone number pattern. Personal phone numbers should generally be withheld to protect privacy unless they are published contact details for a public official acting in their official capacity.",
   },
   {
     type: "email-addr",
     regex: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
-    suggestedGround: "s7_2a",
     reasoning:
       "Matches an email address. Personal email addresses should be withheld to protect privacy. Official/published addresses may not require redaction.",
   },
   {
     type: "nhi",
     regex: /\b[A-HJ-NP-Z]{3}\d{4}\b/g,
-    suggestedGround: "s7_2a",
     reasoning:
       "Matches an NZ National Health Index (NHI) number. NHI numbers are sensitive health identifiers and must be withheld.",
   },
@@ -138,7 +130,6 @@ const PATTERNS: PatternDef[] = [
     type: "address",
     regex:
       /\b\d{1,5}[ \t]+[A-Z][a-z]{2,}(?:[ \t]+[A-Z][a-z]{2,})*[ \t]+(?:Street|Road|Avenue|Drive|Place|Terrace|Crescent|Lane|Way|Close|Court|St|Rd|Ave|Dr|Pl|Tce|Cres|Ln|Cl|Ct)\b/gi,
-    suggestedGround: "s7_2a",
     reasoning:
       "Matches a New Zealand street address. Personal residential addresses should be withheld to protect privacy.",
   },
@@ -148,27 +139,24 @@ const PATTERNS: PatternDef[] = [
     // DL only claims the span when a licence keyword sits just before the
     // token; otherwise the match is skipped (range not claimed) and
     // nz-passport gets its normal shot at the same span.
-    type: "driver-licence",
+    type: "nz-driver-licence",
     regex: /\b[A-HJ-NP-Z]{2}\d{6}\b/g,
     requireContext: {
       words: ["licence", "license", "driver", "DL"],
       windowChars: 40,
     },
-    suggestedGround: "s7_2a",
     reasoning:
       "NZ driver licence number (2 letters + 6 digits, I and O excluded) with required context keyword nearby.",
   },
   {
     type: "nz-passport",
     regex: /\b[A-Z]{2}\d{6}\b/g,
-    suggestedGround: "s7_2a",
     reasoning:
       "Matches an NZ passport number pattern (two letters followed by six digits). Passport numbers are sensitive identity documents that must be withheld.",
   },
   {
     type: "vehicle-reg",
     regex: /\b[A-Z]{3}\d{3,4}\b/g,
-    suggestedGround: "s7_2a",
     reasoning:
       "Matches an NZ vehicle registration plate pattern. Vehicle registrations can be used to identify individuals and should be withheld.",
   },
@@ -244,7 +232,6 @@ export function detectPatterns(
           text: matchedText,
           confidence: 95,
           page: page.pageNumber,
-          suggestedGround: pattern.suggestedGround,
           reasoning: pattern.reasoning,
           offset: start,
         });

@@ -19,7 +19,6 @@ function makeDetection(
     text,
     page,
     confidence: 95,
-    suggestedGround: null,
     ...overrides,
   };
 }

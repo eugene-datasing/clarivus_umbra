@@ -48,8 +48,6 @@ export interface SectionMarkerMatch {
   text: string;
   confidence: number;
   page: number;
-  suggestedGround: string;
-  appliedGround: string;
   reasoning: string;
   /** Which section-marker pattern fired, for audit trail. */
   markerMatched: string;
@@ -434,8 +432,6 @@ export function detectSectionMarkers(
             text: c.text,
             confidence: 75,
             page: page.pageNumber,
-            suggestedGround: "s7_2fi",
-            appliedGround: "s7_2fi",
             reasoning:
               "Sentence inside a section labelled candid / free-and-frank — section-marker deterministic pass.",
             markerMatched: markerLabel,

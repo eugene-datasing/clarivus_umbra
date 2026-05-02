@@ -7,7 +7,6 @@ import {
   acceptDetectionSchema,
   bulkDetectionSchema,
   rejectDetectionSchema,
-  applyGroundSchema,
   confidenceThresholdSchema,
   updateDepartmentSchema,
   updateRuleSchema,
@@ -167,32 +166,6 @@ describe("rejectDetectionSchema", () => {
   it("rejects reason longer than 2000 chars", () => {
     expect(() =>
       rejectDetectionSchema.parse({ detectionId: "d1", reason: "x".repeat(2001) }),
-    ).toThrow();
-  });
-});
-
-describe("applyGroundSchema", () => {
-  it("accepts valid detectionId and groundId", () => {
-    expect(() =>
-      applyGroundSchema.parse({ detectionId: "d1", groundId: "s7(2)(a)" }),
-    ).not.toThrow();
-  });
-
-  it("rejects empty groundId", () => {
-    expect(() =>
-      applyGroundSchema.parse({ detectionId: "d1", groundId: "" }),
-    ).toThrow();
-  });
-
-  it("rejects missing groundId", () => {
-    expect(() =>
-      applyGroundSchema.parse({ detectionId: "d1" }),
-    ).toThrow();
-  });
-
-  it("rejects groundId longer than 30 chars", () => {
-    expect(() =>
-      applyGroundSchema.parse({ detectionId: "d1", groundId: "a".repeat(31) }),
     ).toThrow();
   });
 });

@@ -30,7 +30,6 @@ export interface LabelAdjacentMatch {
   text: string;
   confidence: number;
   page: number;
-  suggestedGround: string;
   reasoning: string;
   /** Which label definition produced this match, for audit trail. */
   labelMatched: string;
@@ -56,7 +55,6 @@ interface LabelEntry {
   /** All label variants that activate this entry. Case-insensitive. */
   labels: string[];
   type: string;
-  suggestedGround: string;
   reasoning: string;
   /**
    * Optional per-entry tightening guard. Returns true if the match
@@ -70,43 +68,36 @@ const LABEL_DICTIONARY: LabelEntry[] = [
   {
     labels: ["date of birth", "dob", "d.o.b.", "d.o.b", "born"],
     type: "personal-name",
-    suggestedGround: "s7_2a",
     reasoning: "Labelled date of birth — personal identifier.",
   },
   {
     labels: ["address", "home address", "residential address", "postal address"],
     type: "address",
-    suggestedGround: "s7_2a",
     reasoning: "Labelled personal address.",
   },
   {
     labels: ["phone", "mobile", "telephone", "tel", "contact number"],
     type: "phone",
-    suggestedGround: "s7_2a",
     reasoning: "Labelled personal phone number.",
   },
   {
     labels: ["email", "email address", "e-mail"],
     type: "email-addr",
-    suggestedGround: "s7_2a",
     reasoning: "Labelled personal email address.",
   },
   {
     labels: ["ird", "ird number", "tax number"],
     type: "ird",
-    suggestedGround: "s7_2a",
     reasoning: "Labelled IRD / tax identifier.",
   },
   {
     labels: ["nhi", "nhi number", "health number"],
     type: "nhi",
-    suggestedGround: "s7_2a",
     reasoning: "Labelled NHI (National Health Index) number.",
   },
   {
     labels: ["passport", "passport number", "passport no", "nz passport"],
     type: "nz-passport",
-    suggestedGround: "s7_2a",
     reasoning: "Labelled passport number.",
   },
   {
@@ -122,14 +113,12 @@ const LABEL_DICTIONARY: LabelEntry[] = [
       "licence number",
       "dl number",
     ],
-    type: "driver-licence",
-    suggestedGround: "s7_2a",
+    type: "nz-driver-licence",
     reasoning: "Labelled driver licence number.",
   },
   {
     labels: ["bank account", "account number", "bank details"],
     type: "bank-account",
-    suggestedGround: "s7_2a",
     reasoning: "Labelled bank account number.",
   },
   {
@@ -141,7 +130,6 @@ const LABEL_DICTIONARY: LabelEntry[] = [
       "number plate",
     ],
     type: "vehicle-reg",
-    suggestedGround: "s7_2a",
     reasoning: "Labelled vehicle registration.",
   },
 
@@ -156,13 +144,11 @@ const LABEL_DICTIONARY: LabelEntry[] = [
       "badge number",
     ],
     type: "confidential",
-    suggestedGround: "s7_2a",
     reasoning: "Labelled employee identifier — re-identifies an individual.",
   },
   {
     labels: ["salary", "salary band", "salary range", "remuneration", "pay band"],
     type: "confidential",
-    suggestedGround: "s7_2a",
     reasoning: "Labelled salary / remuneration — privacy-sensitive compensation.",
   },
 
@@ -174,7 +160,6 @@ const LABEL_DICTIONARY: LabelEntry[] = [
   {
     labels: ["gp", "general practitioner"],
     type: "personal-name",
-    suggestedGround: "s7_2a",
     reasoning:
       "Labelled GP / general practitioner — third-party professional name.",
     extraGuard: (_pageText, _labelEnd, value) => {
@@ -196,7 +181,6 @@ const LABEL_DICTIONARY: LabelEntry[] = [
   {
     labels: ["icd-10", "icd 10", "icd-10-am", "icd 10 am", "diagnosis code"],
     type: "confidential",
-    suggestedGround: "s7_2a",
     reasoning: "Labelled diagnostic code — individual medical identifier.",
     extraGuard: (_pageText, _labelEnd, value) => {
       // Must start with a letter+digits pattern like F43.23 / G31.9 /
@@ -434,7 +418,6 @@ export function detectLabelAdjacent(
           text: valueTrimmed,
           confidence: 95,
           page: page.pageNumber,
-          suggestedGround: entry.suggestedGround,
           reasoning: entry.reasoning,
           labelMatched: labelText.trim(),
           offset: valueStart,

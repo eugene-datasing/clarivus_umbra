@@ -13,7 +13,7 @@ import { join } from "node:path";
 
 const CLIENT_PATH = join(
   process.cwd(),
-  "app/requests/[id]/review/[docId]/review-client.tsx",
+  "app/batches/[id]/review/[docId]/review-client.tsx",
 );
 
 function stripComments(src: string): string {

@@ -31,7 +31,6 @@ import {
   acceptDetection,
   rejectDetection,
   revertDetection,
-  applyGround,
   changeDetectionType,
   acceptRemainingDetections,
   submitForSeniorReview,
@@ -579,16 +578,9 @@ export default function ReviewClient({
       ...prev,
       [detectionId]: { ...prev[detectionId], appliedGround: groundId },
     }));
-    // Persist
-    try {
-      await applyGround(detectionId, groundId);
-    } catch {
-      // Revert on error
-      setDetectionStates((prev) => ({
-        ...prev,
-        [detectionId]: { ...prev[detectionId], appliedGround: previousGround ?? null },
-      }));
-    }
+    // Persist — Phase 5 removed appliedGround from Detection. The
+    // local state still tracks ground until Phase 7 reworks the UI.
+    void previousGround;
   }, [detectionStates]);
 
   const handleDetectionClick = useCallback((detectionId: string) => {
@@ -766,9 +758,6 @@ export default function ReviewClient({
 
       try {
         await changeDetectionType(detectionId, newType);
-        if (shouldAutoGround && newDefaultGround) {
-          await applyGround(detectionId, newDefaultGround);
-        }
       } catch {
         // Revert on error
         setDetectionStates((prev) => ({
@@ -804,30 +793,7 @@ export default function ReviewClient({
     });
 
     try {
-      const result = await acceptRemainingDetections(docId);
-      if (result.skipped > 0) {
-        const skippedTexts = detections
-          .filter((d) => result.skippedIds.includes(d.id))
-          .map((d) => d.text.length > 50 ? d.text.slice(0, 50) + "..." : d.text);
-        setAcceptRemainingAlert({ skipped: result.skipped, texts: skippedTexts });
-
-        // Revert skipped detections back to pending
-        setDetectionStates((prev) => {
-          const next = { ...prev };
-          for (const id of result.skippedIds) {
-            if (prevStates[id]) {
-              next[id] = prevStates[id];
-            }
-          }
-          return next;
-        });
-
-        // Scroll to first skipped detection
-        if (result.skippedIds[0]) {
-          const row = detectionRowRefs.current[result.skippedIds[0]];
-          if (row) row.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
-      }
+      await acceptRemainingDetections(docId);
     } catch {
       // Revert all on error
       setDetectionStates(prevStates);

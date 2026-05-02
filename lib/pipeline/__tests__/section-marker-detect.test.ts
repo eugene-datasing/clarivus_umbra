@@ -12,8 +12,6 @@
  *        marker echoes, and lines outside the length floor / ceiling;
  *        the "real-section" minimum (≥2 candidate sentences) drops
  *        metadata-style header echoes.
- *   §7 — every emitted match has `appliedGround` AND `suggestedGround`
- *        equal to "s7_2fi" (Eugene's clarification 1).
  *
  * Eugene's clarification 2 (positive test for the section-self-
  * justification framing paragraph from B1) is the
@@ -699,30 +697,10 @@ describe("detectSectionMarkers — FP-guards (Phase 1 §4)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// §7 — ground assignment
+// §7 — confidence floor
 // ---------------------------------------------------------------------------
 
-describe("detectSectionMarkers — ground assignment (Phase 1 §7, Eugene clarification 1)", () => {
-  it("sets BOTH appliedGround AND suggestedGround to s7_2fi on every match", () => {
-    const result = detectSectionMarkers([
-      page(
-        1,
-        [
-          "Officer commentary (free and frank)",
-          "Officer's candid opinion is that the application should be approved with conditions.",
-          "Recommendation is to grant the consent subject to monitoring requirements.",
-          "Conclusion",
-        ].join("\n"),
-      ),
-    ]);
-    expect(result.length).toBe(2);
-    for (const m of result) {
-      expect(m.suggestedGround).toBe("s7_2fi");
-      expect(m.appliedGround).toBe("s7_2fi");
-      expect(m.type).toBe("free-frank");
-    }
-  });
-
+describe("detectSectionMarkers — confidence", () => {
   it("emits matches with confidence 75 (below AI's typical 85+ for free-frank)", () => {
     const result = detectSectionMarkers([
       page(

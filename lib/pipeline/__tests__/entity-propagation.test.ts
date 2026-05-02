@@ -6,9 +6,7 @@ function seed(
   overrides: Partial<PropagationSeed> & Pick<PropagationSeed, "type" | "text" | "page">,
 ): PropagationSeed {
   return {
-    suggestedGround: "s7(2)(a)",
     reasoning: "test seed",
-    piConsideration: "",
     aiExplanation: "",
     source: "ai",
     ...overrides,

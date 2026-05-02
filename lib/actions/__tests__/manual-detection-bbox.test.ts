@@ -54,16 +54,12 @@ const mockDocumentUpdate = vi.fn();
 const mockDocumentPageFindUnique = vi.fn();
 const mockDetectionCreate = vi.fn();
 const mockDetectionUpdate = vi.fn();
-const mockFeedbackCreate = vi.fn();
-const mockCaseUpdate = vi.fn();
+const mockBatchUpdate = vi.fn();
 
 const txStub = {
   detection: {
     create: (...args: unknown[]) => mockDetectionCreate(...args),
     update: (...args: unknown[]) => mockDetectionUpdate(...args),
-  },
-  feedbackExample: {
-    create: (...args: unknown[]) => mockFeedbackCreate(...args),
   },
   document: {
     update: (...args: unknown[]) => mockDocumentUpdate(...args),
@@ -71,8 +67,8 @@ const txStub = {
   documentPage: {
     findUnique: (...args: unknown[]) => mockDocumentPageFindUnique(...args),
   },
-  case: {
-    update: (...args: unknown[]) => mockCaseUpdate(...args),
+  batch: {
+    update: (...args: unknown[]) => mockBatchUpdate(...args),
   },
 };
 
@@ -135,9 +131,8 @@ function setupDefaults() {
     return Promise.resolve({ id, posX: 0, posY: 0, posW: 0, posH: 0 });
   });
   mockDetectionUpdate.mockResolvedValue({});
-  mockFeedbackCreate.mockResolvedValue({});
   mockDocumentUpdate.mockResolvedValue({});
-  mockCaseUpdate.mockResolvedValue({});
+  mockBatchUpdate.mockResolvedValue({});
 }
 
 describe("createManualDetection — bbox resolution (Bug 2 fix)", () => {
@@ -284,27 +279,6 @@ describe("createManualDetection — bbox resolution (Bug 2 fix)", () => {
     // entered the txStub variant of each.
   });
 
-  it("populates feedbackExample with text and ground for the AI-learning trail", async () => {
-    // The bbox patch must NOT cause the existing feedback example
-    // creation to be skipped — the AI-learning feedback signal is
-    // independent of bbox resolution. Regression guard.
-    mockDocumentPageFindUnique.mockResolvedValue({
-      layoutJson: [makeWord("Maia", 10, 20, 14, 5), makeWord("Rangi", 26, 20, 14, 5)],
-      width: 100,
-      height: 100,
-    });
-
-    await createManualDetection(baseInput);
-
-    expect(mockFeedbackCreate).toHaveBeenCalledTimes(1);
-    expect(mockFeedbackCreate.mock.calls[0][0]).toMatchObject({
-      data: expect.objectContaining({
-        text: "Maia Rangi",
-        ground: "s7_2a",
-        detectionId: "det-new",
-      }),
-    });
-  });
 });
 
 // ---------------------------------------------------------------------
@@ -387,8 +361,8 @@ describe("createManualDetection — Bug 5 fix (long text + multi-line)", () => {
     expect(mockDetectionCreate).toHaveBeenCalledTimes(2);
     expect(mockDetectionUpdate).toHaveBeenCalledTimes(1);
 
-    // Sibling shares text/type/ground/source with the original but
-    // has its own bbox.
+    // Sibling shares text/type/source with the original but has its
+    // own bbox.
     const siblingCall = mockDetectionCreate.mock.calls[1][0];
     expect(siblingCall.data).toMatchObject({
       documentId,
@@ -396,8 +370,6 @@ describe("createManualDetection — Bug 5 fix (long text + multi-line)", () => {
       text: "Maia Rangi of Whanganui",
       status: "accepted",
       source: "manual",
-      appliedGround: "s7_2a",
-      suggestedGround: "s7_2a",
     });
     // Sibling bbox is non-zero AND distinct from the patched-on-original
     // bbox.
@@ -436,38 +408,10 @@ describe("createManualDetection — Bug 5 fix (long text + multi-line)", () => {
       data: { detectionCount: { increment: 2 } },
     });
 
-    expect(mockCaseUpdate).toHaveBeenCalledTimes(1);
-    expect(mockCaseUpdate.mock.calls[0][0]).toMatchObject({
+    expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
+    expect(mockBatchUpdate.mock.calls[0][0]).toMatchObject({
       where: { id: batchId },
       data: { redactionCount: { increment: 2 } },
-    });
-  });
-
-  it("(d) creates only ONE FeedbackExample regardless of how many sibling rows", async () => {
-    // The reviewer made ONE drag-and-click. Sibling rows are an
-    // implementation detail of the renderer (one bbox per visual
-    // line); the AI-learning training signal should be one example
-    // per reviewer action, not one per visual line.
-    mockDocumentPageFindUnique.mockResolvedValue({
-      layoutJson: [
-        makeWord("Maia", 10, 20, 14, 5),
-        makeWord("Rangi", 26, 20, 14, 5),
-        makeWord("of", 10, 40, 6, 5),
-        makeWord("Whanganui", 18, 40, 28, 5),
-      ],
-      width: 100,
-      height: 100,
-    });
-
-    await createManualDetection({
-      ...baseInput,
-      text: "Maia Rangi of Whanganui",
-    });
-
-    expect(mockFeedbackCreate).toHaveBeenCalledTimes(1);
-    expect(mockFeedbackCreate.mock.calls[0][0].data).toMatchObject({
-      detectionId: "det-new", // tied to the original row, not a sibling
-      text: "Maia Rangi of Whanganui",
     });
   });
 
@@ -484,11 +428,10 @@ describe("createManualDetection — Bug 5 fix (long text + multi-line)", () => {
 
     expect(mockDetectionCreate).toHaveBeenCalledTimes(1); // only the original
     expect(mockDetectionUpdate).toHaveBeenCalledTimes(1);
-    expect(mockFeedbackCreate).toHaveBeenCalledTimes(1);
     expect(mockDocumentUpdate.mock.calls[0][0].data).toMatchObject({
       detectionCount: { increment: 1 },
     });
-    expect(mockCaseUpdate.mock.calls[0][0].data).toMatchObject({
+    expect(mockBatchUpdate.mock.calls[0][0].data).toMatchObject({
       redactionCount: { increment: 1 },
     });
   });
@@ -515,7 +458,7 @@ describe("createManualDetection — Bug 5 fix (long text + multi-line)", () => {
     expect(mockDocumentUpdate.mock.calls[0][0].data).toMatchObject({
       detectionCount: { increment: 1 },
     });
-    expect(mockCaseUpdate.mock.calls[0][0].data).toMatchObject({
+    expect(mockBatchUpdate.mock.calls[0][0].data).toMatchObject({
       redactionCount: { increment: 1 },
     });
   });

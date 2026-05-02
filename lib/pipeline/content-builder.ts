@@ -24,7 +24,6 @@ export interface DetectionInput {
   text: string;
   page: number;
   confidence: number;
-  suggestedGround?: string | null;
 }
 
 // ---------------------------------------------------------------------------

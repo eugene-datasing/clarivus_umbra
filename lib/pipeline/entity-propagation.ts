@@ -60,9 +60,7 @@ export interface PropagationSeed {
   type: string;
   text: string;
   page: number;
-  suggestedGround: string | null;
   reasoning: string;
-  piConsideration: string;
   aiExplanation: string;
   source: string;
 }
@@ -72,9 +70,7 @@ export interface PropagatedDetection {
   text: string; // the matched variant
   confidence: number;
   page: number; // page of the match (not the seed's page)
-  suggestedGround: string | null;
   reasoning: string;
-  piConsideration: string;
   aiExplanation: string;
   source: "entity-propagation";
   seedType: "personal-name" | "harassment-risk";
@@ -264,9 +260,7 @@ export function propagateNameDetections(
           text: variant,
           confidence: PROPAGATED_CONFIDENCE,
           page: page.pageNumber,
-          suggestedGround: seed.suggestedGround,
           reasoning: `Entity propagation from seed "${seed.text}" (originally detected on page ${seed.page}).`,
-          piConsideration: seed.piConsideration,
           aiExplanation: `Propagated from "${seed.text}" (seed type ${seedType}, seed source ${seed.source}). The seed was identified on page ${seed.page}; this variant was found on page ${page.pageNumber} by deterministic word-boundary search.`,
           source: "entity-propagation",
           seedType,

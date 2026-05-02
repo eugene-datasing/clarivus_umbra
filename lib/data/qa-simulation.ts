@@ -1,11 +1,10 @@
 /**
  * QA Simulation data layer.
  *
- * Simulates what a LGOIMA release will look like from the requester's
- * perspective. Produces a preview of released documents, withholding
- * schedule entries, warnings, and overall stats.
- *
- * Used by the pre-release QA page to catch issues before export.
+ * Simulates what a release will look like from the requester's perspective:
+ * a preview of redacted documents, a count of schedule entries, warnings,
+ * and overall stats. Used by the pre-release QA page to catch issues
+ * before export.
  */
 
 import { prisma } from "@/lib/db/prisma";
@@ -23,7 +22,7 @@ export interface SimulationReleasedDocument {
 }
 
 export interface SimulationWarning {
-  type: "unreviewed" | "no-ground" | "low-confidence" | "pending-detections";
+  type: "unreviewed" | "low-confidence" | "pending-detections";
   message: string;
   documentName: string;
 }
@@ -33,8 +32,7 @@ export interface SimulationResult {
   releasedDocuments: SimulationReleasedDocument[];
 
   /** Schedule preview */
-  withholdingScheduleEntries: number;
-  groundsUsed: string[];
+  scheduleEntries: number;
 
   /** Warnings */
   warnings: SimulationWarning[];
@@ -58,8 +56,6 @@ export async function getQASimulation(batchId: string): Promise<SimulationResult
         select: {
           id: true,
           status: true,
-          appliedGround: true,
-          suggestedGround: true,
           confidence: true,
           page: true,
         },
@@ -71,25 +67,15 @@ export async function getQASimulation(batchId: string): Promise<SimulationResult
   const releasedDocuments: SimulationReleasedDocument[] = [];
   let totalPages = 0;
   let totalRedactions = 0;
-  const groundsSet = new Set<string>();
 
   for (const doc of documents) {
     const acceptedDetections = doc.detections.filter((d) => d.status === "accepted");
     const pendingDetections = doc.detections.filter((d) => d.status === "pending");
     const redactionCount = acceptedDetections.length;
 
-    // Collect grounds used
-    for (const det of acceptedDetections) {
-      const ground = det.appliedGround || det.suggestedGround;
-      if (ground) groundsSet.add(ground);
-    }
-
-    // Which pages have redactions
     const redactedPageSet = new Set(acceptedDetections.map((d) => d.page));
     const redactedPages = redactedPageSet.size;
 
-    // Is the entire document withheld? Heuristic: every page has at least
-    // one redaction AND the number of redactions exceeds a threshold per page
     const hasFullWithholding =
       doc.pageCount > 0 &&
       redactedPages >= doc.pageCount &&
@@ -106,9 +92,6 @@ export async function getQASimulation(batchId: string): Promise<SimulationResult
     totalPages += doc.pageCount;
     totalRedactions += redactionCount;
 
-    // ------ Warnings ------
-
-    // Unreviewed document (not in reviewed or signed-off status)
     if (!["reviewed", "signed-off"].includes(doc.status)) {
       warnings.push({
         type: "unreviewed",
@@ -117,7 +100,6 @@ export async function getQASimulation(batchId: string): Promise<SimulationResult
       });
     }
 
-    // Pending detections
     if (pendingDetections.length > 0) {
       warnings.push({
         type: "pending-detections",
@@ -126,22 +108,7 @@ export async function getQASimulation(batchId: string): Promise<SimulationResult
       });
     }
 
-    // Accepted detections without a withholding ground
-    const noGroundCount = acceptedDetections.filter(
-      (d) => !d.appliedGround && !d.suggestedGround,
-    ).length;
-    if (noGroundCount > 0) {
-      warnings.push({
-        type: "no-ground",
-        message: `${noGroundCount} accepted detection(s) have no withholding ground assigned`,
-        documentName: doc.name,
-      });
-    }
-
-    // Low-confidence accepted detections (below 0.6)
-    const lowConfCount = acceptedDetections.filter(
-      (d) => d.confidence < 0.6,
-    ).length;
+    const lowConfCount = acceptedDetections.filter((d) => d.confidence < 0.6).length;
     if (lowConfCount > 0) {
       warnings.push({
         type: "low-confidence",
@@ -151,17 +118,11 @@ export async function getQASimulation(batchId: string): Promise<SimulationResult
     }
   }
 
-  // Withholding schedule entries = accepted detections with grounds
-  const withholdingScheduleEntries = documents.reduce(
-    (sum, doc) =>
-      sum +
-      doc.detections.filter(
-        (d) => d.status === "accepted" && (d.appliedGround || d.suggestedGround),
-      ).length,
+  const scheduleEntries = documents.reduce(
+    (sum, doc) => sum + doc.detections.filter((d) => d.status === "accepted").length,
     0,
   );
 
-  // Percentage of pages that have at least one redaction
   const pagesWithRedactions = new Set<string>();
   for (const doc of documents) {
     for (const det of doc.detections) {
@@ -177,8 +138,7 @@ export async function getQASimulation(batchId: string): Promise<SimulationResult
 
   return {
     releasedDocuments,
-    withholdingScheduleEntries,
-    groundsUsed: Array.from(groundsSet).sort(),
+    scheduleEntries,
     warnings,
     totalPages,
     totalRedactions,

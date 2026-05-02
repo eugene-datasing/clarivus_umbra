@@ -21,8 +21,8 @@ import {
   bulkAcceptDetections,
   bulkRejectDetections,
   applyConfidenceThreshold,
-  bulkApplyGroundToSimilar,
-  bulkApplyGroundByType,
+  bulkAcceptBySimilar,
+  bulkAcceptByType,
 } from "@/lib/actions/detection-actions";
 import { lgoimaGrounds } from "@/lib/lgoima-grounds";
 
@@ -221,10 +221,9 @@ export default function BulkReviewClient({
     if (!bulkGroundValue) return;
     setBulkGroundApplying(true);
     try {
-      const result = await bulkApplyGroundToSimilar(
+      const result = await bulkAcceptBySimilar(
         requestId,
         group.entity,
-        bulkGroundValue,
         bulkGroundAction,
       );
       const groundLabel = lgoimaGrounds.find((g) => g.id === bulkGroundValue)?.reference || bulkGroundValue;
@@ -246,10 +245,9 @@ export default function BulkReviewClient({
     if (!bulkTypeGroundValue) return;
     setBulkTypeApplying(true);
     try {
-      const result = await bulkApplyGroundByType(
+      const result = await bulkAcceptByType(
         requestId,
         type,
-        bulkTypeGroundValue,
         bulkTypeGroundAction,
       );
       const groundLabel = lgoimaGrounds.find((g) => g.id === bulkTypeGroundValue)?.reference || bulkTypeGroundValue;

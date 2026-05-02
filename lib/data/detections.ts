@@ -14,10 +14,8 @@ export async function getDetectionsForDocument(documentId: string) {
     confidence: d.confidence,
     page: d.page,
     position: { x: d.posX, y: d.posY, w: d.posW, h: d.posH },
-    suggestedGround: d.suggestedGround,
-    appliedGround: d.appliedGround,
     reasoning: d.reasoning,
-    piConsideration: d.piConsideration,
+    note: d.note,
     status: d.status,
     aiExplanation: d.aiExplanation,
     source: d.source,
@@ -49,8 +47,6 @@ export async function getGroupedDetectionsForCase(batchId: string) {
     text: d.text,
     confidence: d.confidence,
     page: d.page,
-    suggestedGround: d.suggestedGround,
-    appliedGround: d.appliedGround,
     status: d.status,
     aiExplanation: d.aiExplanation,
   }));
@@ -87,7 +83,6 @@ export async function getThresholdPreview(batchId: string) {
       id: true,
       type: true,
       confidence: true,
-      suggestedGround: true,
       documentId: true,
     },
     orderBy: { confidence: "desc" },
@@ -103,7 +98,7 @@ export async function getWithholdingItems(batchId: string) {
       status: "accepted",
     },
     include: { document: { select: { name: true } } },
-    orderBy: [{ appliedGround: "asc" }, { document: { name: "asc" } }],
+    orderBy: [{ type: "asc" }, { document: { name: "asc" } }],
   });
 
   return acceptedDetections.map((d) => ({
@@ -111,8 +106,8 @@ export async function getWithholdingItems(batchId: string) {
     documentName: d.document.name,
     type: d.type,
     text: d.text,
-    ground: d.appliedGround || d.suggestedGround,
     reasoning: d.reasoning,
+    note: d.note,
     page: d.page,
   }));
 }

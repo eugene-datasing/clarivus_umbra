@@ -77,7 +77,7 @@ export async function processDocument(docId: string): Promise<void> {
     // ------------------------------------------------------------------
     const doc = await prisma.document.findUnique({
       where: { id: docId },
-      include: { case: true },
+      include: { batch: true },
     });
 
     if (!doc) {
@@ -419,7 +419,7 @@ export async function processDocument(docId: string): Promise<void> {
               status: "queued",
             },
           });
-          await tx.case.update({
+          await tx.batch.update({
             where: { id: batchId },
             data: { documentCount: { increment: 1 } },
           });
@@ -681,9 +681,7 @@ export async function processDocument(docId: string): Promise<void> {
       text: string;
       confidence: number;
       page: number;
-      suggestedGround: string | null;
       reasoning: string;
-      piConsideration: string;
       aiExplanation: string;
       source: string;
     }
@@ -694,9 +692,7 @@ export async function processDocument(docId: string): Promise<void> {
         text: m.text,
         confidence: m.confidence,
         page: m.page,
-        suggestedGround: m.suggestedGround,
         reasoning: m.reasoning,
-        piConsideration: "",
         aiExplanation: `Pattern-detected ${m.type}. ${m.reasoning}`,
         source: "pattern",
       })),
@@ -705,9 +701,7 @@ export async function processDocument(docId: string): Promise<void> {
         text: d.text,
         confidence: d.confidence,
         page: d.page,
-        suggestedGround: d.suggestedGround,
         reasoning: d.reasoning,
-        piConsideration: d.piConsideration,
         aiExplanation: d.aiExplanation,
         source: "ai",
       })),
@@ -716,9 +710,7 @@ export async function processDocument(docId: string): Promise<void> {
         text: crm.text,
         confidence: crm.confidence,
         page: crm.page,
-        suggestedGround: crm.suggestedGround,
         reasoning: crm.reasoning,
-        piConsideration: "",
         aiExplanation: `Custom rule: ${crm.ruleName}. ${crm.reasoning}`,
         source: "custom-rule",
       })),
@@ -727,9 +719,7 @@ export async function processDocument(docId: string): Promise<void> {
         text: la.text,
         confidence: la.confidence,
         page: la.page,
-        suggestedGround: la.suggestedGround,
         reasoning: la.reasoning,
-        piConsideration: "",
         aiExplanation: `Label-adjacent match on "${la.labelMatched}". ${la.reasoning}`,
         source: "label-adjacent",
       })),
@@ -738,10 +728,7 @@ export async function processDocument(docId: string): Promise<void> {
         text: sm.text,
         confidence: sm.confidence,
         page: sm.page,
-        suggestedGround: sm.suggestedGround,
         reasoning: sm.reasoning,
-        piConsideration:
-          "Free and frank candour protection — withholding must be balanced against public interest in transparency.",
         aiExplanation: `Section-marker match inside "${sm.markerMatched}" section. ${sm.reasoning}`,
         source: "section-marker",
       })),
@@ -770,9 +757,7 @@ export async function processDocument(docId: string): Promise<void> {
           text: p.text,
           confidence: p.confidence,
           page: p.page,
-          suggestedGround: p.suggestedGround,
           reasoning: p.reasoning,
-          piConsideration: p.piConsideration,
           aiExplanation: p.aiExplanation,
           source: p.source,
         });
@@ -903,9 +888,7 @@ export async function processDocument(docId: string): Promise<void> {
           text: det.text,
           confidence: det.confidence,
           page: det.page,
-          suggestedGround: det.suggestedGround,
           reasoning: det.reasoning,
-          piConsideration: det.piConsideration,
           aiExplanation: det.aiExplanation,
           source: det.source,
           status: "pending",
@@ -937,7 +920,6 @@ export async function processDocument(docId: string): Promise<void> {
       text: r.text,
       page: r.page,
       confidence: r.confidence,
-      suggestedGround: r.suggestedGround,
     }));
 
     // For DOCX files, use structured content from mammoth HTML conversion
@@ -1012,8 +994,8 @@ export async function processDocument(docId: string): Promise<void> {
         },
       });
 
-      // 11. Update case counters
-      await tx.case.update({
+      // 11. Update batch counters
+      await tx.batch.update({
         where: { id: batchId },
         data: {
           redactionCount: {

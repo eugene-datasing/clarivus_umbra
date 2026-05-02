@@ -3,24 +3,19 @@
 import { prisma } from "@/lib/db/prisma";
 import { createAuditEntry } from "@/lib/data/audit";
 import { maskEntityText, stripPiiPatterns } from "@/lib/data/audit-sanitize";
-import { createSnapshot } from "@/lib/pipeline/version-snapshot";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeForBatch, authorizeForDocument, authorizeForDetection } from "@/lib/auth/authorize";
 import { isAdmin } from "@/lib/auth/roles";
 import {
   acceptDetectionSchema,
   rejectDetectionSchema,
-  applyGroundSchema,
   bulkDetectionSchema,
   detectionIdSchema,
   confidenceThresholdSchema,
-  bulkApplyGroundToSimilarSchema,
-  bulkApplyGroundByTypeSchema,
   changeDetectionTypeSchema,
   acceptRemainingSchema,
 } from "@/lib/validation/schemas";
 import { recomputeBatchStatus } from "@/lib/data/batches";
-import { normaliseGroundToId } from "@/lib/lgoima-grounds";
 
 // ---------------------------------------------------------------------------
 // Change tracking (WP12)
@@ -84,7 +79,6 @@ async function regressDocumentIfNeeded(documentId: string) {
   });
   if (!doc) return;
 
-  // If document was reviewed or in-review and a detection goes back to pending
   if (doc.status === "reviewed" || doc.status === "in-review") {
     await prisma.document.update({
       where: { id: documentId },
@@ -132,8 +126,10 @@ export async function markDocumentInReview(documentId: string) {
 }
 
 /**
- * Submit a document for senior review. Transitions from "in-review" or
- * "reviewed" (reviewer sign-off complete, awaiting final approval if configured).
+ * Reviewer signs off a document — transitions from "in-review" or
+ * "reviewed" to "reviewed" (Umbra v1's flow has no separate senior
+ * review stage; this preserves the action for callers but is now
+ * idempotent on already-reviewed documents).
  */
 export async function submitForSeniorReview(documentId: string) {
   const user = await requireUser();
@@ -153,9 +149,6 @@ export async function submitForSeniorReview(documentId: string) {
     data: { status: "reviewed" },
   });
 
-  // Create "draft" snapshot for version comparison (WP5)
-  await createSnapshot(documentId, "draft", user.name);
-
   await createAuditEntry({
     userName: user.name,
     userRole: user.role,
@@ -171,8 +164,7 @@ export async function submitForSeniorReview(documentId: string) {
 }
 
 /**
- * Final approval of a document. Transitions from "reviewed" to "signed-off".
- * Used by the senior reviewer (if configured) or acts as the final step.
+ * Final sign-off of a document. Transitions from "reviewed" to "signed-off".
  */
 export async function signOffDocument(documentId: string) {
   const user = await requireUser();
@@ -191,9 +183,6 @@ export async function signOffDocument(documentId: string) {
     where: { id: documentId },
     data: { status: "signed-off" },
   });
-
-  // Create "final" snapshot for version comparison (WP5)
-  await createSnapshot(documentId, "final", user.name);
 
   await createAuditEntry({
     userName: user.name,
@@ -249,8 +238,13 @@ export async function requestChanges(documentId: string, reason?: string) {
 // Detection-level actions
 // ---------------------------------------------------------------------------
 
+/**
+ * Accept a detection. Umbra v1 collapses the LGOIMA "ground" concept — the
+ * `ground` parameter is accepted for schema compatibility but ignored
+ * server-side until Phase 7 reframes the export pipeline.
+ */
 export async function acceptDetection(detectionId: string, ground?: string) {
-  const { detectionId: validId, ground: validGround } = acceptDetectionSchema.parse({ detectionId, ground });
+  const { detectionId: validId } = acceptDetectionSchema.parse({ detectionId, ground });
   const user = await requireUser();
   await authorizeForDetection(user, validId);
   const detection = await prisma.detection.findUnique({
@@ -259,20 +253,12 @@ export async function acceptDetection(detectionId: string, ground?: string) {
   });
   if (!detection) throw new Error("Detection not found");
 
-  const appliedGround = validGround
-    || (detection.suggestedGround ? normaliseGroundToId(detection.suggestedGround) : null);
-
-  // Record change history
   await recordHistory(validId, "status", detection.status, "accepted", user.name);
-  if (detection.appliedGround !== appliedGround) {
-    await recordHistory(validId, "appliedGround", detection.appliedGround, appliedGround ?? null, user.name);
-  }
 
   await prisma.detection.update({
     where: { id: validId },
     data: {
       status: "accepted",
-      appliedGround,
       reviewedAt: new Date(),
     },
   });
@@ -284,7 +270,7 @@ export async function acceptDetection(detectionId: string, ground?: string) {
     description: `Accepted detection (${detection.type || "unknown"})`,
     target: detection.document.name,
     batchId: detection.document.batchId,
-    detail: `Detection ${validId}, Confidence: ${detection.confidence}%, Ground: ${appliedGround}`,
+    detail: `Detection ${validId}, Confidence: ${detection.confidence}%`,
   });
 
   await recomputeDocumentStatus(detection.documentId);
@@ -303,15 +289,11 @@ export async function rejectDetection(detectionId: string, reason?: string) {
   if (!detection) throw new Error("Detection not found");
 
   await recordHistory(validId, "status", detection.status, "rejected", user.name);
-  if (detection.appliedGround) {
-    await recordHistory(validId, "appliedGround", detection.appliedGround, null, user.name);
-  }
 
   await prisma.detection.update({
     where: { id: validId },
     data: {
       status: "rejected",
-      appliedGround: null,
       reviewedAt: new Date(),
     },
   });
@@ -337,21 +319,17 @@ export async function revertDetection(detectionId: string) {
   await authorizeForDetection(user, validId);
   const detection = await prisma.detection.findUnique({
     where: { id: validId },
-    select: { documentId: true, status: true, appliedGround: true },
+    select: { documentId: true, status: true },
   });
 
   if (detection) {
     await recordHistory(validId, "status", detection.status, "pending", user.name);
-    if (detection.appliedGround) {
-      await recordHistory(validId, "appliedGround", detection.appliedGround, null, user.name);
-    }
   }
 
   await prisma.detection.update({
     where: { id: validId },
     data: {
       status: "pending",
-      appliedGround: null,
       reviewedAt: null,
     },
   });
@@ -363,108 +341,36 @@ export async function revertDetection(detectionId: string) {
   return { success: true };
 }
 
-export async function applyGround(detectionId: string, groundId: string) {
-  const { detectionId: validId, groundId: validGroundId } = applyGroundSchema.parse({ detectionId, groundId });
-  const user = await requireUser();
-  await authorizeForDetection(user, validId);
-  const detection = await prisma.detection.findUnique({
-    where: { id: validId },
-    select: { appliedGround: true },
-  });
-
-  if (detection) {
-    await recordHistory(validId, "appliedGround", detection.appliedGround, validGroundId, user.name);
-  }
-
-  await prisma.detection.update({
-    where: { id: validId },
-    data: { appliedGround: validGroundId },
-  });
-
-  return { success: true };
-}
-
 export async function bulkAcceptDetections(detectionIds: string[], ground?: string) {
-  const { detectionIds: validIds, ground: validGround } = bulkDetectionSchema.parse({ detectionIds, ground });
+  const { detectionIds: validIds } = bulkDetectionSchema.parse({ detectionIds, ground });
   const user = await requireUser();
 
-  // Fetch all detections and verify they belong to the same authorized
-  // case. `appliedGround` and `suggestedGround` are pulled in the same
-  // query so we can resolve the per-row ground without a second
-  // round-trip.
   const detections = await prisma.detection.findMany({
     where: { id: { in: validIds } },
     select: {
       id: true,
       documentId: true,
       document: { select: { batchId: true } },
-      appliedGround: true,
-      suggestedGround: true,
     },
   });
 
   if (detections.length === 0) return { count: 0 };
 
-  // All detections must belong to the same case
+  // All detections must belong to the same batch
   const batchIds = new Set(detections.map((d) => d.document.batchId));
   if (batchIds.size !== 1) {
-    throw new Error("All detections in a bulk operation must belong to the same case");
+    throw new Error("All detections in a bulk operation must belong to the same batch");
   }
   const batchId = detections[0].document.batchId;
   await authorizeForBatch(user, batchId);
 
-  // Resolve the ground each row should be accepted with.
-  //
-  // Priority (matches `acceptRemainingDetections` and `acceptDetection`):
-  //   1. Explicit `validGround` argument (the bulk caller said
-  //      "apply this ground to all of them") — overrides anything on
-  //      the row.
-  //   2. Row's existing `appliedGround` — preserved so a partial bulk
-  //      doesn't clobber a previous reviewer's per-row ground.
-  //   3. Row's `suggestedGround`, normalised to ID format. This is
-  //      the post-2026-04-27 fix: pre-fix the bulk path used
-  //      `updateMany` with `appliedGround: validGround || undefined`,
-  //      which left the field unchanged when no explicit ground was
-  //      passed and produced the prod-state `appliedGround=null,
-  //      suggestedGround=non-null` shape that suppressed the right-
-  //      pane citation (Bug 2 from PR #54 verification). Now every
-  //      row gets a normalised ID written, matching the per-row paths
-  //      that already had this logic.
-  //   4. None of the above → leave `appliedGround` untouched
-  //      (`undefined` in the Prisma update). Rare — only happens if
-  //      the row has no `suggestedGround` either (e.g. a manual
-  //      detection inserted without a ground).
-  const validGroundId = validGround ? normaliseGroundToId(validGround) : null;
-  const updates = detections.map((d) => {
-    const resolvedGround =
-      validGroundId ??
-      d.appliedGround ??
-      (d.suggestedGround ? normaliseGroundToId(d.suggestedGround) : null);
-    return { id: d.id, ground: resolvedGround };
+  const result = await prisma.detection.updateMany({
+    where: { id: { in: detections.map((d) => d.id) } },
+    data: {
+      status: "accepted",
+      reviewedAt: new Date(),
+    },
   });
-
-  // Single transaction so concurrent bulk-accepts can't interleave —
-  // either every row in this call commits with its resolved ground or
-  // none do. Pre-fix the `updateMany` was already a single statement
-  // (atomic by Prisma's contract); the per-row loop in a `$transaction`
-  // gives the same guarantee for the new per-row logic.
-  await prisma.$transaction(
-    updates.map((u) =>
-      prisma.detection.update({
-        where: { id: u.id },
-        data: {
-          status: "accepted",
-          // `undefined` (not `null`) means "leave the field unchanged"
-          // in Prisma — preserves any pre-existing appliedGround on
-          // rows that resolved to no-ground (priority 4 above).
-          appliedGround: u.ground ?? undefined,
-          reviewedAt: new Date(),
-        },
-      }),
-    ),
-  );
-
-  const acceptedCount = updates.length;
 
   // Recompute status for all affected documents
   const docIds = [...new Set(detections.map((d) => d.documentId))];
@@ -476,20 +382,19 @@ export async function bulkAcceptDetections(detectionIds: string[], ground?: stri
     userName: user.name,
     userRole: user.role,
     type: "review",
-    description: `Bulk accepted ${acceptedCount} detection(s)`,
+    description: `Bulk accepted ${result.count} detection(s)`,
     target: "Bulk Review",
     batchId,
-    detail: `${acceptedCount} detection(s)${validGround ? `, Ground: ${validGround}` : ""}`,
+    detail: `${result.count} detection(s)`,
   });
 
-  return { count: acceptedCount };
+  return { count: result.count };
 }
 
 export async function bulkRejectDetections(detectionIds: string[]) {
   const { detectionIds: validIds } = bulkDetectionSchema.parse({ detectionIds });
   const user = await requireUser();
 
-  // Fetch all detections and verify they belong to the same authorized case
   const detections = await prisma.detection.findMany({
     where: { id: { in: validIds } },
     select: { id: true, documentId: true, document: { select: { batchId: true } } },
@@ -499,7 +404,7 @@ export async function bulkRejectDetections(detectionIds: string[]) {
 
   const batchIds = new Set(detections.map((d) => d.document.batchId));
   if (batchIds.size !== 1) {
-    throw new Error("All detections in a bulk operation must belong to the same case");
+    throw new Error("All detections in a bulk operation must belong to the same batch");
   }
   const batchId = detections[0].document.batchId;
   await authorizeForBatch(user, batchId);
@@ -509,7 +414,6 @@ export async function bulkRejectDetections(detectionIds: string[]) {
     where: { id: { in: authorizedIds } },
     data: {
       status: "rejected",
-      appliedGround: null,
       reviewedAt: new Date(),
     },
   });
@@ -532,13 +436,11 @@ export async function bulkRejectDetections(detectionIds: string[]) {
 }
 
 // ---------------------------------------------------------------------------
-// Confidence-threshold mass redaction
+// Confidence-threshold mass acceptance
 // ---------------------------------------------------------------------------
 
 /**
- * Auto-accept all pending detections above a confidence threshold.
- * Each detection gets its suggestedGround applied as appliedGround.
- * Admin-only.
+ * Auto-accept all pending detections above a confidence threshold. Admin-only.
  */
 export async function applyConfidenceThreshold(batchId: string, threshold: number) {
   const { batchId: validBatchId, threshold: validThreshold } =
@@ -551,51 +453,32 @@ export async function applyConfidenceThreshold(batchId: string, threshold: numbe
     throw new Error("Access denied: only admins can apply confidence thresholds");
   }
 
-  // Find all pending detections above the threshold
   const detections = await prisma.detection.findMany({
     where: {
       document: { batchId: validBatchId },
       status: "pending",
       confidence: { gt: validThreshold },
     },
-    select: {
-      id: true,
-      suggestedGround: true,
-      documentId: true,
-    },
+    select: { id: true, documentId: true },
   });
 
   if (detections.length === 0) {
     return { accepted: 0, documentsAffected: 0 };
   }
 
-  // Group by suggestedGround so each batch gets the right ground applied
-  const byGround = new Map<string | null, string[]>();
-  for (const det of detections) {
-    const ground = det.suggestedGround;
-    if (!byGround.has(ground)) byGround.set(ground, []);
-    byGround.get(ground)!.push(det.id);
-  }
+  await prisma.detection.updateMany({
+    where: { id: { in: detections.map((d) => d.id) } },
+    data: {
+      status: "accepted",
+      reviewedAt: new Date(),
+    },
+  });
 
-  // Bulk update per ground group
-  for (const [ground, ids] of byGround) {
-    await prisma.detection.updateMany({
-      where: { id: { in: ids } },
-      data: {
-        status: "accepted",
-        appliedGround: ground ? normaliseGroundToId(ground) : null,
-        reviewedAt: new Date(),
-      },
-    });
-  }
-
-  // Recompute document statuses
   const docIds = [...new Set(detections.map((d) => d.documentId))];
   for (const docId of docIds) {
     await recomputeDocumentStatus(docId);
   }
 
-  // Audit trail
   await createAuditEntry({
     userName: user.name,
     userRole: user.role,
@@ -610,141 +493,90 @@ export async function applyConfidenceThreshold(batchId: string, threshold: numbe
 }
 
 // ---------------------------------------------------------------------------
-// Bulk apply ground to similar entity text
+// Bulk accept by similar entity text
 // ---------------------------------------------------------------------------
 
 /**
- * Find all detections in a case where the detected text matches (case-insensitive)
- * the given entityText, and apply the ground + status.
+ * Find all detections in a batch whose detected text matches (case-insensitive)
+ * the given entityText, and accept or reject them in bulk.
  */
-export async function bulkApplyGroundToSimilar(
+export async function bulkAcceptBySimilar(
   batchId: string,
   entityText: string,
-  ground: string,
   action: "accept" | "reject",
 ): Promise<{ updatedCount: number }> {
-  const validated = bulkApplyGroundToSimilarSchema.parse({
-    batchId,
-    entityText,
-    ground,
-    action,
-  });
-
   const user = await requireUser();
-  await authorizeForBatch(user, validated.batchId);
+  await authorizeForBatch(user, batchId);
 
-  // Find all pending detections in this case whose text matches (case-insensitive)
   const detections = await prisma.detection.findMany({
     where: {
-      document: { batchId: validated.batchId },
+      document: { batchId },
       status: "pending",
     },
-    select: {
-      id: true,
-      text: true,
-      type: true,
-      status: true,
-      appliedGround: true,
-      documentId: true,
-    },
+    select: { id: true, text: true, type: true, status: true, documentId: true },
   });
 
-  // Filter case-insensitive match on text
-  const entityLower = validated.entityText.toLowerCase();
-  const matching = detections.filter(
-    (d) => d.text.toLowerCase() === entityLower,
-  );
+  const entityLower = entityText.toLowerCase();
+  const matching = detections.filter((d) => d.text.toLowerCase() === entityLower);
 
   if (matching.length === 0) {
     return { updatedCount: 0 };
   }
 
   const matchingIds = matching.map((d) => d.id);
-  const newStatus = validated.action === "accept" ? "accepted" : "rejected";
-  const appliedGround = validated.action === "accept" ? validated.ground : null;
+  const newStatus = action === "accept" ? "accepted" : "rejected";
 
-  // Record history for each detection
   for (const det of matching) {
     await recordHistory(det.id, "status", det.status, newStatus, user.name);
-    if (det.appliedGround !== appliedGround) {
-      await recordHistory(
-        det.id,
-        "appliedGround",
-        det.appliedGround,
-        appliedGround,
-        user.name,
-      );
-    }
   }
 
-  // Bulk update
   await prisma.detection.updateMany({
     where: { id: { in: matchingIds } },
-    data: {
-      status: newStatus,
-      appliedGround,
-      reviewedAt: new Date(),
-    },
+    data: { status: newStatus, reviewedAt: new Date() },
   });
 
-  // Recompute document statuses
   const docIds = [...new Set(matching.map((d) => d.documentId))];
   for (const docId of docIds) {
     await recomputeDocumentStatus(docId);
   }
 
-  // Audit trail — mask entity text to prevent PII leaking into audit logs
-  const maskedEntity = maskEntityText(validated.entityText, matching[0]?.type);
+  const maskedEntity = maskEntityText(entityText, matching[0]?.type);
   await createAuditEntry({
     userName: user.name,
     userRole: user.role,
     type: "review",
     description: `Bulk ${newStatus} ${matching.length} detection(s) matching ${maskedEntity}`,
     target: "Bulk Review",
-    batchId: validated.batchId,
-    detail: `Entity: ${maskedEntity}, Ground: ${validated.ground}, Action: ${validated.action}`,
+    batchId,
+    detail: `Entity: ${maskedEntity}, Action: ${action}`,
   });
 
   return { updatedCount: matching.length };
 }
 
 // ---------------------------------------------------------------------------
-// Bulk apply ground by detection type
+// Bulk accept by detection type
 // ---------------------------------------------------------------------------
 
 /**
- * Find all detections in a case matching a detection type, and apply the
- * ground + status.
+ * Find all pending detections in a batch matching a detection type, and
+ * accept or reject them in bulk.
  */
-export async function bulkApplyGroundByType(
+export async function bulkAcceptByType(
   batchId: string,
   detectionType: string,
-  ground: string,
   action: "accept" | "reject",
 ): Promise<{ updatedCount: number }> {
-  const validated = bulkApplyGroundByTypeSchema.parse({
-    batchId,
-    detectionType,
-    ground,
-    action,
-  });
-
   const user = await requireUser();
-  await authorizeForBatch(user, validated.batchId);
+  await authorizeForBatch(user, batchId);
 
-  // Find all pending detections of this type in this case
   const detections = await prisma.detection.findMany({
     where: {
-      document: { batchId: validated.batchId },
+      document: { batchId },
       status: "pending",
-      type: validated.detectionType,
+      type: detectionType,
     },
-    select: {
-      id: true,
-      status: true,
-      appliedGround: true,
-      documentId: true,
-    },
+    select: { id: true, status: true, documentId: true },
   });
 
   if (detections.length === 0) {
@@ -752,48 +584,30 @@ export async function bulkApplyGroundByType(
   }
 
   const matchingIds = detections.map((d) => d.id);
-  const newStatus = validated.action === "accept" ? "accepted" : "rejected";
-  const appliedGround = validated.action === "accept" ? validated.ground : null;
+  const newStatus = action === "accept" ? "accepted" : "rejected";
 
-  // Record history for each detection
   for (const det of detections) {
     await recordHistory(det.id, "status", det.status, newStatus, user.name);
-    if (det.appliedGround !== appliedGround) {
-      await recordHistory(
-        det.id,
-        "appliedGround",
-        det.appliedGround,
-        appliedGround,
-        user.name,
-      );
-    }
   }
 
-  // Bulk update
   await prisma.detection.updateMany({
     where: { id: { in: matchingIds } },
-    data: {
-      status: newStatus,
-      appliedGround,
-      reviewedAt: new Date(),
-    },
+    data: { status: newStatus, reviewedAt: new Date() },
   });
 
-  // Recompute document statuses
   const docIds = [...new Set(detections.map((d) => d.documentId))];
   for (const docId of docIds) {
     await recomputeDocumentStatus(docId);
   }
 
-  // Audit trail
   await createAuditEntry({
     userName: user.name,
     userRole: user.role,
     type: "review",
-    description: `Bulk ${newStatus} ${detections.length} detection(s) of type "${validated.detectionType}"`,
+    description: `Bulk ${newStatus} ${detections.length} detection(s) of type "${detectionType}"`,
     target: "Bulk Review",
-    batchId: validated.batchId,
-    detail: `Type: "${validated.detectionType}", Ground: ${validated.ground}, Action: ${validated.action}`,
+    batchId,
+    detail: `Type: "${detectionType}", Action: ${action}`,
   });
 
   return { updatedCount: detections.length };
@@ -843,12 +657,11 @@ export async function changeDetectionType(
 // ---------------------------------------------------------------------------
 
 /**
- * Bulk-accept all pending detections on a document. Detections without any
- * ground (neither applied nor suggested) are skipped.
+ * Bulk-accept all pending detections on a document.
  */
 export async function acceptRemainingDetections(
   documentId: string,
-): Promise<{ accepted: number; skipped: number; skippedIds: string[] }> {
+): Promise<{ accepted: number }> {
   const validated = acceptRemainingSchema.parse({ documentId });
 
   const user = await requireUser();
@@ -860,44 +673,13 @@ export async function acceptRemainingDetections(
   });
   if (!doc) throw new Error("Document not found");
 
-  // Fetch all pending detections for this document
-  const pending = await prisma.detection.findMany({
+  const result = await prisma.detection.updateMany({
     where: { documentId: validated.documentId, status: "pending" },
-    select: {
-      id: true,
-      suggestedGround: true,
-      appliedGround: true,
-      type: true,
-      text: true,
+    data: {
+      status: "accepted",
+      reviewedAt: new Date(),
     },
   });
-
-  const toAccept: { id: string; ground: string }[] = [];
-  const skippedIds: string[] = [];
-
-  for (const det of pending) {
-    const ground =
-      det.appliedGround ||
-      (det.suggestedGround ? normaliseGroundToId(det.suggestedGround) : null);
-
-    if (ground) {
-      toAccept.push({ id: det.id, ground });
-    } else {
-      skippedIds.push(det.id);
-    }
-  }
-
-  // Update each accepted detection with its specific ground
-  for (const item of toAccept) {
-    await prisma.detection.update({
-      where: { id: item.id },
-      data: {
-        status: "accepted",
-        appliedGround: item.ground,
-        reviewedAt: new Date(),
-      },
-    });
-  }
 
   await recomputeDocumentStatus(validated.documentId);
 
@@ -905,15 +687,11 @@ export async function acceptRemainingDetections(
     userName: user.name,
     userRole: user.role,
     type: "review",
-    description: `Bulk accepted ${toAccept.length} remaining detection(s)${skippedIds.length > 0 ? `, skipped ${skippedIds.length} without ground` : ""}`,
+    description: `Bulk accepted ${result.count} remaining detection(s)`,
     target: doc.name,
     batchId: doc.batchId,
-    detail: `Accepted: ${toAccept.length}, Skipped: ${skippedIds.length}`,
+    detail: `Accepted: ${result.count}`,
   });
 
-  return {
-    accepted: toAccept.length,
-    skipped: skippedIds.length,
-    skippedIds,
-  };
+  return { accepted: result.count };
 }

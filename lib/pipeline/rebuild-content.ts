@@ -161,7 +161,6 @@ export async function rebuildContentJson(documentId: string): Promise<void> {
     text: d.text,
     page: d.page,
     confidence: d.confidence,
-    suggestedGround: d.suggestedGround,
   }));
 
   const existingContent = doc?.contentJson;

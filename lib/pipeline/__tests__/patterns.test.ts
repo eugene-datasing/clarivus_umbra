@@ -39,13 +39,6 @@ describe("detectPatterns", () => {
       expect(matches.some((m) => m.type === "ird")).toBe(true);
     });
 
-    it("assigns s7_2a ground to IRD matches", () => {
-      const pages = [makePage(1, "IRD: 12-345-678")];
-      const matches = detectPatterns(pages);
-      const ird = matches.find((m) => m.type === "ird");
-      expect(ird?.suggestedGround).toBe("s7_2a");
-    });
-
     it("assigns confidence of 95", () => {
       const pages = [makePage(1, "IRD: 12-345-678")];
       const matches = detectPatterns(pages);
@@ -348,7 +341,7 @@ describe("detectPatterns", () => {
       const pages = [makePage(1, "NZ Driver Licence HM847219")];
       const matches = detectPatterns(pages);
       const types = matchTypes(matches);
-      expect(types).toContain("driver-licence");
+      expect(types).toContain("nz-driver-licence");
       expect(types).not.toContain("nz-passport");
     });
 
@@ -357,7 +350,7 @@ describe("detectPatterns", () => {
       const matches = detectPatterns(pages);
       const types = matchTypes(matches);
       expect(types).toContain("nz-passport");
-      expect(types).not.toContain("driver-licence");
+      expect(types).not.toContain("nz-driver-licence");
     });
 
     it("falls back to nz-passport on an ID-shaped token without DL context", () => {
@@ -368,7 +361,7 @@ describe("detectPatterns", () => {
       const matches = detectPatterns(pages);
       const types = matchTypes(matches);
       expect(types).toContain("nz-passport");
-      expect(types).not.toContain("driver-licence");
+      expect(types).not.toContain("nz-driver-licence");
     });
   });
 });
