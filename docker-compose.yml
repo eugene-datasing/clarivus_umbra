@@ -5,13 +5,13 @@ services:
     ports:
       - "5434:5432"
     environment:
-      POSTGRES_USER: veil
-      POSTGRES_PASSWORD: veil_dev
-      POSTGRES_DB: veil
+      POSTGRES_USER: umbra
+      POSTGRES_PASSWORD: umbra_dev
+      POSTGRES_DB: umbra
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U veil"]
+      test: ["CMD-SHELL", "pg_isready -U umbra"]
       interval: 5s
       timeout: 3s
       retries: 5
