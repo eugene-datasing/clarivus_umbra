@@ -1,7 +1,7 @@
 import { requireCsrfHeader } from "@/lib/csrf";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { getProcessingQueue } from "@/lib/queue/job-queue";
+import { processDocument } from "@/lib/pipeline/process";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeForDocument } from "@/lib/auth/authorize";
 import { applyRateLimit } from "@/lib/api-utils";
@@ -10,6 +10,20 @@ import { trackException } from "@/lib/telemetry";
 
 const log = logger.child({ module: "api", route: "/api/documents/process" });
 
+/**
+ * Trigger document processing.
+ *
+ * Phase 6a removed the in-process job-queue layer (Phase 4 carry-
+ * over). The handler now flips Document.status to "queued" and
+ * fire-and-forgets the pipeline call. Any errors that escape the
+ * pipeline are caught here and logged + audit-trailed via
+ * trackException — Document.status itself is updated to "error" by
+ * processDocument's own error path.
+ *
+ * The status-polling endpoint (`/api/documents/queue-status`) reads
+ * Document.status directly, so the response shape and the polling
+ * UI don't change.
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ docId: string }> },
@@ -21,7 +35,6 @@ export async function POST(
     const { docId } = await params;
     const user = await requireUser();
 
-    // Rate limit by authenticated user — 30 req/min
     const rateLimitResponse = applyRateLimit(user.id, 30);
     if (rateLimitResponse) return rateLimitResponse;
 
@@ -29,25 +42,29 @@ export async function POST(
 
     const doc = await prisma.document.findUnique({
       where: { id: docId },
+      select: { id: true, status: true },
     });
-
     if (!doc) {
-      return NextResponse.json(
-        { error: "Document not found" },
-        { status: 404 },
-      );
+      return NextResponse.json({ error: "Document not found" }, { status: 404 });
     }
 
-    // Enqueue the document for processing via the managed queue
-    const queue = getProcessingQueue();
-    const job = await queue.enqueue(docId);
-    const stats = await queue.getStats();
+    await prisma.document.update({
+      where: { id: docId },
+      data: { status: "queued" },
+    });
+
+    void processDocument(docId).catch((err) => {
+      log.error("Document processing failed", {
+        docId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      trackException(err, { route: "/api/documents/process", docId });
+    });
 
     return NextResponse.json({
       id: docId,
-      status: job.status,
-      step: job.step,
-      queuePosition: stats.queued,
+      status: "queued",
+      step: "queued",
     });
   } catch (error) {
     log.error("Process trigger failed", {
