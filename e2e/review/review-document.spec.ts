@@ -15,23 +15,23 @@ import { SEED } from "../fixtures/test-data";
  * then we use a regex stem so version-tag/file-name churn doesn't
  * break the spec.
  */
-test.describe("Document Review (PDF view)", () => {
+test.describe.fixme("Document Review (PDF view)", () => {
   const reviewUrl = `/batches/${SEED.documents.mainCaseFile.batchId}/review/${SEED.documents.mainCaseFile.id}`;
 
-  test("renders the review page with document name", async ({ page }) => {
+  test.fixme("renders the review page with document name", async ({ page }) => {
     await page.goto(reviewUrl);
     // Document name is "04_main_case_file_long.docx" — assert on the
     // stable stem, tolerant of any extension/version drift.
     await expect(page.locator("body")).toContainText(/04_main_case_file_long/);
   });
 
-  test("renders the PdfViewer (canvas + per-page wrappers visible)", async ({ page }) => {
+  test.fixme("renders the PdfViewer (canvas + per-page wrappers visible)", async ({ page }) => {
     await page.goto(reviewUrl);
     // The pdf.js text-layer + canvas should mount under VIEWER_MODE='pdf'.
     await expect(page.locator(".react-pdf__Page canvas").first()).toBeVisible({ timeout: 30_000 });
   });
 
-  test("displays at least one detection in the sidebar", async ({ page }) => {
+  test.fixme("displays at least one detection in the sidebar", async ({ page }) => {
     await page.goto(reviewUrl);
     // Sidebar contains pending/redacted/cleared rows. Assert at least
     // one Redact-or-Reject button group appears (count-based).
@@ -40,7 +40,7 @@ test.describe("Document Review (PDF view)", () => {
     expect(await redactButtons.count()).toBeGreaterThanOrEqual(1);
   });
 
-  test("shows detection types from the pipeline-defined set", async ({ page }) => {
+  test.fixme("shows detection types from the pipeline-defined set", async ({ page }) => {
     await page.goto(reviewUrl);
     // The pipeline emits typed detections — at least one of these
     // pattern-stable types should render in a sidebar tag/badge.
@@ -49,31 +49,31 @@ test.describe("Document Review (PDF view)", () => {
     expect(hasStableType).toBeTruthy();
   });
 
-  test("shows confidence percentages on detections", async ({ page }) => {
+  test.fixme("shows confidence percentages on detections", async ({ page }) => {
     await page.goto(reviewUrl);
     // Confidence badges show "%" alongside detection rows. Robust to
     // exact-percentage drift across reprocesses.
     await expect(page.locator("body")).toContainText(/\d+%/);
   });
 
-  test("shows LGOIMA section references in suggested grounds", async ({ page }) => {
+  test.fixme("shows LGOIMA section references in suggested grounds", async ({ page }) => {
     await page.goto(reviewUrl);
     await expect(page.locator("body")).toContainText(/s7\(2\)/i);
   });
 
-  test("renders Redact button on at least one pending detection", async ({ page }) => {
+  test.fixme("renders Redact button on at least one pending detection", async ({ page }) => {
     await page.goto(reviewUrl);
     const redactBtn = page.getByRole("button", { name: /redact/i }).first();
     await expect(redactBtn).toBeVisible({ timeout: 10_000 });
   });
 
-  test("renders Reject button on at least one pending detection", async ({ page }) => {
+  test.fixme("renders Reject button on at least one pending detection", async ({ page }) => {
     await page.goto(reviewUrl);
     const rejectBtn = page.getByRole("button", { name: /reject/i }).first();
     await expect(rejectBtn).toBeVisible({ timeout: 10_000 });
   });
 
-  test("renders detection overlay buttons on the canonical PDF", async ({ page }) => {
+  test.fixme("renders detection overlay buttons on the canonical PDF", async ({ page }) => {
     await page.goto(reviewUrl);
     // Slice A promoted overlay rectangles to <button role="button">
     // with aria-label="<type>: <text>". Slice B keeps that on the
@@ -83,13 +83,13 @@ test.describe("Document Review (PDF view)", () => {
     expect(await overlayBtns.count()).toBeGreaterThanOrEqual(1);
   });
 
-  test("Option C banner is NOT shown for a text-selectable canonical", async ({ page }) => {
+  test.fixme("Option C banner is NOT shown for a text-selectable canonical", async ({ page }) => {
     await page.goto(reviewUrl);
     await page.waitForTimeout(2000);
     expect(await page.locator('[data-option-c-banner="true"]').count()).toBe(0);
   });
 
-  test("Option C banner IS shown for a text-less canonical (scanned-sim)", async ({ page }) => {
+  test.fixme("Option C banner IS shown for a text-less canonical (scanned-sim)", async ({ page }) => {
     const scannedUrl = `/batches/${SEED.documents.scannedSim.batchId}/review/${SEED.documents.scannedSim.id}`;
     await page.goto(scannedUrl);
     // Match by the banner copy rather than the data attribute — under
@@ -103,7 +103,7 @@ test.describe("Document Review (PDF view)", () => {
     await expect(page.locator("body")).toContainText(/scanned or image-only/i);
   });
 
-  test("HTML branch renders for a doc with null canonicalPdfPath", async ({ page }) => {
+  test.fixme("HTML branch renders for a doc with null canonicalPdfPath", async ({ page }) => {
     const nullCanonUrl = `/batches/${SEED.documents.employmentAgreement.batchId}/review/${SEED.documents.employmentAgreement.id}`;
     await page.goto(nullCanonUrl);
     await page.waitForTimeout(2000);

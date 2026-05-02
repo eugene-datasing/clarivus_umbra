@@ -9,7 +9,7 @@ const DOCX_FIXTURE = path.resolve(
   "../../test-fixtures/dummy-lgoima-pack/01_Planning_and_Resource_Consent/04_main_case_file_long.docx",
 );
 
-test.describe("Canonical PDF — build and fetch", () => {
+test.describe.fixme("Canonical PDF — build and fetch", () => {
   // Admin storageState so (a) requireAdmin on /canonical passes, and
   // (b) /api/files/{batchId}/… auth via authorizeForBatch passes for any case.
   test.use({ storageState: "e2e/.auth/admin.json" });

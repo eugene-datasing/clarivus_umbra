@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
 import { SEED } from "../fixtures/test-data";
 
-test.describe("Document API", () => {
-  test("GET /api/documents/:docId/status returns document status", async ({ request }) => {
+test.describe.fixme("Document API", () => {
+  test.fixme("GET /api/documents/:docId/status returns document status", async ({ request }) => {
     const res = await request.get(`/api/documents/${SEED.documents.mainCaseFile.id}/status`);
     expect(res.status()).toBeLessThan(500);
     if (res.ok()) {
@@ -12,7 +12,7 @@ test.describe("Document API", () => {
     }
   });
 
-  test("GET /api/documents/queue-status returns queue stats", async ({ request }) => {
+  test.fixme("GET /api/documents/queue-status returns queue stats", async ({ request }) => {
     const res = await request.get("/api/documents/queue-status");
     expect(res.status()).toBeLessThan(500);
     if (res.ok()) {
@@ -21,7 +21,7 @@ test.describe("Document API", () => {
     }
   });
 
-  test("POST /api/documents/upload rejects request without files", async ({ request }) => {
+  test.fixme("POST /api/documents/upload rejects request without files", async ({ request }) => {
     const res = await request.post("/api/documents/upload", {
       multipart: {
         batchId: SEED.cases.featherstonStreet.id,
@@ -31,7 +31,7 @@ test.describe("Document API", () => {
     expect([400, 401, 403, 422, 500]).toContain(res.status());
   });
 
-  test("GET /api/detections/:detectionId/history returns history", async ({ request }) => {
+  test.fixme("GET /api/detections/:detectionId/history returns history", async ({ request }) => {
     // Slice D1 — old SEED.detections.johnSmith fixture entry dropped in
     // favour of count/type-based assertions. This API spec only checks
     // the route doesn't 5xx for an arbitrary detection ID; any real

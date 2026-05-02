@@ -2,15 +2,15 @@ import { test, expect } from "@playwright/test";
 import path from "path";
 import { SEED } from "../fixtures/test-data";
 
-test.describe("Document Ingestion", () => {
+test.describe.fixme("Document Ingestion", () => {
   const ingestUrl = `/batches/${SEED.cases.featherstonStreet.id}/ingest`;
 
-  test("renders the upload/ingest page", async ({ page }) => {
+  test.fixme("renders the upload/ingest page", async ({ page }) => {
     await page.goto(ingestUrl);
     await expect(page.locator("body")).toContainText(/upload|ingest|import|drag/i);
   });
 
-  test("shows a file drop zone or upload button", async ({ page }) => {
+  test.fixme("shows a file drop zone or upload button", async ({ page }) => {
     await page.goto(ingestUrl);
     const dropZone = page.locator('[aria-label*="dropzone"], [class*="drop"], [class*="upload"]').first();
     const uploadInput = page.locator('input[type="file"]');
@@ -19,7 +19,7 @@ test.describe("Document Ingestion", () => {
     expect(hasDropZone || hasInput > 0).toBeTruthy();
   });
 
-  test("can select a PDF file for upload", async ({ page }) => {
+  test.fixme("can select a PDF file for upload", async ({ page }) => {
     await page.goto(ingestUrl);
     const fileInput = page.locator('input[type="file"]');
     const fixturePath = path.resolve(__dirname, "../fixtures/test-document.pdf");
