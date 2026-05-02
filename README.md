@@ -1,629 +1,257 @@
-> **Umbra (in-flight rework)** — fork of Veil, simplifying to a PII redaction tool for NZ councils and central-government agencies. Full rework plan: [`docs/umbra-implementation-plan.md`](docs/umbra-implementation-plan.md). Until Phase 9 (branding + docs cleanup) lands, this document and most of the codebase retain Veil-era content; the divergence is intentional and tracked.
+# Umbra
 
----
+PII redaction for NZ public-sector documents.
 
-# Veil — LGOIMA Disclosure Platform (Working POC)
+Umbra is a single-tenant web application that ingests documents (PDF, DOCX,
+XLSX, EML, MSG, TXT), runs a three-source detection pipeline (regex patterns,
+AI via Azure OpenAI, custom rules) over the extracted text, lets a reviewer
+accept or reject each finding, and produces a permanently redacted PDF
+package with an audit-traceable archive.
 
-**AI-powered document redaction and LGOIMA disclosure workflow**
-DataSing / Clarivus AI
+It is the simpler successor to **Veil** — a fuller LGOIMA disclosure
+workflow built for NZ councils. Umbra drops the disclosure workflow and
+keeps the redaction core. The fork lives at
+[`DataSing/clarivus_umbra`](https://github.com/eugene-datasing/clarivus_umbra)
+on GitHub; the Veil predecessor sits at `DataSing/clarivus_veil` and is
+historical context only.
 
----
+## Audience
 
-## Overview
+NZ councils and central-government agencies that need to redact PII from
+documents before publishing or sharing them — typically in response to
+LGOIMA / OIA requests, public consultations, court disclosures, or routine
+records management. Umbra does not own the request lifecycle (assign, track,
+correspond) — only the redaction step.
 
-Veil is a working proof-of-concept for the NPDC RFP P26-138. It demonstrates the full LGOIMA disclosure workflow with real persistence, AI-powered detection, and PDF export:
+## Locked v1 scope
 
-- **PostgreSQL** database via Prisma ORM (cases, documents, detections, audit)
-- **Azure AD (Entra ID)** SSO with NextAuth v5, activation flow, and SCIM provisioning
-- **Azure Document Intelligence** for OCR text extraction
-- **Azure OpenAI GPT-4o** for LGOIMA-aware contextual detection
-- **Regex pattern detection** for structured NZ PII (IRD, phone, email, NHI, address)
-- **PDF redaction engine** with permanent black-box redaction and ground references
-- **Export pipeline** producing requester, internal, and ombudsman packages
-- **Tiered review workflow** with document status tracking and audit trail
+- Two roles: `admin` and `reviewer`. No departments, no SCIM.
+- A **batch** is the unit of work. One or more documents → reviewer
+  accepts/rejects detections → admin signs off → exported as a single ZIP.
+- 22-entry detection-type vocabulary (NZ-flavoured PII + governance
+  categories). Type-driven; no LGOIMA grounds anywhere in the data model.
+- Soft-delete with a 7-day grace window, then hard-delete plus an immutable
+  audit-archive blob.
+- Single export package: redacted PDFs + redaction schedule + audit
+  timeline + audit log (CSV + PDF) + manifest.
 
----
+## What's in the box
 
-## Live Deployment
+| | |
+|---|---|
+| Framework | Next.js 15 (App Router) + TypeScript + React 19 |
+| Database | PostgreSQL 16 via Prisma ORM 7.5 (`@prisma/adapter-pg`) |
+| Auth | NextAuth v5 — Azure AD (Entra ID) primary, Credentials fallback |
+| AI | Azure OpenAI GPT-4o (detection + classification), Azure Document Intelligence `prebuilt-read` (OCR) |
+| Storage | Azure Blob Storage (prod), local filesystem (dev) |
+| Background jobs | pg-boss 12.x — runs in-process inside the Next.js server |
+| PDF generation | pdf-lib (schedule, audit-timeline, audit-log) |
+| PDF redaction | PyMuPDF via Python3 subprocess (3-tier: coordinate → text-search → plain-text) |
+| Tests | Vitest unit + Playwright e2e |
+| Models | 14 Prisma models, 1 migration (`0001_init`) |
+| Live URL | (Phase 11 will publish) |
+| Azure region | NZ North primary (Australia East fallback for AI services) |
 
-**URL:** https://veil.datasing.nz
-
-Hosted on Azure App Service (Linux B1, custom Docker container) with PostgreSQL Flexible Server, Key Vault, and Blob Storage — all in `australiaeast` region. See `docs/azure-infrastructure-spec.md` for full details.
-
----
-
-## Prerequisites
-
-| Tool | Version | Purpose |
-|------|---------|---------|
-| Node.js | 18+ (20 recommended) | Runtime |
-| npm | 9+ | Package manager |
-| Docker | Latest | Local PostgreSQL database |
-| Python 3 | 3.x | PDF redaction (optional for dev, required for production) |
-
-**macOS:** `brew install node@20 && brew install --cask docker`
-**Linux:** See [Node.js downloads](https://nodejs.org/) + `sudo apt-get install docker.io docker-compose`
-**Windows:** Use WSL2 with Ubuntu for best compatibility
-
----
-
-## Quick Start (Local Development)
+## Local development
 
 ```bash
-# 1. Start PostgreSQL (port 5434 to avoid conflicts)
+# Start PostgreSQL (Docker required)
 docker compose up -d
 
-# 2. Install dependencies
+# Install deps + run migrations
 npm install
-
-# 3. Create .env file with minimum required variables
-#    (copy template below, then generate AUTH_SECRET with: openssl rand -base64 32)
-
-# 4. Run database migrations
 npx prisma migrate dev
 
-# 5. (Optional) Seed with demo data — adds users, cases, documents, detections
+# Seed demo data — Ministry of Demo + 1 admin + 3 reviewers + 3 sample Batches
 npx prisma db seed
 
-# 6. Run development server
+# Start dev server
 npm run dev
 
-# 7. Open in browser
-open http://localhost:3000
+# If port 3000 is occupied:
+PORT=3001 npm run dev
 ```
 
----
+### Database
 
-## Environment Variables
+| | |
+|---|---|
+| Dev port | `5434` (not 5432) |
+| Dev creds | `postgresql://umbra:umbra_dev@localhost:5434/umbra` |
+| Prisma client output | `lib/generated/prisma` — import as `@/lib/generated/prisma/client` |
+| Reset | `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION="yes go ahead" npx prisma migrate reset --force` |
+| Reset without seed | add `PRISMA_SKIP_SEED=true` |
+| Studio | `npx prisma studio` (localhost:5555) |
 
-Create a `.env` file in the project root:
+`prisma.config.ts` reads `DATABASE_URL` from the environment. Standalone
+scripts (`npx tsx ...`) need it passed in explicitly — they don't load
+`.env`.
 
-```env
-# === REQUIRED ===
-DATABASE_URL="postgresql://veil:veil_dev@localhost:5434/veil"
-AUTH_SECRET="your-32-char-secret"              # openssl rand -base64 32
+### Docker on macOS
 
-# === AZURE AI (required for document processing) ===
-AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com
-AZURE_OPENAI_KEY=<key>
-AZURE_OPENAI_DEPLOYMENT=gpt-4o
-AZURE_DI_ENDPOINT=https://<resource>.cognitiveservices.azure.com
-AZURE_DI_KEY=<key>
-
-# === AZURE AD SSO (optional — falls back to credentials provider) ===
-AZURE_AD_CLIENT_ID=<client-id>
-AZURE_AD_CLIENT_SECRET=<client-secret>
-AZURE_AD_TENANT_ID=<tenant-id>
-
-# === OPTIONAL ===
-AUTH_CREDENTIALS_ENABLED=true                  # Enable credentials login (dev mode)
-SCIM_API_TOKEN=                                # SCIM user provisioning bearer token
-AZURE_STORAGE_CONNECTION_STRING=                # Blob storage (falls back to local filesystem)
-AZURE_COMMUNICATION_CONNECTION_STRING=         # Email notifications
-APPLICATIONINSIGHTS_CONNECTION_STRING=         # Telemetry
-UPLOAD_DIR=./uploads                           # Local upload directory (dev only)
-EXPORT_DIR=./exports                           # Local export directory (dev only)
+If `docker` is not on PATH:
+```bash
+export PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"
 ```
 
-Without Azure AI keys, the app runs but document processing (OCR, AI detection) is unavailable.
-In production, secrets are resolved from Key Vault via App Service managed identity. See `docs/azure-infrastructure-spec.md`.
+## Required env vars
 
----
+Required in `.env` for the dev server:
+- `DATABASE_URL` — PostgreSQL connection string
+- `AUTH_SECRET` — NextAuth secret (`openssl rand -base64 32`)
 
-## Available Scripts
+Required for AI processing:
+- `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_KEY`, `AZURE_OPENAI_DEPLOYMENT`
+- `AZURE_DI_ENDPOINT`, `AZURE_DI_KEY`
 
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Start development server (port 3000) |
-| `npm run build` | Production build (standalone output) |
-| `npm run start` | Start production server |
-| `npm run lint` | Strict ESLint (0 warnings policy) |
-| `npm run test` | Run Vitest tests |
-| `npx prisma studio` | Database GUI at localhost:5555 |
-| `npx prisma migrate dev` | Run migrations |
-| `npx prisma db seed` | Seed demo data |
+For SSO:
+- `AZURE_AD_CLIENT_ID`, `AZURE_AD_CLIENT_SECRET`, `AZURE_AD_TENANT_ID`
 
----
+For prod blob storage:
+- `AZURE_STORAGE_CONNECTION_STRING` (falls back to local filesystem if unset)
 
-## Seeded Demo Data
+Full list with descriptions in `.env.example`.
 
-After `npx prisma db seed`, the database includes:
+## Architecture
 
-- **11 users** — Eugene Cash (SSO admin, eugene@datasing.nz) + 10 Palmerston North City Council staff with credentials login
-- **8 departments** — City Planning, Infrastructure, Finance, Parks & Reserves, Environmental Services, Building Services, Community Services, Corporate Services
-- **5 realistic LGOIMA cases** — no documents (user uploads real files during demo)
-- **Pipeline milestones** and org identity settings (PNCC branding)
+### Server / client split
+Pages are async server components that query PostgreSQL via Prisma and pass
+data as props to `"use client"` children. Mutations go through server
+actions in `lib/actions/`.
 
----
+### Auth flow
+1. Login via Azure AD SSO (or credentials in dev).
+2. First user enters activation code at `/activate` and becomes `admin`.
+3. Admin completes the 5-step setup wizard at `/setup` (Org Identity →
+   Document Branding → Detection Policies → Team Setup → Review).
+4. Admin invites users via email. Two roles only: `admin`, `reviewer`.
 
-## Troubleshooting
+### Document processing pipeline
+Upload → file validation → format conversion → OCR (Azure DI `prebuilt-read`)
+→ document classification (GPT-4o) → regex patterns (NZ PII) → AI detection
+(GPT-4o, 3-page batches with doc-level context) → custom rules → bbox
+calculation (per-line, >80-char text short-circuits) → cross-source dedup
+by `(page, type, text, posY_rounded)` → content building → storage.
 
-| Problem | Solution |
-|---------|----------|
-| `Can't reach database at localhost:5434` | `docker compose ps` — check container is running |
-| `Cannot find module '@/lib/generated/prisma/client'` | `npx prisma generate` |
-| Migration fails | `npx prisma migrate status`, then `npx prisma migrate reset` (destructive) |
-| `SessionTokenError` | Check `AUTH_SECRET` is set and 32+ chars; clear browser cookies |
-| Port 3000 in use | `kill -9 $(lsof -ti:3000)` or `PORT=3001 npm run dev` |
-| Docker build on ARM Mac | Use `docker build --platform linux/amd64 -t veil-prototype .` |
+### Detection types (22 in `lib/detection-type-grounds.ts`)
+- **Personal**: `personal-name`, `phone`, `email-addr`, `ird`, `address`,
+  `bank-account`, `nz-passport`, `nz-driver-licence`, `vehicle-reg`, `nhi`
+- **Commercial**: `commercial`, `council-commercial`, `negotiation`
+- **Governance**: `legal-privilege`, `confidential`, `free-frank`,
+  `harassment-risk`, `cultural-sensitivity`
+- **Enforcement**: `safety-concern`, `law-enforcement`, `health-safety`
+- `manual` — reviewer-added, no auto-classification
 
----
-
-## Further Documentation
-
-| Document | Description |
-|----------|-------------|
-| [`DEVELOPER-NOTES.md`](DEVELOPER-NOTES.md) | Architecture decisions, what's working, remaining gaps |
-| [`DEMO-SCRIPT.md`](DEMO-SCRIPT.md) | 20-minute demo walkthrough for stakeholders |
-| [`CHANGELOG.md`](CHANGELOG.md) | Version history |
-| [`docs/api-reference.md`](docs/api-reference.md) | REST API and server action reference |
-| [`docs/requirements-traceability.md`](docs/requirements-traceability.md) | RFP requirements mapped to implementation status |
-| [`docs/azure-infrastructure-spec.md`](docs/azure-infrastructure-spec.md) | Azure architecture and deployment |
-| [`docs/auth-and-onboarding-spec.md`](docs/auth-and-onboarding-spec.md) | Authentication and first-run onboarding design |
-| [`docs/client-deployment-activation-spec.md`](docs/client-deployment-activation-spec.md) | Client activation and licensing |
-| [`docs/tier1-redaction-investigation.md`](docs/tier1-redaction-investigation.md) | Tier 1 PDF redaction dedup + bbox bug investigation |
-| [`docs/lgoima-remediation-plan.md`](docs/lgoima-remediation-plan.md) | LGOIMA grounds remediation plan (taxonomy + coverage gaps) |
-| [`docs/lgoima-redaction-taxonomy.md`](docs/lgoima-redaction-taxonomy.md) | Detailed LGOIMA redaction taxonomy reference |
-| [`docs/lgoima-act-2026-01-15.pdf`](docs/lgoima-act-2026-01-15.pdf) | Full text of the Local Government Official Information and Meetings Act 1987 (version as at 15 January 2026) |
-
----
-
-## Tech Stack
-
-| Technology | Purpose |
-|-----------|---------|
-| Next.js 15 (App Router) | Framework — server components + client components |
-| TypeScript | Type safety |
-| Tailwind CSS | Styling with Clarivus brand tokens |
-| Prisma ORM v7 | Database access layer (`@prisma/adapter-pg`) |
-| PostgreSQL 16 | Persistence (Docker locally, Azure Flexible Server in production) |
-| NextAuth v5 | Authentication (Azure AD / Entra ID + Credentials fallback) |
-| Azure OpenAI (GPT-4o) | LGOIMA-aware contextual detection |
-| Azure Document Intelligence | OCR and text extraction |
-| Python3 + PyMuPDF | PDF redaction (permanent black-box, via subprocess) |
-| pdf-lib | PDF generation (cover letters, schedules, audit trail) |
-| mammoth | DOCX text extraction |
-| archiver | ZIP package assembly |
-| @tanstack/react-query | Client-side data caching |
-| @dnd-kit/* | Drag and drop (sortable lists, reordering) |
-| framer-motion | Animations and transitions |
-| @azure/communication-email | Email notifications via Azure Communication Services |
-| applicationinsights | Azure telemetry and error tracking |
-| Lucide React | Icons |
-| React Hook Form + Zod | Form validation |
-| Recharts | Charts (AI governance dashboard) |
-| Docker | Container deployment (multi-stage: Node.js 20 Debian slim + Python3 + LibreOffice) |
-
----
-
-## Authentication and Onboarding
-
-Veil uses NextAuth v5 with **Azure AD (Entra ID)** as the primary authentication provider and a Credentials fallback for development.
-
-### Flow
-
-1. **Login** — User authenticates via Azure AD SSO (or credentials in dev mode)
-2. **Activation** — First user to log in enters a pre-generated activation code and is promoted to admin
-3. **Setup Wizard** — Admin completes a 7-step setup wizard (organisation details, departments, roles, AI config, etc.)
-4. **Invitation** — Admin invites additional users via email; invitations are domain-restricted to the organisation's email domain
-5. **SCIM Provisioning** — Azure AD can push user/group changes to Veil via SCIM 2.0 endpoints (`/api/scim/Users`, `/api/scim/Groups`)
-
-### Roles
-
-Role names below match the enum stored in the database (`admin`, `request-manager`, `senior-reviewer`, `final-approver`, `reviewer`). UI labels are in parentheses.
-
-| Role (enum) | UI label | Responsibility |
-|-------------|----------|----------------|
-| `admin` | Administrator | Full system access, organisation setup, user management |
-| `request-manager` | Request Manager | Creates cases, assigns work, manages deadlines |
-| `reviewer` | Reviewer | Reviews AI detections, accepts/rejects, assigns withholding grounds |
-| `senior-reviewer` | Senior Reviewer | Signs off or requests changes on reviewed documents |
-| `final-approver` | Final Approver | Signs off on the complete response package before release |
-
----
-
-## Organisational Workflow
-
-Veil supports a tiered LGOIMA disclosure workflow within a council or similar organisation.
-
-### Per-Request Workflow
-
+### Batch lifecycle
 ```
-1. INTAKE           Request received -> Case created -> Deadline set (20 working days)
-2. GATHER           Relevant documents identified -> Uploaded to Veil
-3. PROCESS          OCR extraction -> Regex patterns -> AI detection -> Content built
-                    Doc status: pending -> processing -> ready
-4. INITIAL REVIEW   Reviewer opens document -> Accepts/rejects each detection
-                    Assigns LGOIMA grounds (s6, s7, s17)
-                    Doc status: ready -> in-review -> reviewed
-5. SENIOR REVIEW    Senior reviewer checks decisions -> Sign off OR request changes
-                    Doc status: reviewed -> signed-off (or back to in-review)
-6. QA               Automated compliance checks -> Withholding schedule review
-7. EXPORT           Redacted PDFs + withholding schedule + cover letter
-                    Three packages: requester / internal / ombudsman
-8. RELEASE          Sent to requester with right-of-review notice
-                    Immutable audit trail preserved
+draft → processing → ready-for-review → reviewed → exported
+                                                   │
+                                          (admin) ┴→ deleted (soft)
+                                                   │
+                                          (worker) ┴→ purged (hard + archived)
 ```
 
-### Document Status Flow
-
+### Export package
+Single ZIP per batch, contents:
 ```
-ready (for review)  ->  in-review  ->  reviewed (initial)  ->  signed-off
-                          ^                    |
-                          |    (request        |
-                          +--- changes) -------+
-```
-
----
-
-## Project Structure
-
-```
-veil-prototype/
-├── app/
-│   ├── layout.tsx                         # Root layout (force-dynamic, providers)
-│   ├── page.tsx                           # Dashboard (server component)
-│   ├── login/                             # Login page (Azure AD SSO + credentials fallback)
-│   ├── activate/                          # Post-login activation (enter code, become admin)
-│   ├── landing-page.tsx                   # Public landing page component (rendered by page.tsx when unauthenticated)
-│   ├── setup/                             # Setup wizard (7 steps)
-│   ├── profile/                           # User profile page
-│   ├── queue/page.tsx                     # My Queue (server component)
-│   ├── reports/page.tsx                   # Reports dashboard with real analytics, templates, and cost-recovery
-│   ├── requests/
-│   │   ├── page.tsx                       # Cases list (server + client)
-│   │   ├── new/page.tsx                   # New LGOIMA request form
-│   │   └── [id]/
-│   │       ├── page.tsx                   # Case detail (server + client)
-│   │       ├── case-detail-client.tsx     # Case detail interactive UI
-│   │       ├── ingest/                    # Document upload + processing
-│   │       ├── review/[docId]/            # Document review (split-panel)
-│   │       ├── schedule/                  # Withholding schedule
-│   │       ├── audit/                     # Audit trail (WORM)
-│   │       ├── export/                    # Export / release
-│   │       ├── qa/                        # Pre-release QA (with simulation mode)
-│   │       └── bulk-review/               # Bulk redaction review
-│   ├── api/
-│   │   ├── auth/[...nextauth]/route.ts    # NextAuth API routes
-│   │   ├── activation-status/             # Activation status check
-│   │   ├── documents/
-│   │   │   ├── upload/route.ts            # File upload endpoint
-│   │   │   └── [docId]/
-│   │   │       ├── process/route.ts       # Trigger processing pipeline
-│   │   │       └── status/route.ts        # Poll processing status
-│   │   ├── detections/[detectionId]/      # Detection review actions
-│   │   ├── export/[requestId]/            # Export generation + download
-│   │   ├── schedule/[requestId]/route.ts  # Withholding schedule PDF
-│   │   ├── files/[...path]/route.ts       # Serve uploaded files
-│   │   ├── health/                        # Health check endpoint
-│   │   ├── notifications/                 # Notifications API
-│   │   ├── reports/                       # Cost recovery reports
-│   │   ├── logo/                          # Organisation logo upload/serve/delete
-│   │   ├── scim/                          # SCIM 2.0 provisioning
-│   │   │   ├── Users/                     # SCIM user management
-│   │   │   └── Groups/                    # SCIM group management
-│   │   └── telemetry/                     # Error telemetry endpoint
-│   └── admin/
-│       ├── rules/page.tsx                 # Custom rules manager
-│       ├── settings/page.tsx              # Settings & admin
-│       └── ai-governance/page.tsx         # AI governance dashboard
-├── components/
-│   ├── layout/
-│   │   ├── app-shell.tsx                  # App shell with sidebar
-│   │   └── sidebar.tsx                    # Navigation sidebar
-│   ├── review/
-│   │   ├── ai-learning-panel.tsx          # AI learning from reviewer feedback
-│   │   ├── manual-detection-popover.tsx   # Manual detection creation
-│   │   └── statutory-ground-selector.tsx  # LGOIMA ground picker
-│   ├── accessibility/
-│   │   └── keyboard-shortcuts-help.tsx    # Keyboard shortcut reference
-│   ├── common/
-│   │   └── error-display.tsx              # Shared error display
-│   ├── providers/
-│   │   ├── session-provider.tsx           # NextAuth session provider
-│   │   └── query-provider.tsx             # React Query provider
-│   └── sw-register.tsx                    # Service worker registration
-├── lib/
-│   ├── utils.ts                           # Shared utilities
-│   ├── lgoima-grounds.ts                  # LGOIMA s6/s7/s17 ground definitions
-│   ├── logger.ts                          # Structured logging
-│   ├── rate-limit.ts                      # API rate limiting
-│   ├── api-utils.ts                       # API response helpers
-│   ├── telemetry.ts                       # Application Insights integration
-│   ├── auth/
-│   │   ├── auth-options.ts                # NextAuth config (Azure AD + Credentials)
-│   │   ├── auth.config.ts                 # Edge-compatible auth config (middleware)
-│   │   ├── session.ts                     # requireUser(), requireAdmin() helpers
-│   │   └── authorize.ts                   # authorizeForCase() role checks
-│   ├── db/
-│   │   ├── prisma.ts                      # Prisma client singleton
-│   │   └── mappers.ts                     # Status/type configs and display types
-│   ├── data/
-│   │   ├── cases.ts                       # Case queries
-│   │   ├── documents.ts                   # Document queries
-│   │   ├── detections.ts                  # Detection queries
-│   │   ├── audit.ts                       # Audit log queries + writes
-│   │   ├── activation.ts                  # Activation code lookups
-│   │   ├── ai-metrics.ts                  # AI accuracy metrics
-│   │   ├── audit-sanitize.ts              # Audit data sanitisation
-│   │   ├── backup-restore.ts              # Database backup/restore
-│   │   ├── cost-recovery.ts               # Cost recovery data
-│   │   ├── departments.ts                 # Department queries
-│   │   ├── detection-history.ts           # Detection change history
-│   │   ├── document-content.ts            # Document content (paragraphs/segments)
-│   │   ├── org-config.ts                  # Organisation configuration
-│   │   ├── pipeline.ts                    # Pipeline state queries
-│   │   ├── processing-metrics.ts          # Processing time metrics
-│   │   ├── qa-simulation.ts               # QA simulation data
-│   │   ├── reports.ts                     # Report queries
-│   │   ├── rules.ts                       # Custom rule queries
-│   │   ├── settings.ts                    # System setting queries
-│   │   ├── snapshots.ts                   # Detection snapshot queries
-│   │   └── snapshot-diff.ts               # Snapshot comparison
-│   ├── actions/
-│   │   ├── activation-actions.ts          # Activation code validation
-│   │   ├── case-actions.ts                # Create case server action
-│   │   ├── department-actions.ts          # Department CRUD actions
-│   │   ├── detection-actions.ts           # Accept/reject/sign-off server actions
-│   │   ├── invitation-actions.ts          # User invitation actions
-│   │   ├── manual-detection-actions.ts    # Manual detection creation
-│   │   ├── pipeline-actions.ts            # Pipeline trigger actions
-│   │   ├── profile-actions.ts             # User profile updates
-│   │   ├── rule-actions.ts                # Custom rule CRUD
-│   │   ├── settings-actions.ts            # System settings updates
-│   │   └── setup-actions.ts               # Setup wizard completion
-│   ├── config/
-│   │   ├── env.ts                         # Environment variable definitions
-│   │   └── validate-env.ts                # Startup environment validation
-│   ├── validation/
-│   │   └── schemas.ts                     # Zod validation schemas
-│   ├── rules/
-│   │   └── rule-tester.ts                 # Custom rule test runner
-│   ├── email/
-│   │   ├── email-client.ts               # Azure Communication Services client
-│   │   ├── send.ts                        # Email sending functions
-│   │   └── templates.ts                   # Email templates (invitations, notifications)
-│   ├── integrations/
-│   │   ├── m365-connector.ts              # Microsoft 365 integration (SharePoint, OneDrive, Outlook)
-│   │   ├── records-connector.ts           # Records management system integration
-│   │   └── ediscovery-connector.ts        # eDiscovery platform integration
-│   ├── resilience/
-│   │   ├── circuit-breaker.ts             # Circuit breaker for external services
-│   │   ├── retry.ts                       # Retry with exponential backoff
-│   │   └── azure-services.ts             # Azure service health monitoring
-│   ├── queue/
-│   │   └── job-queue.ts                   # Persistent job queue with retry
-│   ├── storage/
-│   │   ├── types.ts                       # Storage provider interface
-│   │   ├── local.ts                       # Local filesystem storage
-│   │   ├── azure-blob.ts                  # Azure Blob Storage provider
-│   │   └── index.ts                       # Storage factory
-│   └── pipeline/
-│       ├── process.ts                     # Main pipeline orchestrator
-│       ├── extract.ts                     # Text extraction (Azure DI, mammoth)
-│       ├── patterns.ts                    # Regex NZ PII detection
-│       ├── ai-detect.ts                   # Azure OpenAI GPT-4o detection
-│       ├── content-builder.ts             # Build DocParagraph[] for review UI
-│       ├── file-validator.ts              # Corrupted/unreadable file detection
-│       ├── format-converter.ts            # Document format conversion
-│       ├── email-extract.ts               # Email extraction (EML, MSG)
-│       ├── custom-rules.ts                # Custom rule matching
-│       ├── duplicate-detect.ts            # Exact + near-duplicate detection
-│       ├── sanitise-metadata.ts           # Metadata sanitisation
-│       ├── merge.ts                       # Deduplicate pattern + AI detections
-│       ├── bbox.ts                        # Bounding box utilities
-│       ├── chain-of-custody.ts            # Chain-of-custody tracking
-│       ├── version-snapshot.ts            # Version snapshot creation
-│       ├── feedback-examples.ts           # AI feedback example management
-│       ├── rebuild-content.ts             # Content rebuild after edits
-│       ├── cost-recovery-report.ts        # Cost recovery report generation
-│       ├── multimedia-extract.ts          # Multimedia content extraction
-│       ├── redact_pdf_pymupdf.py          # PyMuPDF PDF redaction (Python)
-│       ├── verify_redaction_pymupdf.py    # PyMuPDF redaction verification (Python)
-│       ├── verify-redaction.ts            # Redaction verification orchestrator
-│       ├── redact-pdf.ts                  # PDF redaction orchestrator (calls Python)
-│       ├── schedule.ts                    # Withholding schedule PDF generator
-│       ├── cover-letter.ts                # Cover letter PDF generator
-│       ├── logo-helper.ts                 # Shared PDF logo embedding helper
-│       ├── audit-pdf.ts                   # Audit trail PDF generator
-│       └── export.ts                      # ZIP export package assembler
-├── prisma/
-│   ├── schema.prisma                      # Database schema (19 models, 18 migrations)
-│   └── seed.ts                            # Demo data seed script
-├── scripts/
-│   ├── generate-activation-code.ts        # Generate activation code for new deployments
-│   ├── reset-instance.ts                  # Reset instance state for fresh demo
-│   ├── seed-content.ts                    # Seed content into existing documents
-│   └── check-content.ts                   # Diagnostic: check document content structure
-├── tests/
-│   └── benchmarks/                        # Performance benchmarks
-├── .github/workflows/
-│   ├── ci.yml                             # CI: lint, type check, tests, build
-│   ├── docker.yml                         # Docker image build + push to ACR
-│   └── migrate.yml                        # Database migration runner
-├── docs/
-│   ├── azure-infrastructure-spec.md       # Azure architecture & deployment
-│   ├── auth-and-onboarding-spec.md        # Auth & first-run onboarding design
-│   └── client-deployment-activation-spec.md  # Client deployment & activation flow
-├── Dockerfile                             # Multi-stage: Node 20 Debian slim + Python3 + LibreOffice
-├── .dockerignore                          # Excludes node_modules, .next, .env*, etc.
-├── docker-compose.yml                     # Local PostgreSQL 16 (port 5434)
-├── next.config.ts                         # standalone output mode
-├── middleware.ts                          # Auth middleware (route protection)
-├── instrumentation.ts                     # Application Insights initialisation
-├── vitest.config.ts                       # Vitest test configuration
-├── DEMO-SCRIPT.md                         # 20-minute demo walkthrough
-├── DEVELOPER-NOTES.md                     # Architecture decisions and gaps
-└── README.md                              # This file
+redacted/{originalFilename}.pdf      one per accepted document
+redaction-schedule.pdf                per-type detection summary, no leakage
+audit-timeline.pdf                    per-document handling timeline
+audit-log.pdf                         full immutable audit trail
+audit-log.csv                         RFC-4180 CSV mirror of the trail
+verification-report.txt               post-redaction verification summary
+manifest.json                         generator + content metadata
 ```
 
----
+### PDF redaction engine (3 tiers)
 
-## Database Schema (Prisma)
+| Tier | Mode | For | Implementation |
+|---|---|---|---|
+| 1 | Coordinate-based | PDF originals with Azure DI bboxes | `redact_pdf_pymupdf.py` (coordinate mode) |
+| 2 | Text-search | DOCX/XLSX/TXT via LibreOffice convert + PyMuPDF `search_for` | `redact_pdf_pymupdf.py` (text-search mode) |
+| 3 | Plain-text PDF | Last resort when Tier 1+2 both fail | `redact-pdf.ts` (`generateTextPdf`) |
 
-19 models across 18 migrations:
+Orchestrated by `lib/pipeline/redact-pdf.ts`. Tier 1 first; on exception
+falls through to Tier 2 (text-search on the original PDF). For non-PDFs,
+LibreOffice headless converts to PDF then Tier 2 searches all pages.
 
-| Model | Purpose |
-|-------|---------|
-| User | Authenticated users with roles and org membership |
-| Department | Organisation departments |
-| UserInvitation | Pending email invitations (domain-restricted) |
-| ActivationCode | One-time codes for first-user admin activation |
-| Case | LGOIMA request cases with deadlines and status |
-| Document | Uploaded documents linked to cases |
-| DocumentPage | Extracted pages with OCR text |
-| Detection | AI/pattern detections with grounds and confidence |
-| DetectionHistory | Change history for each detection |
-| DetectionSnapshot | Point-in-time snapshots for version comparison |
-| FeedbackExample | Reviewer feedback used for AI learning |
-| AuditEntry | Immutable audit trail (WORM) |
-| FileUpload | File metadata and storage references |
-| CustomRule | User-defined detection rules |
-| SystemSetting | Organisation-level configuration |
-| CaseMilestone | Milestone tracking per case |
-| CaseAssignment | User-to-case role assignments |
-| ExportJob | Export package generation with progress tracking |
-| ProcessingJob | Persistent job queue entries with retry state |
+### Retention worker (Phase 6)
 
----
+pg-boss 12.x runs an in-process worker that:
+- Hourly **retention sweep**: claims any batch whose `purgeScheduledAt`
+  has elapsed (`SELECT ... FOR UPDATE SKIP LOCKED`), archives the audit
+  chain to blob storage with roundtrip verification, cascade-deletes the
+  batch, cleans up the data blobs, writes a `PurgeLog` row.
+- Hourly **auto-retention pass**: soft-deletes any `status=exported`
+  batch that's been idle longer than `RETENTION_CONFIG.retentionDaysAfterCompletion`
+  (default 14 days). Standard grace window applies.
+- Per-request **purge-batch** job: admin-triggered Purge Now path.
 
-## Key Screens
+See `lib/jobs/runner.ts` and `lib/jobs/audit-archive.ts`.
 
-### Fully Working (with real data)
-- **Landing Page** (`/`, unauthenticated) — Public-facing product page with feature showcase, screenshots, stats, and demo request form
-- **Dashboard** (`/`, authenticated) — Active cases, queue summary, recent activity
-- **Cases List** (`/requests`) — All LGOIMA requests with search and filters
-- **New Request** (`/requests/new`) — Intake form with auto-deadline and DB persistence
-- **Case Detail** (`/requests/[id]`) — Document table with real status tracking
-- **Document Ingestion** (`/requests/[id]/ingest`) — Drag-and-drop upload with real processing
-- **Document Review** (`/requests/[id]/review/[docId]`) — Split-panel review with AI detections, accept/reject with grounds, submit/sign-off workflow
-- **Withholding Schedule** (`/requests/[id]/schedule`) — Auto-generated from accepted detections, PDF preview
-- **Audit Trail** (`/requests/[id]/audit`) — Immutable log of all actions
-- **Export** (`/requests/[id]/export`) — Real PDF redaction, ZIP packages (requester/internal/ombudsman)
-- **Bulk Review** (`/requests/[id]/bulk-review`) — Bulk redaction across document sets
-- **Custom Rules** (`/admin/rules`) — Custom detection rule editor with test runner
-- **Settings** (`/admin/settings`) — Multi-tab admin configuration (org, AI, integrations, email)
-- **AI Governance** (`/admin/ai-governance`) — Model accuracy metrics and governance dashboard
-- **Setup Wizard** (`/setup`) — 7-step initial configuration wizard
-- **Activation** (`/activate`) — Post-login activation code entry
-- **Profile** (`/profile`) — User profile management
-- **Queue** (`/queue`) — Personal work queue with job monitoring
+### Storage abstraction
+`StorageProvider` interface in `lib/storage/types.ts` with implementations:
+- `lib/storage/local.ts` — local filesystem (dev)
+- `lib/storage/azure-blob.ts` — Azure Blob Storage (prod)
+- `lib/storage/index.ts` — factory (checks `AZURE_STORAGE_CONNECTION_STRING`)
 
-### UI Present, Limited Functionality
-- **QA Screen** (`/requests/[id]/qa`) — Pre-release quality checks with simulation mode
+Six operations: `upload, download, getUrl, delete, exists, listByPrefix`.
 
-
----
-
-## Processing Pipeline
-
-When documents are uploaded, Veil processes them through:
-
-1. **File validation** — Detect corrupted or unreadable files before processing
-2. **Format conversion** — Convert documents to a consistent processing format
-3. **Email extraction** — Extract content from email formats (EML, MSG), with attachments spawned as child documents
-4. **Text extraction** — Azure Document Intelligence `prebuilt-read` for PDFs (with word-level polygons), mammoth for DOCX
-5. **Document classification** — GPT-4o classifies document type and content flags (legal advice, personnel info, commercial, cultural, enforcement) — context injected into subsequent detection batches
-6. **Regex pattern detection** — NZ IRD numbers, phone numbers, email addresses, NHI numbers, street addresses, bank accounts, vehicle registrations (95% confidence, deterministic)
-7. **AI contextual detection** — Azure OpenAI GPT-4o analyses text in 3-page batches with document-level context, identifying 27+ detection types with LGOIMA ground suggestions
-8. **Custom rule matching** — Apply user-defined detection rules
-9. **BBox calculation** — Word-level polygon matching to compute percentage-based per-line bounding boxes for PDF originals; detection text longer than 80 characters short-circuits to zero bbox and falls through to Tier 2 text-search.
-10. **Cross-source deduplication** — Pattern, AI, and custom rule detections unified and deduplicated by `(page, type, text, round(posY * 10) / 10)` so repeated occurrences of the same text at different vertical positions survive as separate Detection rows.
-11. **Duplicate detection** — Exact and near-duplicate document identification across the case
-12. **Metadata sanitisation** — Strip hidden metadata and embedded content
-13. **Content building** — Extracted text + detections combined into structured DocParagraph[] model (with heading, list, and table support for DOCX)
-14. **Storage** — Pages, detections, and content JSON stored in PostgreSQL
-
-### AI Detection Prompt
-
-The GPT-4o system prompt is LGOIMA-aware:
-- Classifies detections by type (personal-name, phone, email-addr, ird, address, commercial, legal-privilege, etc.)
-- Suggests appropriate withholding grounds (s7(2)(a), s7(2)(b)(ii), s7(2)(f)(i), etc.)
-- Considers public interest context (public officials have lower privacy expectations)
-- Distinguishes between actual PII and labels/headings that describe PII categories
-- Provides reviewer-facing reasoning and explanation
-
----
-
-## Export Packages
-
-Three export types are supported:
-
-| Package | Contents |
-|---------|----------|
-| **Requester** | Redacted PDFs + withholding schedule + cover letter |
-| **Internal** | Redacted PDFs + withholding schedule + cover letter + audit trail |
-| **Ombudsman** | All of the above + original unredacted documents |
-
-Redacted PDFs have:
-- Permanent black rectangles over accepted detections
-- LGOIMA ground reference labels in white text on the redaction bars
-- Metadata stripped (author, title, keywords)
-
----
-
-## Design System
-
-Clarivus brand tokens in `tailwind.config.ts`:
-
-- **Primary:** `#3e13af` (Clarivus purple)
-- **Accent:** `#1A9F6F` (Clarivus green)
-- **Fonts:** Playfair Display (headings), DM Sans (body), JetBrains Mono (mono)
-  - Fonts are self-hosted via `next/font/google` (build-time bundled, no runtime Google Fonts dependency)
-- **Confidence colours:** Green (high >= 85%), Amber (medium 50-84%), Red (low < 50%)
-
-Component classes in `app/globals.css`: `.btn-primary`, `.btn-secondary`, `.card`, `.badge`, `.input-field`.
-
-Responsive design with mobile-friendly layout and bottom navigation bar on small screens.
-
----
-
-## Build
+## Testing
 
 ```bash
-# Local development
-npm run build    # Production build
-npm run start    # Start production server
-npm run lint     # Strict ESLint (0 warnings policy)
-npm run test     # Run Vitest tests (319 tests)
-
-# Docker (local — use --platform on ARM Macs)
-docker build --platform linux/amd64 -t veil-prototype .
-docker run -p 3000:3000 --env-file .env veil-prototype
-
-# Azure deployment (via ACR Tasks — no local Docker needed)
-az acr build --registry acrveilprototype --image veil-prototype:latest --file Dockerfile .
-az webapp restart --name app-veil-prototype --resource-group rg-veil-prototype
+npm run test              # Vitest unit tests
+npm run test:e2e          # Playwright e2e (seeds test users first)
+npm run test:e2e:ui       # Playwright with UI
+npm run lint              # ESLint, 0-warning policy
 ```
 
-### CI/CD
+## Bench / detection-quality
 
-GitHub Actions runs on every push and pull request (`.github/workflows/ci.yml`):
-- ESLint (strict, 0 warnings)
-- TypeScript type checking
-- Vitest test suite (319 tests)
-- Production build
+```bash
+npm run bench:detection   # Run the detection bench against the canonical fixtures
+npm run bench:suite       # Multi-fixture suite
+npm run bench:compare     # Compare to a frozen baseline
+npm run bench:canonical   # Capture a new canonical baseline
+```
 
-Additional workflows handle Docker image builds (`docker.yml`) and database migrations (`migrate.yml`).
+Baselines live under `docs/bench-baselines/`.
 
----
+## Key directories
 
-## Notes
+| Path | Purpose |
+|---|---|
+| `app/` | Next.js App Router pages and API routes |
+| `app/api/` | REST endpoints (upload, process, export, logo, audit-archive download, etc.) |
+| `components/` | Shared React components |
+| `lib/actions/` | Server actions (mutations) |
+| `lib/data/` | Database query functions |
+| `lib/pipeline/` | Document processing, detection, redaction, PDF generation |
+| `lib/jobs/` | pg-boss worker + audit-archive helpers |
+| `lib/auth/` | Auth config, session helpers, authorisation |
+| `lib/storage/` | Storage provider abstraction |
+| `lib/config/` | Environment variable definitions |
+| `prisma/` | Schema + migrations + seed |
+| `scripts/` | Standalone utility scripts |
+| `e2e/` | Playwright end-to-end tests |
+| `docs/` | Architecture and process documentation |
+| `docs/legacy-veil/` | Archived Veil-era documents kept for reference |
 
-- This is a working POC — real database, real AI, real PDF redaction
-- **Authentication** is implemented via NextAuth v5 with Azure AD (Entra ID) as the primary provider and Credentials as a development fallback
-- **Activation flow** — the first user to log in enters a pre-generated activation code (see `scripts/generate-activation-code.ts`) and is promoted to admin, then completes the 7-step setup wizard to configure the organisation
-- **SCIM provisioning** — Azure AD can automatically sync users and groups to Veil via SCIM 2.0 endpoints, supporting automated onboarding/offboarding
-- **User invitations** — admins invite users via email; invitations are domain-restricted to the organisation's configured email domain
-- Role-based access control: admin, senior-reviewer, request-manager, final-approver, reviewer
-- The document review screen uses a PDF viewer with detection overlays for PDFs and styled HTML for non-PDF documents
-- LGOIMA grounds are accurately sourced from the Act
-- **Responsive design** — mobile-friendly with bottom navigation bar on small viewports
-- **CI/CD pipeline** — GitHub Actions enforces lint, type check, tests, and build on every push and PR
-- **Azure deployment** is live — see `docs/azure-infrastructure-spec.md` for full architecture
-- See `DEVELOPER-NOTES.md` for architecture decisions and remaining gaps
-- **CSRF protection** — state-changing API routes require `X-Requested-With: XMLHttpRequest` header
-- **Structured logging** — all server-side code uses `lib/logger.ts` for structured JSON logging in production
-- **Database-backed rate limiting** — activation endpoint uses PostgreSQL-backed rate limiting instead of in-memory
-- **LibreOffice conversion** — non-PDF documents (DOCX, XLSX, TXT) are converted to PDF at export time for true redaction via LibreOffice headless
-- **Fonts** — self-hosted via `next/font/google` — no runtime dependency on Google Fonts CDN
+## Background and traceability
+
+Umbra forks from Veil's `feat/parallel-ai-batches` branch at the
+`v0.0.0-umbra-fork` tag. The full rework plan, current-state survey, and
+phase-by-phase log are in:
+
+- [`docs/umbra-implementation-plan.md`](docs/umbra-implementation-plan.md)
+- [`docs/umbra-current-state-survey.md`](docs/umbra-current-state-survey.md)
+
+Phase deliverables (1 → 11) are tagged in the commit history; each phase's
+landing point is referenced in CHANGELOG.md.
+
+For Veil-era specifications (LGOIMA workflow, ground vocabulary, original
+Azure deployment guides) see `docs/legacy-veil/`.
+
+## Licence
+
+Proprietary. Property of DataSing.

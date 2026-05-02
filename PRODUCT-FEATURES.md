@@ -1,245 +1,179 @@
-# Veil — AI-Powered Document Redaction & Disclosure Platform
+# Umbra — PII Redaction for NZ Public-Sector Documents
 
-**Not Just Redaction. Defensible OIA & LGOIMA Disclosure.**
+**Detect. Review. Redact. Archive.**
 
-Veil automates the detection, review, and release of official information — transforming weeks of manual processing into hours of intelligent, auditable workflow. Purpose-built for New Zealand local and central government.
+Umbra is a single-tenant web application that ingests official-information
+documents, identifies PII and sensitive content with a three-source
+detection pipeline, lets a reviewer accept or reject each finding, and
+produces a permanently redacted PDF package with an immutable audit
+archive. Purpose-built for NZ councils and central-government agencies.
 
-A DataSing Clarivus Product | [veil.datasing.nz](https://veil.datasing.nz)
-
----
-
-## The Problem
-
-Every council and government agency in New Zealand faces the same disclosure challenge:
-
-- **Volume overload** — 1,000 to 10,000+ documents per request. Manual review cannot scale.
-- **Consistency gap** — Different staff apply redactions differently. No standardised workflow.
-- **Defensibility risk** — No structured audit trail linking redactions to statutory grounds.
-- **Deadline pressure** — 20 working days. Every OIA/LGOIMA request is a ticking clock.
-- **Double-edged risk** — Miss a redaction and it's a privacy breach. Over-redact and it's withholding official information.
-
-Generic redaction tools highlight and remove text. They don't understand New Zealand legislation, don't enforce statutory compliance, and don't produce the evidence trail an Ombudsman investigation demands.
+A DataSing product, forked from Veil and slimmed for the redaction-only
+use case.
 
 ---
 
-## What Veil Does
+## The problem
 
-Veil is a complete statutory disclosure workflow platform. It handles the entire pipeline from document ingestion through to compliant release — with AI detection, human review, and an immutable audit trail at every step.
+Every council and agency in NZ faces the same redaction challenge:
 
-### Dual-Layer AI Detection
+- **Volume overload** — hundreds to thousands of documents per request.
+  Manual review doesn't scale.
+- **Consistency gap** — different staff apply redactions differently.
+  No shared shortcut for "redact every instance of this person's name
+  across the batch".
+- **Defensibility risk** — once a document is released, the audit trail
+  must show what was redacted, when, by whom, and survive an Ombudsman
+  enquiry.
+- **Privacy breach risk** — miss a redaction (a phone number on page 47,
+  a witness name in a transcript) and it's a notifiable breach.
 
-Two detection engines work together. Neither makes final decisions.
-
-**Pattern matching** catches structured PII with deterministic accuracy — IRD numbers (with check digit validation), NHI identifiers, email addresses, phone numbers (NZ-specific formats), physical addresses, bank accounts, and vehicle registrations.
-
-**Contextual AI** (Azure OpenAI GPT-4o) reads documents the way a reviewer would — identifying commercially sensitive content, legal professional privilege, free and frank opinions, and personal information in narrative text. Every detection includes a confidence score and plain-language reasoning explaining why it was flagged.
-
-Every detection is a recommendation. Humans always decide.
-
-### Full OIA & LGOIMA Compliance
-
-Statutory grounds are built into the platform, not configuration options.
-
-- **Section 6** (conclusive reasons) — no public interest balance required
-- **Section 7** (other reasons) — mandatory public interest consideration enforced before any redaction can proceed
-- **Section 17** (refusal reasons) — structured refusal workflow
-
-Reviewers cannot export a document without linking every redaction to a statutory ground and providing reasoning. The system enforces what policy manuals can only suggest.
-
-**Withholding schedules** are generated automatically from review decisions — in both requester and Ombudsman-ready formats. No manual compilation. No missed entries.
-
-### Tiered Review Workflow
-
-The same approval chain your organisation already uses, built into the system:
-
-1. **Reviewer** — Reviews AI detections, accepts or rejects recommendations, selects statutory grounds, provides reasoning
-2. **Senior Reviewer** — Reviews decisions for legal consistency, can modify or override, ensures statutory grounds are correctly applied
-3. **Final Approver** — Signs off the release package. Cannot modify redactions — enforcing separation of duties
-
-Full version comparison and change tracking at every stage. Every modification recorded with who, when, and why.
-
-### Permanent, Verified Redaction
-
-Content is removed at the data level, not overlaid with black boxes.
-
-Multi-pass verification confirms redaction integrity before any document leaves the system:
-- Text extraction confirms redacted areas return empty
-- Object layer analysis checks for hidden content
-- Metadata residue scanning removes tracked changes, comments, and embedded objects
-- Image/pixel replacement verification ensures no visual residue
-
-If any check fails, export is blocked. No exceptions.
-
-### Immutable Audit Trail
-
-Every action logged. Every decision captured. Every ground recorded.
-
-- SHA-256 hash chain links each entry to the previous — any tampering breaks the chain and is immediately detectable
-- Write-Once-Read-Many (WORM) storage with 7-year retention
-- Structured fields: user ID, timestamp, role, action, target, reasoning, statutory ground
-- Automatic PII sanitisation — sensitive content detected in free-text fields is stripped before storage
-
-There is no "off the record" mode. The audit trail is designed to withstand Ombudsman investigation.
-
-### Bulk Processing at Scale
-
-| Benchmark | Design target |
-|-----------|---------------|
-| 5,000 pages processed | Under 3 hours |
-| 10,000 document duplicate detection | Under 45 minutes |
-| Concurrent reviewers | 10+ without degradation |
-
-Ingestion, detection, and export pipelines run independently with queue-driven parallelism. The system scales horizontally — no manual capacity provisioning required. Figures above are architectural design targets; full scale-validation against the RFP benchmarks is planned before production rollout.
+Generic redaction tools highlight and remove text. They don't understand
+NZ-specific PII formats (IRD, NHI, NZ driver licence with the I/O
+exclusion), don't run end-to-end on a hundred-document batch, and don't
+produce the audit archive that Records Act / Privacy Act compliance
+demands.
 
 ---
 
-## Document & Format Support
+## What Umbra does
 
-- **Office documents** — PDF, DOCX, XLSX, PPTX, TXT, RTF, HTML
-- **Email archives** — MSG and EML with attachment extraction and thread grouping (for `.pst` archives, export individual `.msg` or `.eml` files before upload)
-- **Scanned documents** — OCR with 99%+ accuracy for printed text, 85-95% for handwriting
-- **Hidden content** — Automatic detection and sanitisation of comments, tracked changes, hidden sheets, embedded objects, and document metadata
-- **Duplicate detection** — Exact match (SHA-256 hash) and near-duplicate (vector similarity at 85% threshold)
+### Three-source detection pipeline
 
----
+Three engines work in parallel; the reviewer makes every final call.
 
-## Export & Release Packages
+**Pattern matching** catches structured PII with deterministic accuracy —
+IRD numbers, NHI identifiers, email addresses, phone numbers (NZ-specific
+formats incl. parenthesised area codes), physical addresses, bank
+accounts (BB-bbbb-AAAAAAA-SS), NZ passports, NZ driver licences (with
+the I/O exclusion + context-word guard), vehicle registrations.
 
-Three export types for different audiences:
+**Contextual AI** (Azure OpenAI GPT-4o) reads documents the way a
+reviewer would — identifying commercially sensitive content, legal
+privilege, candid / free-frank commentary, harassment risk material,
+cultural sensitivity (tikanga / wāhi tapu), safety concerns, and
+personal information in narrative text. Every detection includes a
+confidence score and plain-language reasoning.
 
-| Package | Contents |
-|---------|----------|
-| **Requester** | Redacted documents + withholding schedule + cover letter |
-| **Internal** | Requester package + full audit trail + chain-of-custody report |
-| **Ombudsman** | Internal package + unredacted original documents (for investigation response) |
+**Custom rules** — admin-defined keyword and regex rules for council-
+or agency-specific terms (project codes, internal reference numbers,
+sensitive case identifiers).
 
-All documents exported as PDF/A-2b for long-term archival compliance. Batch export supports 500+ page documents with configurable splitting.
+22 detection types in total. The vocabulary is fixed by
+`lib/detection-type-grounds.ts` and locked by a parity test; adding a
+new type is a deliberate schema change, not a hidden plumbing drift.
 
----
+### Permanent redaction
 
-## Reports & Analytics
+Three-tier engine in `lib/pipeline/redact-pdf.ts`:
 
-- **AI Detection Accuracy** — Precision, recall, false positive/negative rates, entity breakdown with confidence distribution
-- **LGOIMA Compliance Summary** — Cases by status, statutory grounds usage, completion rates
-- **Reviewer Workload Analysis** — Documents reviewed, detections handled, activity breakdown per reviewer
-- **Withholding Schedule** — Auto-generated per case with statutory ground linkage
-- **Chain of Custody** — Complete document lifecycle from ingestion to release
-- **Cost Recovery** — Time tracking for automated vs. manual effort, supporting charging models
+| Tier | Mode | Used for |
+|---|---|---|
+| 1 | Coordinate-based PyMuPDF | PDF originals with Azure DI bboxes |
+| 2 | Text-search PyMuPDF | DOCX/XLSX/TXT (LibreOffice → PDF) and as a Tier-1 fallback |
+| 3 | Plain-text PDF | Last resort when 1+2 both fail |
 
----
+Tier 1 + 2 produce true redactions — the underlying text is removed
+from the PDF, not just covered by a black rectangle. Post-export
+verification confirms the redaction strings don't appear in the output's
+extractable text.
 
-## Security & Data Sovereignty
+### Single-package export
 
-### Your Data. In-Region. Always.
+One ZIP per batch. Contents:
 
-Veil is currently hosted in **Azure Australia East (Sydney)**. **Azure New Zealand North (Auckland)** is available as a deployment-time choice for customers who require in-country residency — data residency is a deployment decision made with the customer before cutover.
+- `redacted/{originalFilename}.pdf` — one per document
+- `redaction-schedule.pdf` — per-type detection summary, **never
+  contains the redacted text** (Amendment A4 no-leakage rule)
+- `audit-timeline.pdf` — per-document handling timeline (upload →
+  processing → review → sign-off → export)
+- `audit-log.pdf` + `audit-log.csv` — full immutable audit trail
+- `verification-report.txt` — post-redaction verification summary
+- `manifest.json` — generator + content metadata + per-document success
+  flags
 
-- DataSing is Wellington-based. No offshore contractors access your data.
-- Production region (AU East or NZ North) is locked at deployment; pairing region is configurable for disaster recovery
-- Microsoft confirmed: no customer data used for AI model training
+The export route generates the ZIP, computes a SHA-256 over the buffer,
+and writes a `redaction-verification` audit entry capturing the verdict.
 
-### Authentication & Access
+### Immutable audit archive
 
-- **Azure AD / Entra ID SSO** — OpenID Connect (primary), SAML 2.0 (fallback)
-- **MFA** — Honoured via Azure AD Conditional Access policies
-- **SCIM 2.0** — Automated user provisioning and deprovisioning from Entra ID
-- **RBAC** — Six distinct roles mapped to Azure AD security groups
+Every batch carries a per-batch SHA-256 hash chain on its audit log
+(`AuditEntry.integrityHash`, `previousHash`). When a batch is purged
+(admin-triggered or auto-retention), the chain is serialised to canonical
+JSON-Lines + RFC-4180 CSV under `archives/{YYYY}/{batchId}/` in blob
+storage, with an `integrity.json` recording chain validity + SHA-256, and
+a `manifest.json` capturing the batch metadata.
 
-### Encryption
+The archiver roundtrip-verifies before allowing the cascade-delete to
+proceed: write the JSONL, re-download it, recompute SHA-256, re-walk the
+chain, and only then drop the batch row. A mismatch leaves
+`purgeStatus='purging'` on the batch for human investigation.
 
-- **At rest** — AES-256 with customer-managed keys in Azure Key Vault (HSM-backed)
-- **In transit** — TLS 1.3 on all communications (minimum TLS 1.2)
+The cross-batch download (admin only, `/api/admin/audit-archive/download`)
+re-verifies every archived chain at download time and writes a top-level
+`verification-summary.json` so an external auditor can independently
+re-walk.
 
-### Compliance
+### Soft-delete + retention
 
-| Standard | Status |
-|----------|--------|
-| OIA 1982 | Built-in statutory ground enforcement |
-| LGOIMA 1987 | Built-in statutory ground enforcement |
-| Privacy Act 2020 | Audit trail evidence, configurable retention, breach notification support |
-| Public Records Act 2005 | WORM storage, General Disposal Authority alignment, Archives NZ export |
-| NZ Web Usability Standard 1.3 | Plain language, consistent navigation, user-controllable timeouts |
-| WCAG 2.1 Level AA | Keyboard navigation, screen reader support, 4.5:1 contrast ratio |
-| OWASP Top 10 | All categories addressed, annual independent penetration testing |
+Admin clicks Delete on a batch → soft-delete with a 7-day grace window.
+Trash is admin-visible; Restore is one click. Purge Now is a destructive
+override that requires a non-empty reason captured in the audit trail.
+Auto-retention sweeps `status=exported` batches into Trash after the
+configured retention window (default 14 days).
 
-### Security Operations
-
-- Annual penetration testing by NZISM-accredited provider
-- Continuous vulnerability scanning in CI/CD pipeline
-- Critical patches within 72 hours
-- All security events logged to Azure Monitor
-
----
-
-## By the Numbers
-
-| | |
-|---|---|
-| **60-70%** | Reduction in manual redaction effort |
-| **200-280 hours** | Staff time saved annually (at 80 requests/year) |
-| **5,000 pages** | Processed in under 3 hours (design target) |
-| **10,000 documents** | Duplicate detection in under 45 minutes (design target) |
-| **10+ reviewers** | Concurrent without performance degradation (design target) |
-| **99.5%** | Uptime SLA with service credits |
-| **27** | Statutory grounds built into the platform |
-| **Customer-chosen** | NZ or AU deployment region |
-
----
-
-## Service & Support
-
-| Priority | Response Time | Availability |
-|----------|--------------|-------------|
-| P1 — Critical (system down) | 30 minutes | 24/7 |
-| P2 — Major (feature impaired) | 2 hours | NZ business hours |
-| P3 — Moderate (workaround available) | 4 hours | NZ business hours |
-| P4 — Minor (cosmetic/enhancement) | 1 business day | NZ business hours |
-
-**Included with every subscription:**
-- Named account manager
-- Quarterly service reviews (performance, AI accuracy, support metrics, roadmap)
-- Role-based training sessions (administrator, reviewer, request manager, auditor)
-- Post-go-live intensive support (1 week) + pilot support (4 weeks)
-- AI model updates, security patching, and continuous product improvement
-- All Azure infrastructure costs — no variable cloud charges
+The hourly worker (pg-boss 12.x, in-process) does the cascade-delete +
+blob cleanup + audit-archive write + PurgeLog insert with proper
+concurrency primitives (`SELECT ... FOR UPDATE SKIP LOCKED`).
 
 ---
 
-## Implementation
+## Who's it for
 
-Fixed-price implementation. No surprises.
+NZ councils and central-government agencies that need to redact PII from
+documents before publication or sharing — typically in response to LGOIMA
+/ OIA requests, public consultations, court disclosures, or routine
+records management.
 
-| Phase | Scope |
-|-------|-------|
-| **Discovery** | Requirements validation, Azure AD integration planning, workflow mapping |
-| **Configuration** | Entra ID SSO + SCIM, role mapping, custom rules, department structure |
-| **Data migration** | Historical request import (if applicable), user provisioning |
-| **Training** | 8 role-based sessions covering all user types |
-| **Pilot** | Live operation with real requests, DataSing on-site support |
-| **Go-live** | Full production handover with 4-week stabilisation period |
+Umbra **does not** own the request lifecycle (track, assign, write
+correspondence). It owns the redaction step. If you need the full
+LGOIMA disclosure workflow, talk to DataSing about Veil.
 
 ---
 
-## Why Veil
+## Roles
 
-| | Generic Redaction Tools | Enterprise eDiscovery | **Veil** |
-|---|---|---|---|
-| OIA/LGOIMA workflow | Manual | Configurable | **Built-in, enforced** |
-| NZ data sovereignty | Varies | Typically offshore | **Absolute — NZ only** |
-| AI detection | Basic pattern only | General NLP | **Dual-layer: NZ patterns + contextual AI** |
-| Withholding schedules | Manual compilation | Manual compilation | **Auto-generated** |
-| Tiered review | Manual routing | Configurable | **Built-in with separation of duties** |
-| Audit trail | Basic logging | Configurable | **WORM + SHA-256 hash chain** |
-| Ombudsman-ready export | Manual assembly | Manual assembly | **One-click package generation** |
-| NZ-based support | Varies | Typically offshore | **Wellington-based team** |
-| Price | Low tool cost, high labour | $750K-$1.2M+ | **Mid-range, all-inclusive SaaS** |
+Two roles, no exceptions:
+
+- **Admin** — full access. Creates batches, edits org settings, manages
+  users, runs Purge Now, downloads cross-batch audit archive.
+- **Reviewer** — review-only on assigned batches. Accepts / rejects
+  detections, signs off documents, exports.
+
+Per-batch scoping is supported (admin can assign reviewers to specific
+batches), but there's no department layer or role-graph.
 
 ---
 
-## About DataSing
+## What's not in scope
 
-DataSing builds intelligent data products for New Zealand organisations. Wellington-based, 100% NZ team, all company tax paid in New Zealand.
+- LGOIMA grounds vocabulary and public-interest tests (use Veil)
+- Department / team / case-assignment workflow (use Veil)
+- Multi-tenant SCIM provisioning
+- Configurable workflow steps (Umbra is fixed at upload → review →
+  export)
+- Reporting beyond AI accuracy + audit timeline + cross-batch archive
 
-Veil is part of the **Clarivus AI** product suite — purpose-built tools that bring AI capability to specific, high-value government and enterprise workflows.
+---
 
-**Contact:** [veil.datasing.nz](https://veil.datasing.nz)
+## Architecture in one paragraph
+
+Next.js 15 App Router + React 19 server components front-end, talking to
+PostgreSQL 16 via Prisma 7. NextAuth v5 with Azure AD primary +
+credentials fallback. Azure OpenAI GPT-4o for AI detection + Azure
+Document Intelligence `prebuilt-read` for OCR. Azure Blob Storage in
+production, local filesystem in dev. PyMuPDF (Python3 subprocess) for
+true PDF redaction. pg-boss 12.x for the in-process retention worker.
+Vitest unit + Playwright e2e tests. 14 Prisma models. Single
+deployment artefact (Docker image to Azure Container Registry → App
+Service Linux B1).

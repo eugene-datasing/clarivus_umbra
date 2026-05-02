@@ -1,215 +1,165 @@
-> **Umbra (in-flight rework)** — fork of Veil, simplifying to a PII redaction tool for NZ councils and central-government agencies. Full rework plan: [`docs/umbra-implementation-plan.md`](docs/umbra-implementation-plan.md). Until Phase 9 (branding + docs cleanup) lands, this document and most of the codebase retain Veil-era content; the divergence is intentional and tracked.
-
----
-
 # Changelog
 
-All notable changes to the Veil prototype.
+All notable changes to Umbra. The Veil-era changelog covering work prior
+to the `v0.0.0-umbra-fork` tag is preserved at
+`docs/legacy-veil/changelog-veil.md` (or in the git history of the
+predecessor repo `DataSing/clarivus_veil`).
+
+The format is loosely based on [Keep a Changelog](https://keepachangelog.com/);
+each phase from the rework programme has its own section.
 
 ---
 
-## 2026-04-14
-
-### Added
-- Document-level classification pipeline (`doc-classify.ts`) — GPT-4o classifies document type and content flags before page-level detection (`8606f67`)
-- 7 new detection types: negotiation, safety-concern, law-enforcement, council-commercial, harassment-risk, cultural-sensitivity, health-safety (`8606f67`)
-- Structured DOCX rendering with headings (h2-h6), bulleted/numbered lists, image placeholders, and full HTML table rendering (`320a9c0`)
-- Per-group review status tracking (pending/partial/accepted/rejected) computed server-side (`320a9c0`)
-- Export-time "missing-grounds" readiness check that blocks export when accepted detections lack assigned grounds (`320a9c0`)
-- Inline type and ground editing on document review page — clickable type badges, improved GroundSelector with section headers (`4dfd8a6`)
-- Accept Remaining bulk action with confirmation dialog and optimistic updates (`4dfd8a6`)
-- Extend deadline feature with s14 LGOIMA validation and audit trail (`4dfd8a6`)
-- Comprehensive audit trail test suite (213 lines) (`320a9c0`)
-- DOCX multi-page redaction test (`c23d049`)
+## 2026-05-02 — Phase 9: branding + docs cleanup
 
 ### Changed
-- Rewrite seed for Palmerston North City Council demo: 8 departments, 11 users, 5 realistic LGOIMA cases with no documents (`4ac3c82`)
-- Pipeline deduplication: combine pattern, AI, and custom rule detections into unified list and deduplicate by (page, type, text) before DB insertion (`2d8f8ed`)
-- Restructured AI prompt with detection guidance, worked examples, grounds grouped by detection pathway (`8606f67`)
-- DOCX large-page chunking for AI batches, custom rule deduplication, ground format normalisation, Zod validation for all 27 grounds (`8606f67`)
-- Wire LGOIMA workflow configuration: split escalation threshold into amber/red warning days, wire defaultResponseDays to new request form (`4dfd8a6`)
-- Skip env validation during Next.js production build phase (Azure build doesn't have runtime secrets) (`04bcd79`)
+- Top-level docs (`README.md`, `CLAUDE.md`, `DEVELOPER-NOTES.md`) rewritten
+  for Umbra. Veil branding stripped from the codebase except where it
+  appears as historical context (this file, `SECURITY-NOTES.md`,
+  `docs/umbra-*`).
+- `prisma/seed.ts` — replaced PNCC + LGOIMA seed scenario with the
+  fictional **Ministry of Demo**: 1 admin, 3 reviewers, 3 sample Batches.
+- Email templates (`lib/email/templates.ts`) — Veil → Umbra.
+- App layout title and footer — Umbra wordmark, neutral palette
+  (placeholder visual branding per Amendment A7).
+- `docker-compose.yml` — env vars updated to `umbra` user/db. Container
+  name follows the directory until Phase 11 recreates it.
+- `.env.example` added with the canonical dev `DATABASE_URL` and the full
+  required env-var set.
 
-### Fixed
-- Fix DOCX redaction to search all PDF pages, not just declared page — Mammoth tags all content as page=1, now Python searches every page for each unique text (`c23d049`)
-- Fix audit trail integrity verification — `timestamp without time zone` column + pg driver TZ interpretation mismatch; use raw SQL `to_char` to read exact stored format (`2949864`)
-- Fix detection sort order to use first occurrence in document — `Map.set()` was overwriting with last position instead of first (`953a868`)
-- Fix bank account misclassification — reorder patterns (most specific first), add negative lookbehind to phone regex (`2d8f8ed`)
-- Fix PDF export WinAnsi encoding error for te reo Māori macrons — embed Noto Sans via shared font loader across all 9 PDF generation files (`4dfd8a6`)
-- Fix coordinate deduplication to prevent double-redaction of overlapping regions (`320a9c0`)
+### Archived
+- LGOIMA-specific specs (`lgoima-*.md`, `lgoima-act-*.pdf`,
+  `lgoima-redaction-taxonomy.md`) moved to `docs/legacy-veil/`.
+- Veil-era architecture docs (`docs/architecture/01-07*.md`),
+  `api-reference.md`, `auth-and-onboarding-spec.md`,
+  `azure-infrastructure-spec.md`, `client-deployment-activation-spec.md`,
+  `requirements-traceability.md`, `remediation-2026-04.md`, and the
+  harassment-risk spike folder all moved to `docs/legacy-veil/`.
+
+### Removed
+- Two pre-fork session-handoff documents
+  (`docs/session-handoff-2026-04-{19,21}.md`).
+
+### Added
+- `docs/architecture/01-umbra-overview.md` — fresh Umbra architecture
+  overview.
+- `docs/requirements-traceability.md` — slim Umbra REQ-keyed traceability.
 
 ---
 
-## 2026-04-13
-
-### Added
-- Logo upload API and pipeline logo helper for embedding org logo in PDFs (`2d5dd76`)
-- LGOIMA reference documents and remediation plan (`732e8e5`)
+## 2026-05-02 — Phase 8: setup wizard slim + custom rules + admin wire
 
 ### Changed
-- Replace hardcoded AI governance and report metrics with real data (`e76b8b0`)
-- Fix LGOIMA statutory grounds and wire detection toggles into pipeline (`7b88eed`)
-- Update documentation: fix README accuracy, add CLAUDE.md context (`3ef12f2`)
+- Setup wizard slimmed from 7 steps (Veil) to 5 (Umbra): Org Identity,
+  Document Branding (no Ombudsman block), Detection Policies, Team Setup,
+  Review.
+- `CustomRule.suggestedGround` replaced with `note: String?` — schema +
+  actions + UI + validation. Auto-suggested rules from manual detections
+  no longer write the ground hint.
+- Admin Settings → Backup tab gains a Retention & Audit Archive panel
+  showing Trash count, last-archive timestamp, archived-total, plus a
+  Download Audit Archive (ZIP) button hitting the Phase-6c endpoint.
+- AI governance copy de-LGOIMA'd (one-line fix).
 
-### Fixed
-- Fix auth session refresh, profile redirect, and setup wizard UX (`6406055`)
-- Fix stale s7_2f ground ID in schedule test (`7434c71`)
+### Removed
+- `saveLGOIMAConfig`, `markDepartmentsStepCompleted` actions.
 
 ---
 
-## 2026-04-01
-
-### Fixed
-- Fix profile nudge persistence, dynamic document headers, and add content seed (`595e4a4`)
-
----
-
-## 2026-03-29
+## 2026-05-02 — Phase 6c: real retention worker + cross-batch download
 
 ### Added
-- Automatic PII sanitization in audit trail free-text fields (`2de322c`)
-- Sign-out on activate page and instance reset script (`2de322c`)
+- `lib/jobs/audit-archive.ts` — canonical-JSONL serialiser, RFC-4180 CSV
+  mirror, integrity verifier, roundtrip-verifying archiver. Per-batch
+  artefacts under `archives/{YYYY}/{batchId}/` (jsonl, csv,
+  integrity.json, manifest.json).
+- Real `purge-batch` and `retention-sweep` pg-boss handlers (replacing
+  Phase 6a placeholders): claim via `SELECT ... FOR UPDATE SKIP LOCKED`,
+  archive + verify, cascade-delete, blob cleanup, `PurgeLog` insert.
+- Auto-retention sweep — soft-deletes `status=exported` batches past
+  their retention window.
+- `GET /api/admin/audit-archive/download` — admin-gated cross-batch ZIP
+  download. Re-verifies every chain at download time and writes a
+  top-level `verification-summary.json`.
+- `StorageProvider.listByPrefix(prefix)` added to the storage abstraction
+  with implementations for both local and Azure Blob.
 
 ---
 
-## 2026-03-28
+## 2026-05-02 — Phase 6a + 6b: scaffolding + soft-delete + admin UI
 
 ### Added
-- All 5 remaining report templates with real PDF generation (`6128c20`)
-- Redesign admin settings page: consolidate tabs, fix UX issues (`fd6ef49`)
+- `PurgeLog` model — survives `Batch` cascade-delete (no FK by design).
+  Phase 6c writes one row per purged batch.
+- pg-boss 12.x dependency. `lib/jobs/runner.ts` owns the singleton
+  instance + `purge-batch` and `retention-sweep` queues. `instrumentation.ts`
+  starts the worker on server boot (best-effort).
+- Soft-delete actions: `softDeleteBatch`, `restoreBatch`, `purgeNowBatch`
+  (`{ skipGrace?, reason? }` — reason required when skip-grace).
+- Admin Retention page at `/admin/retention` with config form, Trash
+  table, and Purge History.
+- `RETENTION_CONFIG` setting (14d retention / 7d grace / auto-enabled).
+- Per-batch Delete button on the batches list (admin only).
 
-### Fixed
-- Wire up automatic case status transitions from document workflow (`4b5c466`, `5a23da8`)
-- Fix sidebar layout shift and filter notification noise (`b29e7bc`)
-- Switch Google Fonts to `next/font/google` for build-time bundling — eliminates runtime Google Fonts CDN dependency (`d008ac7`)
-- Restore `'unsafe-inline'` in CSP `script-src` for Next.js hydration — fixes production "Connection closed" error (`6c04637`)
-
----
-
-## 2026-03-27
-
-### Fixed
-- Wire up remaining UI placeholders, harden security and logging — Tier 3 improvements (`2bf2251`)
-- Wire up non-functional UI elements: filters, audit export, assign reviewer — Tier 2 (`d504e10`)
-- Fix critical security vulnerabilities across auth, audit, and CSP — Tier 1 (`a79c12c`)
-- Fix review workflow labels, add document exclude/delete, fix department banner (`4272591`)
-- Fix Tier 3 PDF encoding error: replace block chars with ASCII marker (`c8f3564`)
+### Removed
+- `lib/queue/job-queue.ts` (Phase 4 carry-over). `app/api/documents/
+  {[docId]/process,queue-status}/route.ts` refactored to read
+  `Document.status` directly.
 
 ---
 
-## 2026-03-26
-
-### Added
-- LibreOffice conversion for non-PDF redaction with text-search mode (`663cda7`)
-
-### Fixed
-- Fix export persistence and PDF redaction fallback (`e715f25`)
-
----
-
-## 2026-03-25
-
-### Added
-- Landing page for unauthenticated visitors with feature showcase, demo request form, real screenshots (`1be3312`, `c3f8da2`, `1a627b6`, `04dce11`)
+## 2026-05-02 — Phase 7: export simplification
 
 ### Changed
-- Redesign detection highlights: three-state system with black-bar redactions (`c03b2e0`)
-- OIA/LGOIMA positioning, profile banner fix, favicon, e2e updates (`14ce9c1`)
+- Export collapsed from a packageType tri-state (requester / internal /
+  ombudsman) to a single ZIP layout. Drops the `documentIds` /
+  `batchGroupId` / `batchNumber` fields from `ExportJob`.
+- `lib/pipeline/schedule.ts` → `redaction-schedule.ts` — regrouped by
+  detection type, never includes the redacted text (Amendment A4
+  no-leakage rule).
+- `lib/pipeline/chain-of-custody.ts` → `audit-timeline.ts` — generic
+  per-document handling timeline; LGOIMA framing dropped.
+- `lib/pipeline/zip.ts` extracted from `export.ts` for Phase 6 reuse.
+
+### Removed
+- `cover-letter.ts`, `cost-recovery-report.ts`,
+  `compliance-summary-report.ts`, `reviewer-workload-report.ts` and
+  their corresponding `/api/reports/...` routes.
+- `app/api/schedule/[batchId]/route.ts` (the schedule survives only in
+  the export ZIP).
 
 ---
 
-## 2026-03-24
-
-### Added
-- PDF viewer for document review with detection overlays (`94cec6b`)
+## 2026-05-02 — Phase 5: detection-field cleanup + nz-driver-licence
 
 ### Changed
-- Switch Docker runtime from Alpine to Debian slim for PyMuPDF compatibility (`86f57ad`)
+- Detection model dropped `suggestedGround`, `appliedGround`, and
+  `piConsideration`. Status-only collapse on the review path; bulk
+  variants renamed to `bulkAcceptBySimilar` / `bulkAcceptByType`.
+- `driver-licence` → `nz-driver-licence` across all 22 detection types.
+- Redaction engine drops ground-priority dedup and ground labels.
+- Added a parity test (`lib/__tests__/detection-type-parity.test.ts`)
+  locking the detection-type vocabulary across every plumbing point.
 
-### Fixed
-- Fix seed script and error boundary for authorization errors (`53b6f76`)
-- Update documentation to reflect current build state (`9358131`)
-
----
-
-## 2026-03-23
-
-### Fixed
-- Notification dropdown, reject UX feedback, profile navigation, and bulk review button (`9a17745`)
-
----
-
-## 2026-03-22
-
-### Added
-- B1-B8 onboarding flow: post-login activation gate, email invitations, user profile page (`3df314e`)
-- P3 production gaps: audit PII sanitisation, user identity model, performance benchmarks (`9482684`)
-
-### Changed
-- Login page cleaned up for production with DataSing branding (`451d055`)
-- Org name and abbreviation made read-only in setup wizard after initial configuration (`deaa781`)
-
-### Fixed
-- Stale JWT authorisation: bootstrap admin role and fix production deployment issues (`bf12d82`)
-- Stale JWT role after activation promotion (`7d9268b`)
-- `requireAdmin()` re-reads role from DB instead of stale JWT (`3d80aa1`)
-- Activation gate hardened with redundant check and diagnostics (`1dbcb81`)
-- Middleware auth enforcement and Azure deployment issues (`3cece6d`)
-- Document page duplicate constraint and CSP `connect-src` directive (`7b95204`)
+### Removed
+- `applyGround`, `bulkApplyGroundToSimilar`, `bulkApplyGroundByType`
+  actions; `version-snapshot.ts` and `snapshot-diff.ts` (snapshot model
+  was dropped in Phase 2).
 
 ---
 
-## 2026-03-21
+## 2026-04 to 2026-05 — Earlier phases
 
-### Added
-- P0 + P1 production readiness: email ingestion (EML/MSG), observability (Application Insights), accessibility improvements, resilience patterns (circuit breakers, retry), CI/CD workflows, test suite (`d9a0bac`)
-- P2 production readiness: 12 features for RFP should-have and could-have requirements including cost-recovery reports, chain-of-custody, multimedia extraction framework, records/eDiscovery connectors, progress dashboards (`9be1cb2`)
-- Tier 1 + Tier 2 production hardening: Azure infrastructure spec, SSO design, audit integrity with hash chaining, SCIM 2.0 provisioning (`6b9c1fe`)
-- Authorisation check added to compare page (`e23f0c1`)
+- **Phase 4**: workflow simplification (drop Veil's milestone pipeline /
+  pipeline route / SCIM / departments). `Case` → `Batch`, `caseId` →
+  `batchId` across the FK graph.
+- **Phase 3**: roles collapse — admin / request-manager / senior-reviewer /
+  final-approver / reviewer → admin / reviewer.
+- **Phase 2**: schema reboot. 19-model Veil schema → 14-model Umbra
+  `0001_init`. Added soft-delete + retention columns to `Batch`.
+- **Phase 1**: rebrand. `package.json` rename, GitHub remote pointed at
+  `DataSing/clarivus_umbra`, `v0.0.0-umbra-fork` tag created.
+- **Phase 0**: pre-flight, decision-gate alignment, current-state survey.
 
-### Changed
-- Pipeline configuration: confidence threshold settings, review sync improvements, navigation fixes, auth spec documentation (`de9a89c`)
-
-### Fixed
-- Security hardening: activation gate, IDOR fixes, PII sanitisation in logs, XSS prevention (`3188cbb`)
-- CI lint migrated from deprecated `next lint` to ESLint CLI (`2e53caa`)
-
----
-
-## 2026-03-20
-
-### Added
-- WP21 + WP22: Client workspace setup wizard and manual redaction with AI learning feedback loop (`51fad39`)
-- True PDF redaction via PyMuPDF — text genuinely removed from content stream, not just visually hidden (`5c98fc7`)
-
-### Changed
-- UI polish: resizable detections panel, EyeOff logo on login, manual detection highlight fix (`f3982ed`)
-
-### Fixed
-- Auth gaps, transaction safety, match length bug (`5eea5d8`)
-- FK constraints, race conditions, input validation (`1bcd62c`)
-- Prototype hardening: auth, validation, crypto, path safety, tests (`f0a954e`)
-- 7 custom rules gaps: type badges, source labels, validation, priority ordering, UX (`f9ab60b`)
-- Fix middleware Edge runtime: split auth config from Node.js providers (`22170f1`)
-- Fix TS error: wrap Uint8Array in Buffer for NextResponse body (`db54ee1`)
-
----
-
-## 2026-03-19
-
-### Added
-- Initial working prototype with real PostgreSQL persistence, Azure AI pipeline, and complete LGOIMA workflow (`0ffc082`)
-- WP1-WP4, WP6-WP7, WP9-WP11: Core gap closure — file validation, format conversion, duplicate detection, metadata sanitisation, QA simulation, AI governance metrics (`01aa5cd`)
-- WP5: Version comparison with detection snapshots and diff view (`90504bd`)
-- WP8: Custom rules engine with persistence and pipeline execution (`c923c3d`)
-- WP12 + WP13: Change tracking (detection history) and processing time instrumentation (`9f01003`)
-- WP14: Error handling polish with structured errors and reusable error component (`d69c2a9`)
-- WP15: DOCX/XLSX metadata sanitisation for ombudsman export packages (`25bc41b`)
-- WP16: Authentication and RBAC foundation with NextAuth v5 (`17615a9`)
-
-### Changed
-- Export workflow redesigned with document selection and validation gates (`065146f`)
-- Document status workflow, schedule PDF preview, AI prompt improvements, docs update (`6690bb4`)
-
-### Fixed
-- Detection highlighting and address regex false positives (`d3f2786`)
+For Veil-era history (2024 → April 2026) consult the predecessor repo
+`DataSing/clarivus_veil`.
