@@ -1,9 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { formatDate, cn } from "@/lib/utils";
-import { Search, Filter, FileText, ChevronRight } from "lucide-react";
+import {
+  Search,
+  Filter,
+  FileText,
+  ChevronRight,
+  Trash2,
+  AlertTriangle,
+} from "lucide-react";
+import { softDeleteBatch } from "@/lib/actions/batch-actions";
 
 export interface BatchRow {
   id: string;
@@ -21,6 +30,7 @@ interface BatchesListClientProps {
   batches: BatchRow[];
   totalCount: number;
   activeCount: number;
+  canDelete: boolean;
 }
 
 const batchStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
@@ -32,10 +42,32 @@ const batchStatusConfig: Record<string, { label: string; color: string; bg: stri
   deleted: { label: "Deleted", color: "text-red-700", bg: "bg-red-50" },
 };
 
-export default function BatchesListClient({ batches, totalCount, activeCount }: BatchesListClientProps) {
+export default function BatchesListClient({
+  batches,
+  totalCount,
+  activeCount,
+  canDelete,
+}: BatchesListClientProps) {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [filterStatus, setFilterStatus] = useState("");
+  const [pendingDelete, startDeleteTransition] = useTransition();
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const handleDelete = (batchId: string) => {
+    startDeleteTransition(async () => {
+      setDeleteError(null);
+      try {
+        await softDeleteBatch(batchId);
+        setConfirmId(null);
+        router.refresh();
+      } catch (err) {
+        setDeleteError(err instanceof Error ? err.message : "Delete failed");
+      }
+    });
+  };
 
   const filtered = batches.filter((b) => {
     if (filterStatus && b.status !== filterStatus) return false;
@@ -99,6 +131,12 @@ export default function BatchesListClient({ batches, totalCount, activeCount }: 
         </div>
       )}
 
+      {deleteError && (
+        <div className="card mb-4 border-red-200 bg-red-50/60">
+          <div className="text-xs text-red-700 font-medium">{deleteError}</div>
+        </div>
+      )}
+
       <div className="card p-0 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
@@ -108,54 +146,111 @@ export default function BatchesListClient({ batches, totalCount, activeCount }: 
               <th className="text-left px-4 py-3 font-medium text-txt-secondary">Status</th>
               <th className="text-left px-4 py-3 font-medium text-txt-secondary">Documents</th>
               <th className="text-left px-4 py-3 font-medium text-txt-secondary">Created</th>
+              {canDelete && <th className="text-right px-4 py-3 font-medium text-txt-secondary">Actions</th>}
               <th className="w-8"></th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((b) => {
-              const cfg = batchStatusConfig[b.status] ?? { label: b.status, color: "text-gray-600", bg: "bg-gray-100" };
+              const cfg = batchStatusConfig[b.status] ?? {
+                label: b.status,
+                color: "text-gray-600",
+                bg: "bg-gray-100",
+              };
+              const isConfirming = confirmId === b.id;
               return (
-                <tr
-                  key={b.id}
-                  className="border-b border-border last:border-0 hover:bg-surface-hover transition-colors cursor-pointer group"
-                >
-                  <td className="px-4 py-3">
-                    <Link href={`/batches/${b.id}`} className="block">
-                      <span className="font-mono text-xs font-medium text-brand-primary">
-                        {b.reference}
-                      </span>
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Link href={`/batches/${b.id}`} className="block">
-                      <div className="font-medium text-txt-primary">{b.name}</div>
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Link href={`/batches/${b.id}`} className="block">
-                      <span className={cn("badge", cfg.bg, cfg.color)}>{cfg.label}</span>
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Link href={`/batches/${b.id}`} className="block">
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-3.5 h-3.5 text-txt-secondary" />
-                        <span className="text-txt-primary font-medium">{b.reviewedCount}</span>
-                        <span className="text-txt-secondary">/ {b.documentCount}</span>
-                      </div>
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-txt-secondary">
-                    <Link href={`/batches/${b.id}`} className="block">
-                      {formatDate(b.createdAt)}
-                    </Link>
-                  </td>
-                  <td className="px-2 py-3">
-                    <Link href={`/batches/${b.id}`} className="block">
-                      <ChevronRight className="w-4 h-4 text-txt-secondary opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </Link>
-                  </td>
-                </tr>
+                <>
+                  <tr
+                    key={b.id}
+                    className="border-b border-border last:border-0 hover:bg-surface-hover transition-colors cursor-pointer group"
+                  >
+                    <td className="px-4 py-3">
+                      <Link href={`/batches/${b.id}`} className="block">
+                        <span className="font-mono text-xs font-medium text-brand-primary">
+                          {b.reference}
+                        </span>
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Link href={`/batches/${b.id}`} className="block">
+                        <div className="font-medium text-txt-primary">{b.name}</div>
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Link href={`/batches/${b.id}`} className="block">
+                        <span className={cn("badge", cfg.bg, cfg.color)}>{cfg.label}</span>
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Link href={`/batches/${b.id}`} className="block">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-3.5 h-3.5 text-txt-secondary" />
+                          <span className="text-txt-primary font-medium">{b.reviewedCount}</span>
+                          <span className="text-txt-secondary">/ {b.documentCount}</span>
+                        </div>
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-txt-secondary">
+                      <Link href={`/batches/${b.id}`} className="block">
+                        {formatDate(b.createdAt)}
+                      </Link>
+                    </td>
+                    {canDelete && (
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmId(b.id);
+                          }}
+                          className="text-xs text-red-600 hover:text-red-700 inline-flex items-center gap-1"
+                          title="Soft-delete this batch"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Delete
+                        </button>
+                      </td>
+                    )}
+                    <td className="px-2 py-3">
+                      <Link href={`/batches/${b.id}`} className="block">
+                        <ChevronRight className="w-4 h-4 text-txt-secondary opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </Link>
+                    </td>
+                  </tr>
+                  {isConfirming && (
+                    <tr key={`${b.id}-confirm`}>
+                      <td colSpan={canDelete ? 7 : 6} className="px-4 py-3 bg-amber-50/60">
+                        <div className="flex items-start gap-3">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 mt-1" />
+                          <div className="flex-1 text-xs">
+                            <div className="font-medium text-amber-800">
+                              Soft-delete {b.reference}?
+                            </div>
+                            <div className="text-amber-700 mt-1">
+                              The batch moves to Trash and is hidden from the list.
+                              An admin can restore it from the Retention page within
+                              the grace period before it is permanently purged.
+                            </div>
+                            <div className="mt-2 flex items-center gap-2">
+                              <button
+                                onClick={() => handleDelete(b.id)}
+                                disabled={pendingDelete}
+                                className="btn-primary text-xs disabled:opacity-50"
+                              >
+                                Confirm Delete
+                              </button>
+                              <button
+                                onClick={() => setConfirmId(null)}
+                                className="btn-secondary text-xs"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
               );
             })}
           </tbody>
