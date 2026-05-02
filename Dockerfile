@@ -17,8 +17,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Server-action hash stability across deploys (see next.config.ts).
-# Both vars are passed in by .github/workflows/docker.yml — the
-# encryption key from kv-veil-prototype, the build ID from the commit
+# Both vars are passed in by the CI workflow / deploy script — the
+# encryption key sourced from Key Vault, the build ID from the commit
 # SHA. Empty defaults keep local `docker build` working without args
 # (Next falls back to per-build random key + default hash). They are
 # build-time only — no runtime ENV in the runner stage.
@@ -62,5 +62,10 @@ COPY --from=builder /app/lib/pipeline/redact_pdf_pymupdf.py ./lib/pipeline/redac
 COPY --from=builder /app/lib/pipeline/verify_redaction_pymupdf.py ./lib/pipeline/verify_redaction_pymupdf.py
 
 EXPOSE 3000
+
+# App Service liveness probe hits /api/health (returns 200 healthy/degraded,
+# 503 unhealthy). 30s start period covers Next.js boot + Prisma client init.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r => process.exit(r.status >= 500 ? 1 : 0)).catch(() => process.exit(1))"
 
 CMD ["node", "server.js"]
