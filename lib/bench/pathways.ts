@@ -19,7 +19,7 @@ export const TYPE_TO_PATHWAY: Record<string, Pathway> = {
   "bank-account": "personal",
   "nz-passport": "personal",
   nhi: "personal",
-  "driver-licence": "personal",
+  "nz-driver-licence": "personal",
   "vehicle-reg": "personal",
   commercial: "commercial",
   "council-commercial": "commercial",

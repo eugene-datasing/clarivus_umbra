@@ -371,7 +371,7 @@ describe.skipIf(!RUN)("Phase 2 detection-coverage follow-up", () => {
       const dets = await prisma.detection.findMany({ where: { documentId: docId } });
 
       const dlHits = dets.filter(
-        (d) => d.type === "driver-licence" && d.text.includes("HM847219"),
+        (d) => d.type === "nz-driver-licence" && d.text.includes("HM847219"),
       );
       expect(
         dlHits.length,

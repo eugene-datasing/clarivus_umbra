@@ -97,7 +97,7 @@ export const DETECTION_TYPE_MAP: Record<string, string> = {
   "IRD Numbers": "ird",
   "Bank Account Numbers": "bank-account",
   "NZ Passport Numbers": "nz-passport",
-  "Driver Licence Numbers": "driver-licence",
+  "Driver Licence Numbers": "nz-driver-licence",
   "Vehicle Registration": "vehicle-reg",
   "Commercial Sensitivity": "commercial",
   "Legal Privilege": "legal-privilege",

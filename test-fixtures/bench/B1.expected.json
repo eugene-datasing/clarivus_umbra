@@ -94,7 +94,7 @@
     },
     {
       "text": "EA123456",
-      "type": "driver-licence",
+      "type": "nz-driver-licence",
       "mustMatch": "exact",
       "page": 1,
       "pathway": "personal",
