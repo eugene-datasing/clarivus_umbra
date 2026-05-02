@@ -90,4 +90,13 @@ export class AzureBlobStorageProvider implements StorageProvider {
     const blob = this.container.getBlockBlobClient(key);
     return blob.exists();
   }
+
+  async listByPrefix(prefix: string): Promise<string[]> {
+    await this.containerReady;
+    const out: string[] = [];
+    for await (const blob of this.container.listBlobsFlat({ prefix })) {
+      out.push(blob.name);
+    }
+    return out;
+  }
 }
