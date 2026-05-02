@@ -83,13 +83,22 @@ export interface Detection {
   confidence: number;
   page: number;
   position: { x: number; y: number; w: number; h: number };
-  suggestedGround: string | null;
-  appliedGround: string | null;
   status: string;
   reasoning: string;
-  piConsideration: string;
+  note: string | null;
   aiExplanation: string;
   source: string;
+  /**
+   * Phase 5 dropped suggestedGround / appliedGround / piConsideration
+   * from the Detection model. The review UI still has dead ground-
+   * picker code paths that read these fields. They're typed as
+   * optional + nullable here so the page compiles; the data layer no
+   * longer populates them, so the dead UI silently renders nothing.
+   * Phase 11 / a future UI rework can rip these out for real.
+   */
+  suggestedGround?: string | null;
+  appliedGround?: string | null;
+  piConsideration?: string | null;
 }
 
 export interface ReviewClientProps {
@@ -316,7 +325,7 @@ export default function ReviewClient({
   const [detectionStates, setDetectionStates] = useState<Record<string, DetectionState>>(() => {
     const init: Record<string, DetectionState> = {};
     for (const d of detections) {
-      init[d.id] = { status: d.status as DetectionStatus, appliedGround: d.appliedGround, type: d.type };
+      init[d.id] = { status: d.status as DetectionStatus, appliedGround: d.appliedGround ?? null, type: d.type };
     }
     return init;
   });
@@ -328,7 +337,7 @@ export default function ReviewClient({
       const next = { ...prev };
       for (const d of detections) {
         if (!next[d.id]) {
-          next[d.id] = { status: d.status as DetectionStatus, appliedGround: d.appliedGround, type: d.type };
+          next[d.id] = { status: d.status as DetectionStatus, appliedGround: d.appliedGround ?? null, type: d.type };
           changed = true;
         }
       }
@@ -2171,7 +2180,7 @@ export default function ReviewClient({
                           {groundSelectorId === det.id && (
                             <GroundSelector
                               detectionId={det.id}
-                              suggestedGround={det.suggestedGround}
+                              suggestedGround={det.suggestedGround ?? null}
                               appliedGround={detectionStates[det.id]?.appliedGround}
                               onSelect={handleGroundSelect}
                               onClose={() => setGroundSelectorId(null)}

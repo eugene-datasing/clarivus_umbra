@@ -35,24 +35,16 @@ export default async function ExportPage({
     },
   });
 
-  // Get per-document accepted detection counts and missing-ground counts
+  // Get per-document accepted detection counts.
   const docIds = documents.map((d) => d.id);
 
-  const [acceptedByDoc, missingGroundsByDoc] = await Promise.all([
-    prisma.detection.groupBy({
-      by: ["documentId"],
-      where: { documentId: { in: docIds }, status: "accepted" },
-      _count: true,
-    }),
-    prisma.detection.groupBy({
-      by: ["documentId"],
-      where: { documentId: { in: docIds }, status: "accepted", appliedGround: null },
-      _count: true,
-    }),
-  ]);
+  const acceptedByDoc = await prisma.detection.groupBy({
+    by: ["documentId"],
+    where: { documentId: { in: docIds }, status: "accepted" },
+    _count: true,
+  });
 
   const acceptedMap = new Map(acceptedByDoc.map((r) => [r.documentId, r._count]));
-  const missingGroundsMap = new Map(missingGroundsByDoc.map((r) => [r.documentId, r._count]));
 
   const exportDocs: ExportDocument[] = documents
     .filter((d) => d.status !== "pending" && d.status !== "processing" && d.status !== "error")
@@ -65,7 +57,6 @@ export default async function ExportPage({
       fileType: d.fileType ?? "PDF",
       detectionCount: d._count.detections,
       acceptedCount: acceptedMap.get(d.id) ?? 0,
-      missingGrounds: missingGroundsMap.get(d.id) ?? 0,
     }));
 
   return (

@@ -15,8 +15,8 @@ interface WithholdingItem {
   documentName: string;
   type: string;
   text: string;
-  ground: string | null;
   reasoning: string | null;
+  note: string | null;
   page: number;
 }
 
@@ -45,26 +45,22 @@ export default function ScheduleClient({ requestId, batchData, withholdingItems 
   const caseReference = batchData?.reference ?? "Unknown";
   const batchName = batchData?.name ?? "";
 
-  // Collect unique grounds for the covering statement
-  const allGrounds = Array.from(new Set(withholdingItems.map((item) => item.ground).filter(Boolean))) as string[];
+  // Detection-type counts (replaces the Veil-era ground breakdown).
+  const typeCounts: Record<string, number> = {};
+  for (const item of withholdingItems) {
+    typeCounts[item.type] = (typeCounts[item.type] || 0) + 1;
+  }
+  const sortedTypes = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]);
 
   const [coveringStatement, setCoveringStatement] = useState(
-    `Withholding schedule for batch ${caseReference}${batchName ? ` ("${batchName}")` : ""}.
+    `Redaction schedule for batch ${caseReference}${batchName ? ` ("${batchName}")` : ""}.
 
-The following grounds were applied during review:
+The following detection types were applied during review:
 
-${allGrounds.map((g) => `- ${g}`).join("\n")}
+${sortedTypes.map(([t, c]) => `- ${t} (${c})`).join("\n")}
 
-The reasons for each withholding are set out in the schedule below.`
+Per-row context is set out in the schedule below.`
   );
-
-  // Group items by ground for stats
-  const groundCounts: Record<string, number> = {};
-  for (const item of withholdingItems) {
-    const ground = item.ground || "Unassigned";
-    groundCounts[ground] = (groundCounts[ground] || 0) + 1;
-  }
-  const sortedGrounds = Object.entries(groundCounts).sort((a, b) => b[1] - a[1]);
 
   return (
     <div className="p-6 max-w-[1400px]">
@@ -119,14 +115,14 @@ The reasons for each withholding are set out in the schedule below.`
           <span className="text-txt-primary font-medium">{withholdingItems.length} items</span>
           <span className="text-txt-secondary">|</span>
           <span className="text-txt-secondary">
-            Grounds:{" "}
-            {sortedGrounds.map(([ground, count], idx) => (
-              <span key={ground}>
+            Types:{" "}
+            {sortedTypes.map(([type, count], idx) => (
+              <span key={type}>
                 <span className="font-mono text-xs bg-purple-50 text-brand-primary px-1.5 py-0.5 rounded">
-                  {ground}
+                  {type}
                 </span>
                 {" "}x {count}
-                {idx < sortedGrounds.length - 1 ? ", " : ""}
+                {idx < sortedTypes.length - 1 ? ", " : ""}
               </span>
             ))}
           </span>
@@ -173,7 +169,7 @@ The reasons for each withholding are set out in the schedule below.`
                   Description
                 </th>
                 <th className="text-left px-4 py-2.5 font-medium text-txt-secondary w-36">
-                  Ground(s)
+                  Type
                 </th>
                 <th className="text-left px-4 py-2.5 font-medium text-txt-secondary w-24">
                   Reason
@@ -208,13 +204,9 @@ The reasons for each withholding are set out in the schedule below.`
                     </div>
                   </td>
                   <td className="px-4 py-3 align-top">
-                    <div className="flex flex-wrap gap-1">
-                      {item.ground && (
-                        <span className="font-mono text-[10px] bg-purple-50 text-brand-primary px-1.5 py-0.5 rounded whitespace-nowrap">
-                          {item.ground}
-                        </span>
-                      )}
-                    </div>
+                    <span className="font-mono text-[10px] bg-purple-50 text-brand-primary px-1.5 py-0.5 rounded whitespace-nowrap">
+                      {item.type}
+                    </span>
                   </td>
                   <td className="px-4 py-3 align-top">
                     <button
