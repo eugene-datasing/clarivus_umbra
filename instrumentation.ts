@@ -7,6 +7,7 @@
  * Responsibilities:
  *   1. Validate environment variables (fail fast on misconfiguration).
  *   2. Initialise Application Insights telemetry.
+ *   3. Start the pg-boss background worker (Phase 6a).
  */
 
 export async function register() {
@@ -18,5 +19,14 @@ export async function register() {
     // 2. Application Insights
     const { initTelemetry } = await import("@/lib/telemetry");
     initTelemetry();
+
+    // 3. pg-boss worker — best-effort, log and continue if startup
+    //    fails so the web server itself still comes up.
+    try {
+      const { startWorker } = await import("@/lib/jobs/runner");
+      await startWorker();
+    } catch (err) {
+      console.error("[instrumentation] failed to start pg-boss worker:", err);
+    }
   }
 }
