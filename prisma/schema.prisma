@@ -244,17 +244,17 @@ model DetectionHistory {
 }
 
 model CustomRule {
-  id              String   @id @default(cuid())
-  name            String
-  type            String   // "Keyword" | "Pattern" | "Entity" | "Combination"
-  status          String   @default("Draft") // "Active" | "Draft" | "Disabled"
-  matchMode       String   @default("Exact") // "Exact" | "Fuzzy" | "Regex"
-  keywords        String   @default("")
-  scope           String   @default("All Documents")
-  priority        String   @default("Medium")
-  suggestedGround String?  // Phase 8 reworks this into a free-form note field.
-  description     String   @default("")
-  matchCount      Int      @default(0)
+  id          String  @id @default(cuid())
+  name        String
+  type        String  // "Keyword" | "Pattern" | "Entity" | "Combination"
+  status      String  @default("Draft") // "Active" | "Draft" | "Disabled"
+  matchMode   String  @default("Exact") // "Exact" | "Fuzzy" | "Regex"
+  keywords    String  @default("")
+  scope       String  @default("All Documents")
+  priority    String  @default("Medium")
+  note        String? // free-form reviewer note, surfaced in the Custom Rules admin UI
+  description String  @default("")
+  matchCount  Int     @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

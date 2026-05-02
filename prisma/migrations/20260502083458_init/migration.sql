@@ -176,7 +176,7 @@ CREATE TABLE "custom_rules" (
     "keywords" TEXT NOT NULL DEFAULT '',
     "scope" TEXT NOT NULL DEFAULT 'All Documents',
     "priority" TEXT NOT NULL DEFAULT 'Medium',
-    "suggestedGround" TEXT,
+    "note" TEXT,
     "description" TEXT NOT NULL DEFAULT '',
     "matchCount" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
