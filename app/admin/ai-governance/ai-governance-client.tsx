@@ -266,7 +266,7 @@ export default function AIGovernanceClient({ metrics, fnMetrics, modelConfig }: 
                 )}
               </div>
               <div className="text-txt-secondary">Approach</div>
-              <div className="text-txt-primary">LGOIMA-specific system prompt with contextual detection</div>
+              <div className="text-txt-primary">PII-focused system prompt with NZ-context detection (22 detection types)</div>
             </div>
           </div>
         </div>
