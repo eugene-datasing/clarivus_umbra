@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import {
   Brain,
@@ -85,6 +86,12 @@ interface SettingsUser {
   lastLogin: string;
 }
 
+interface RetentionStatusSummary {
+  lastArchivedAt: string | null;
+  trashCount: number;
+  archivedTotal: number;
+}
+
 interface SettingsClientProps {
   initialDetectionToggles: DetectionToggle[];
   orgIdentity: OrgIdentity;
@@ -92,6 +99,7 @@ interface SettingsClientProps {
   users: SettingsUser[];
   backupStatus?: BackupStatus;
   backupHistory?: BackupEntry[];
+  retentionStatus: RetentionStatusSummary;
 }
 
 /* ------------------------------------------------------------------ */
@@ -105,6 +113,7 @@ export default function SettingsClient({
   users,
   backupStatus,
   backupHistory,
+  retentionStatus,
 }: SettingsClientProps) {
   const [activeTab, setActiveTab] = useState<TabId>("organisation");
   const [orgSection, setOrgSection] = useState<OrgSection>("details");
@@ -423,22 +432,100 @@ export default function SettingsClient({
       {/* TAB: Backup & Recovery                                       */}
       {/* ============================================================ */}
       {activeTab === "backup" && (
-        backupStatus && backupHistory ? (
-          <BackupRestore
-            initialStatus={backupStatus}
-            initialHistory={backupHistory}
-          />
-        ) : (
+        <div className="space-y-6">
+          {/* Phase 6 retention worker summary — surfaces the live state
+              of the soft-delete grace window + audit-archive worker. */}
           <div className="card">
-            <div className="flex items-center gap-3 p-4 rounded-lg bg-red-50 border border-red-200">
-              <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-red-800">Unable to load backup data</p>
-                <p className="text-xs text-red-600 mt-0.5">Failed to fetch backup status. Refresh the page or contact support.</p>
+            <h2 className="text-sm font-semibold text-txt-primary mb-1">
+              Retention &amp; Audit Archive
+            </h2>
+            <p className="text-xs text-txt-secondary mb-4">
+              Soft-deleted batches and the immutable audit archive produced by
+              the retention worker. The full controls live on the{" "}
+              <Link
+                href="/admin/retention"
+                className="text-brand-primary hover:underline"
+              >
+                Retention page
+              </Link>
+              .
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+              <div className="bg-surface-bg rounded-lg p-3">
+                <div className="text-[10px] uppercase tracking-wider text-txt-secondary font-semibold mb-1">
+                  Trash count
+                </div>
+                <div className="text-lg font-mono font-semibold text-txt-primary">
+                  {retentionStatus.trashCount}
+                </div>
+                <div className="text-[11px] text-txt-secondary mt-0.5">
+                  soft-deleted batches awaiting purge
+                </div>
+              </div>
+              <div className="bg-surface-bg rounded-lg p-3">
+                <div className="text-[10px] uppercase tracking-wider text-txt-secondary font-semibold mb-1">
+                  Last archive
+                </div>
+                <div className="text-sm font-mono text-txt-primary">
+                  {retentionStatus.lastArchivedAt
+                    ? new Date(retentionStatus.lastArchivedAt).toLocaleString(
+                        "en-NZ",
+                      )
+                    : "—"}
+                </div>
+                <div className="text-[11px] text-txt-secondary mt-0.5">
+                  most recent purge / archive
+                </div>
+              </div>
+              <div className="bg-surface-bg rounded-lg p-3">
+                <div className="text-[10px] uppercase tracking-wider text-txt-secondary font-semibold mb-1">
+                  Archived total
+                </div>
+                <div className="text-lg font-mono font-semibold text-txt-primary">
+                  {retentionStatus.archivedTotal}
+                </div>
+                <div className="text-[11px] text-txt-secondary mt-0.5">
+                  PurgeLog rows lifetime
+                </div>
               </div>
             </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <a
+                href="/api/admin/audit-archive/download"
+                download
+                className="btn-primary text-xs inline-flex items-center gap-1.5"
+              >
+                <Database className="w-3.5 h-3.5" />
+                Download Audit Archive (ZIP)
+              </a>
+              <Link
+                href="/admin/retention"
+                className="btn-secondary text-xs inline-flex items-center gap-1.5"
+              >
+                Open Retention page
+              </Link>
+            </div>
           </div>
-        )
+
+          {/* Veil-era simulated backup feature — orthogonal to the
+              retention worker; left in place pending Phase 11 deploy. */}
+          {backupStatus && backupHistory ? (
+            <BackupRestore
+              initialStatus={backupStatus}
+              initialHistory={backupHistory}
+            />
+          ) : (
+            <div className="card">
+              <div className="flex items-center gap-3 p-4 rounded-lg bg-red-50 border border-red-200">
+                <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-red-800">Unable to load backup data</p>
+                  <p className="text-xs text-red-600 mt-0.5">Failed to fetch backup status. Refresh the page or contact support.</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {/* ============================================================ */}
