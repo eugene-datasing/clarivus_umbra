@@ -4,32 +4,27 @@ import { useState } from "react";
 import {
   FileBarChart,
   Download,
-  Calendar,
   TrendingUp,
   Clock,
   FileText,
   Shield,
   BarChart3,
-  PieChart,
-  Users,
   X,
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { SummaryStats, GroundUsageItem, RecentExport } from "@/lib/data/reports";
+import type {
+  SummaryStats,
+  DetectionTypeUsageItem,
+  RecentExport,
+} from "@/lib/data/reports";
 import type { AIMetrics } from "@/lib/data/ai-metrics";
 
 /* -------------------------------------------------------------------------- */
 /*  Types                                                                      */
 /* -------------------------------------------------------------------------- */
 
-type ReportKey =
-  | "compliance-summary"
-  | "ai-accuracy"
-  | "chain-of-custody"
-  | "reviewer-workload"
-  | "cost-recovery"
-  | "withholding-schedule";
+type ReportKey = "ai-accuracy" | "chain-of-custody";
 
 interface ReportTemplate {
   key: ReportKey;
@@ -41,12 +36,24 @@ interface ReportTemplate {
 }
 
 const reportTemplates: ReportTemplate[] = [
-  { key: "compliance-summary", name: "LGOIMA Compliance Summary", description: "Statutory compliance metrics, response times, and withholding ground usage across all cases.", icon: Shield, format: "PDF", needsCase: false },
-  { key: "ai-accuracy", name: "AI Detection Accuracy", description: "False positive/negative rates, model governance metrics, and confidence score distributions.", icon: TrendingUp, format: "PDF", needsCase: false },
-  { key: "chain-of-custody", name: "Chain of Custody Report", description: "Immutable audit trail export \u2014 user actions, timestamps, and document access history.", icon: FileText, format: "PDF", needsCase: true },
-  { key: "reviewer-workload", name: "Reviewer Workload Analysis", description: "Cases per reviewer, average review time, approval rates, and queue depth over time.", icon: Users, format: "PDF", needsCase: false },
-  { key: "cost-recovery", name: "Cost Recovery Report", description: "Processing costs, time allocation, and charge-back calculations per LGOIMA request.", icon: PieChart, format: "PDF", needsCase: true },
-  { key: "withholding-schedule", name: "Withholding Schedule Export", description: "Consolidated withholding schedules with statutory grounds and reasoning for Ombudsman review.", icon: Calendar, format: "PDF", needsCase: true },
+  {
+    key: "ai-accuracy",
+    name: "AI Detection Accuracy",
+    description:
+      "False positive/negative rates, model governance metrics, and confidence score distributions.",
+    icon: TrendingUp,
+    format: "PDF",
+    needsCase: false,
+  },
+  {
+    key: "chain-of-custody",
+    name: "Audit Timeline",
+    description:
+      "Per-document handling timeline sourced from the immutable audit trail — upload, processing, review, sign-off, export.",
+    icon: FileText,
+    format: "PDF",
+    needsCase: true,
+  },
 ];
 
 export interface CaseOption {
@@ -57,7 +64,7 @@ export interface CaseOption {
 
 interface ReportsClientProps {
   stats: SummaryStats;
-  groundUsage: GroundUsageItem[];
+  typeUsage: DetectionTypeUsageItem[];
   recentExports: RecentExport[];
   aiMetrics: AIMetrics;
   cases: CaseOption[];
@@ -68,21 +75,13 @@ interface ReportsClientProps {
 /* -------------------------------------------------------------------------- */
 
 const API_ROUTES: Record<ReportKey, string> = {
-  "compliance-summary": "/api/reports/compliance-summary",
   "ai-accuracy": "/api/reports/ai-accuracy",
   "chain-of-custody": "/api/reports/chain-of-custody",
-  "reviewer-workload": "/api/reports/reviewer-workload",
-  "cost-recovery": "/api/reports/cost-recovery",
-  "withholding-schedule": "/api/reports/withholding-schedule",
 };
 
 const FILE_NAMES: Record<ReportKey, string> = {
-  "compliance-summary": "lgoima-compliance-summary.pdf",
   "ai-accuracy": "ai-detection-accuracy.pdf",
-  "chain-of-custody": "chain-of-custody.pdf",
-  "reviewer-workload": "reviewer-workload-analysis.pdf",
-  "cost-recovery": "cost-recovery-report.pdf",
-  "withholding-schedule": "withholding-schedule.pdf",
+  "chain-of-custody": "audit-timeline.pdf",
 };
 
 /* -------------------------------------------------------------------------- */
@@ -91,7 +90,7 @@ const FILE_NAMES: Record<ReportKey, string> = {
 
 export default function ReportsClient({
   stats,
-  groundUsage,
+  typeUsage,
   recentExports,
   aiMetrics,
   cases,
@@ -104,8 +103,8 @@ export default function ReportsClient({
 
   const summaryCards = [
     {
-      label: "Total Cases",
-      value: stats.totalCases.toLocaleString(),
+      label: "Total Batches",
+      value: stats.totalBatches.toLocaleString(),
       sub: "all time",
       icon: FileText,
       color: "text-brand-primary bg-brand-primary/10",
@@ -123,13 +122,6 @@ export default function ReportsClient({
       sub: "pattern + AI",
       icon: Clock,
       color: "text-green-600 bg-green-50",
-    },
-    {
-      label: "Compliance Rate",
-      value: `${stats.complianceRate}%`,
-      sub: "statutory deadlines met",
-      icon: Shield,
-      color: "text-purple-600 bg-purple-50",
     },
   ];
 
@@ -210,7 +202,7 @@ export default function ReportsClient({
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         {summaryCards.map((card) => {
           const Icon = card.icon;
           return (
@@ -229,31 +221,33 @@ export default function ReportsClient({
 
       {/* Two-column layout: Ground usage + section toggle */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-        {/* Withholding ground usage breakdown */}
+        {/* Detection type usage breakdown */}
         <div className="card p-4">
           <h3 className="text-sm font-semibold text-txt-primary mb-3 flex items-center gap-2">
             <Shield size={14} className="text-brand-primary" />
-            Withholding Ground Usage
+            Detection Type Usage
           </h3>
-          {groundUsage.length > 0 ? (
+          {typeUsage.length > 0 ? (
             <div className="space-y-2.5">
-              {groundUsage.map((g) => (
-                <div key={g.ground}>
+              {typeUsage.map((t) => (
+                <div key={t.type}>
                   <div className="flex items-center justify-between text-[11px] mb-1">
-                    <span className="text-txt-primary font-medium">
-                      <span className="font-mono text-txt-secondary">{g.ground}</span>{" "}
-                      <span className="text-txt-secondary font-normal">{g.label}</span>
-                    </span>
-                    <span className="text-txt-secondary">{g.count}</span>
+                    <span className="text-txt-primary font-medium font-mono">{t.type}</span>
+                    <span className="text-txt-secondary">{t.count}</span>
                   </div>
                   <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-brand-primary/60 rounded-full" style={{ width: `${g.pct}%` }} />
+                    <div
+                      className="h-full bg-brand-primary/60 rounded-full"
+                      style={{ width: `${t.pct}%` }}
+                    />
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-xs text-txt-secondary">No withholding data yet. Accept detections with grounds to populate this chart.</p>
+            <p className="text-xs text-txt-secondary">
+              No accepted detections yet. Accept detections in the review UI to populate this chart.
+            </p>
           )}
         </div>
 
@@ -376,7 +370,7 @@ export default function ReportsClient({
         </div>
         <div className="mt-3 pt-3 border-t border-border flex items-center justify-between">
           <p className="text-[11px] text-txt-secondary">
-            Based on {stats.documentsProcessed.toLocaleString()} documents processed across {stats.totalCases} cases. Model: Azure OpenAI GPT-4o.
+            Based on {stats.documentsProcessed.toLocaleString()} documents processed across {stats.totalBatches} batches. Model: Azure OpenAI GPT-4o.
             {!aiMetrics.hasSufficientData && " Requires at least 10 reviewed detections to compute accuracy metrics."}
           </p>
         </div>

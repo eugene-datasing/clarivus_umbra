@@ -3,18 +3,15 @@
  */
 
 import { prisma } from "@/lib/db/prisma";
-import { getGroundLabelMap } from "@/lib/lgoima-grounds";
 
 export interface SummaryStats {
-  totalCases: number;
+  totalBatches: number;
   documentsProcessed: number;
   totalDetections: number;
-  complianceRate: number; // % of cases past deadline that are complete
 }
 
-export interface GroundUsageItem {
-  ground: string;
-  label: string;
+export interface DetectionTypeUsageItem {
+  type: string;
   count: number;
   pct: number;
 }
@@ -26,64 +23,40 @@ export interface RecentExport {
   detail: string | null;
 }
 
-/**
- * Summary statistics from real DB data.
- */
 export async function getSummaryStats(): Promise<SummaryStats> {
-  const [totalCases, documentsProcessed, totalDetections, pastDeadlineCases, completedPastDeadline] =
-    await Promise.all([
-      prisma.batch.count(),
-      prisma.document.count({ where: { status: { not: "pending" } } }),
-      prisma.detection.count(),
-      prisma.batch.count({ where: { deadline: { lt: new Date() } } }),
-      prisma.batch.count({
-        where: {
-          deadline: { lt: new Date() },
-          status: { in: ["complete", "exported"] },
-        },
-      }),
-    ]);
+  const [totalBatches, documentsProcessed, totalDetections] = await Promise.all([
+    prisma.batch.count(),
+    prisma.document.count({ where: { status: { not: "pending" } } }),
+    prisma.detection.count(),
+  ]);
 
-  const complianceRate = pastDeadlineCases > 0
-    ? Math.round((completedPastDeadline / pastDeadlineCases) * 100 * 10) / 10
-    : 100;
-
-  return { totalCases, documentsProcessed, totalDetections, complianceRate };
+  return { totalBatches, documentsProcessed, totalDetections };
 }
 
 /**
- * Withholding ground usage breakdown from accepted detections.
+ * Detection-type breakdown across accepted detections — replaces the
+ * Veil-era ground-usage breakdown post-Phase-5 (grounds dropped from
+ * Detection).
  */
-export async function getGroundUsageBreakdown(): Promise<GroundUsageItem[]> {
-  const detections = await prisma.detection.findMany({
-    where: { status: "accepted", appliedGround: { not: null } },
-    select: { appliedGround: true },
+export async function getDetectionTypeBreakdown(): Promise<DetectionTypeUsageItem[]> {
+  const grouped = await prisma.detection.groupBy({
+    by: ["type"],
+    where: { status: "accepted" },
+    _count: true,
   });
 
-  const counts = new Map<string, number>();
-  for (const d of detections) {
-    const ground = d.appliedGround || "Unspecified";
-    counts.set(ground, (counts.get(ground) || 0) + 1);
-  }
+  const total = grouped.reduce((sum, row) => sum + row._count, 0) || 1;
 
-  const total = detections.length || 1;
-
-  const groundLabels = getGroundLabelMap();
-
-  return Array.from(counts.entries())
-    .sort((a, b) => b[1] - a[1])
+  return grouped
+    .sort((a, b) => b._count - a._count)
     .slice(0, 8)
-    .map(([ground, count]) => ({
-      ground,
-      label: groundLabels[ground] || ground,
-      count,
-      pct: Math.round((count / total) * 100),
+    .map((row) => ({
+      type: row.type,
+      count: row._count,
+      pct: Math.round((row._count / total) * 100),
     }));
 }
 
-/**
- * Recent export audit entries.
- */
 export async function getRecentExports(limit = 5): Promise<RecentExport[]> {
   const entries = await prisma.auditEntry.findMany({
     where: { type: "export-generated" },

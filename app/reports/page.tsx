@@ -1,12 +1,16 @@
-import { getSummaryStats, getGroundUsageBreakdown, getRecentExports } from "@/lib/data/reports";
+import {
+  getSummaryStats,
+  getDetectionTypeBreakdown,
+  getRecentExports,
+} from "@/lib/data/reports";
 import { computeAccuracyMetrics } from "@/lib/data/ai-metrics";
 import { prisma } from "@/lib/db/prisma";
 import ReportsClient from "./reports-client";
 
 export default async function ReportsPage() {
-  const [stats, groundUsage, recentExports, aiMetrics, allCases] = await Promise.all([
+  const [stats, typeUsage, recentExports, aiMetrics, allCases] = await Promise.all([
     getSummaryStats(),
-    getGroundUsageBreakdown(),
+    getDetectionTypeBreakdown(),
     getRecentExports(),
     computeAccuracyMetrics(),
     prisma.batch.findMany({
@@ -19,7 +23,7 @@ export default async function ReportsPage() {
   return (
     <ReportsClient
       stats={stats}
-      groundUsage={groundUsage}
+      typeUsage={typeUsage}
       recentExports={recentExports}
       aiMetrics={aiMetrics}
       cases={allCases}
