@@ -2,16 +2,21 @@
 
 ## What this is
 
-Umbra is a PII redaction tool for NZ public-sector documents. It forked
-from **Veil** (a fuller LGOIMA disclosure platform) at the
-`v0.0.0-umbra-fork` tag and dropped the workflow / ground-vocabulary
-machinery. The full rework programme is documented in
+Umbra is a **mass-PII-redaction tool** for NZ public-sector documents.
+It forked from **Veil** (a fuller LGOIMA disclosure platform) at the
+`v0.0.0-umbra-fork` tag and went through two major reworks: the
+initial Veil → Umbra strip-down, and **Phase 12 (Umbra v2)** which
+re-focused on mass redaction (drop the LGOIMA-grounds vocabulary,
+auto-redact-by-default, cluster-by-similar review Tray). The full
+rework programme is documented in
 [`docs/umbra-implementation-plan.md`](docs/umbra-implementation-plan.md).
 
-The audience is councils and central-government agencies. Umbra owns the
-redaction step only — not request lifecycle. A **batch** is the unit of
-work: one or more uploaded documents → reviewer accepts/rejects detections
-→ admin signs off → exported as a single ZIP.
+The audience is councils and central-government agencies. Umbra owns
+the redaction step only — not request lifecycle. A **batch** is the
+unit of work: one or more uploaded documents → tier-routed detection
+write (high-confidence auto-accepted, medium → Tray, low → suppressed)
+→ reviewer triages the Tray clusters → batch reaches `auto-redacted`
+or `reviewed` → auto-export ZIP.
 
 ## Quick reference
 
@@ -28,10 +33,11 @@ work: one or more uploaded documents → reviewer accepts/rejects detections
 | Dev DB port | `5434` (not 5432) |
 | Dev DB creds | `postgresql://umbra:umbra_dev@localhost:5434/umbra` |
 | Roles | `admin`, `reviewer` (no SCIM, no departments) |
-| Detection types | 22 (`lib/detection-type-grounds.ts`) |
+| Detection types | 12 (`lib/detection-type-grounds.ts`) — Phase 12.1 collapsed the v1 22-type LGOIMA vocabulary to PII-only |
 | Models | 14 Prisma models, 1 migration (`0001_init`) |
-| Live URL | TBD — Phase 11 |
-| Azure region | NZ North (Australia East fallback for AI services) |
+| Live URL | https://app-umbra-prototype.azurewebsites.net |
+| Azure region | Australia East (Phase 11b) |
+| Auto-redact | High-confidence detections auto-accepted at write time; medium → Tray; low → suppressed (Phase 12.2) |
 
 ## Local development
 
@@ -98,27 +104,46 @@ actions in `lib/actions/`.
 ### Document processing pipeline
 
 Upload → file validation → format conversion → OCR (Azure DI `prebuilt-read`)
-→ document classification (GPT-4o) → regex patterns (NZ PII) → AI detection
-(GPT-4o, 3-page batches with doc-level context) → custom rules → bbox
-calculation (per-line; >80-char text short-circuits) → cross-source dedup
-by `(page, type, text, posY_rounded)` → content building → storage.
+→ regex patterns (NZ PII) → label-adjacent (table fields) → AI detection
+(GPT-4o, 3-page batches; PII-only prompt per Phase 12.1) → custom rules
+→ entity-propagation (personal-name only) → bbox calculation (per-line;
+>80-char text short-circuits) → cross-source dedup by
+`(page, type, text, posY_rounded)` → **tier-routing** (Phase 12.2:
+`bucketConfidence` → `accepted` / `pending` / `rejected` at write time)
+→ pageContext capture (Phase 12.4: ±100 chars around match) → content
+building → storage.
 
-**Detection types** — 22 in `lib/detection-type-grounds.ts`. Personal:
-`personal-name`, `phone`, `email-addr`, `ird`, `address`, `bank-account`,
-`nz-passport`, `nz-driver-licence`, `vehicle-reg`, `nhi`. Commercial:
-`commercial`, `council-commercial`, `negotiation`. Governance:
-`legal-privilege`, `confidential`, `free-frank`, `harassment-risk`,
-`cultural-sensitivity`. Enforcement: `safety-concern`, `law-enforcement`,
-`health-safety`. Plus `manual` for reviewer-added detections.
+**Detection types** — 12 in `lib/detection-type-grounds.ts`. Personal:
+`personal-name`, `phone`, `email-addr`, `address`, `ird`,
+`nz-driver-licence`, `nhi`, `nz-passport`, `bank-account`, `vehicle-reg`.
+Plus `sensitive-context` (Phase 12.1 catch-all for personal-circumstance
+content: medical / employment / financial-hardship / family-violence
+prose, internal employee identifiers, salary values) and `manual`
+(reviewer-added).
 
 ### Review workflow
 
 ```
-processing → ready → in-review → reviewed → signed-off
+processing → ready ─────────────┐
+              └→ auto-redacted ─┤
+                                ├→ exported (after auto-export or manual export)
+              ┌→ in-review → reviewed → signed-off ─┘
 ```
 
 The batch surfaces these states aggregated across its documents (per
 `recomputeBatchStatus` in `lib/data/batches.ts`).
+
+**Auto-redact path** (Phase 12.2): when every detection lands at
+`accepted` (no pending in the Tray), the document goes straight to
+`auto-redacted`; the batch follows when all docs are auto-redacted; an
+auto-export pg-boss job fires (gated by `AUTO_REDACT_CONFIG.autoExportEnabled`).
+
+**Review path**: documents with at least one `pending` detection go to
+`ready`; reviewers triage via the Tray (`/batches/[id]/bulk-review`)
+which clusters by `(type, normalisedText)` and surfaces ±100-char
+pageContext snippets for disambiguation. Per-doc review at
+`/batches/[id]/review/[docId]` is the drill-in target for individual
+overrides.
 
 ### Export package
 

@@ -3,13 +3,17 @@
 **Detect. Review. Redact. Archive.**
 
 Umbra is a single-tenant web application that ingests official-information
-documents, identifies PII and sensitive content with a three-source
-detection pipeline, lets a reviewer accept or reject each finding, and
-produces a permanently redacted PDF package with an immutable audit
-archive. Purpose-built for NZ councils and central-government agencies.
+documents, identifies PII with a four-source detection pipeline, **auto-
+redacts high-confidence findings without reviewer intervention**, and
+surfaces only the ambiguous cases in a cluster-by-similar review Tray.
+The output is a permanently redacted PDF package with an immutable
+audit archive. Purpose-built for NZ councils and central-government
+agencies.
 
-A DataSing product, forked from Veil and slimmed for the redaction-only
-use case.
+A DataSing product. Forked from Veil (LGOIMA disclosure platform) and
+re-focused twice — first for the PII-redaction use case, then again in
+Phase 12 for **mass redaction at scale** (auto-redact-by-default,
+cluster-by-similar review, no statutory-grounds vocabulary).
 
 ---
 
@@ -38,9 +42,10 @@ demands.
 
 ## What Umbra does
 
-### Three-source detection pipeline
+### Four-source detection pipeline
 
-Three engines work in parallel; the reviewer makes every final call.
+Four engines work in parallel; the **tier-router** at the write site
+decides which findings need a reviewer eye and which auto-redact.
 
 **Pattern matching** catches structured PII with deterministic accuracy —
 IRD numbers, NHI identifiers, email addresses, phone numbers (NZ-specific
@@ -48,20 +53,62 @@ formats incl. parenthesised area codes), physical addresses, bank
 accounts (BB-bbbb-AAAAAAA-SS), NZ passports, NZ driver licences (with
 the I/O exclusion + context-word guard), vehicle registrations.
 
+**Label-adjacent fields** picks up labelled PII in tables and forms —
+"Date of birth: …", "GP: …", "Employee number | …", ICD-10 diagnostic
+codes, salary bands. Deterministic regex; high tier by default.
+
 **Contextual AI** (Azure OpenAI GPT-4o) reads documents the way a
-reviewer would — identifying commercially sensitive content, legal
-privilege, candid / free-frank commentary, harassment risk material,
-cultural sensitivity (tikanga / wāhi tapu), safety concerns, and
-personal information in narrative text. Every detection includes a
+reviewer would — identifying personal names, third-party professionals,
+sensitive personal-circumstance content (medical / employment grievance
+/ financial-hardship / family-violence), and PII in narrative text.
+The Phase 12.1 prompt is privacy-first; council-officials and
+professional-capacity carve-outs are gone. Every detection carries a
 confidence score and plain-language reasoning.
 
 **Custom rules** — admin-defined keyword and regex rules for council-
 or agency-specific terms (project codes, internal reference numbers,
 sensitive case identifiers).
 
-22 detection types in total. The vocabulary is fixed by
-`lib/detection-type-grounds.ts` and locked by a parity test; adding a
-new type is a deliberate schema change, not a hidden plumbing drift.
+12 detection types in total: 10 deterministic-shape PII identifiers
+(personal-name, phone, email-addr, ird, address, bank-account,
+nz-passport, nz-driver-licence, vehicle-reg, nhi), plus
+**sensitive-context** as the catch-all for personal-circumstance prose
+(medical / employment / financial / family-violence) and labelled
+internal IDs / salaries, plus `manual` for reviewer-added detections.
+The vocabulary is fixed by `lib/detection-type-grounds.ts` and locked
+by a parity test.
+
+### Tier-routing — auto-redact-by-default
+
+At detection-write time, every finding is bucketed:
+
+- **High** (deterministic-shape matches, high-confidence AI) →
+  auto-`accepted`. No reviewer touch required.
+- **Medium** → `pending`. Surfaces in the Tray as a cluster.
+- **Low** → `rejected` with audit-trail. Never silently dropped.
+
+Thresholds are configurable per deployment (`AUTO_REDACT_CONFIG`).
+A clean PII batch typically lands as **`auto-redacted` with zero
+reviewer interaction** and immediately fires an auto-export.
+
+### Cluster-by-similar review (the Tray)
+
+When the AI surfaces ambiguous cases (medium-confidence personal
+names, sensitive-context prose), they cluster in the **Tray** by
+`(type, normalisedText)`. Reviewers see:
+
+- "Sarah Mitchell — 8 occurrences in 3 docs · 78% avg confidence"
+- ±100-char **pageContext** snippets per occurrence with the matched
+  text bolded — disambiguates "Sarah Mitchell from Finance" vs
+  "Sarah Mitchell the complainant" before approval.
+- One-click **Approve cluster** / **Reject cluster** actions that flip
+  every matching detection in the batch in one operation.
+- **Drill in** to per-document review for fine-grained override.
+
+Result: where v1 required hundreds of per-detection clicks across
+documents, v2 batches typically resolve in seconds — most clusters
+get a single approve, rare ones a single reject, the rest auto-redact
+without surfacing.
 
 ### Permanent redaction
 

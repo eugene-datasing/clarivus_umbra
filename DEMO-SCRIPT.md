@@ -14,9 +14,11 @@ agency content as appropriate.
 
 ## Pre-demo setup
 
-### Option A: Azure (when Phase 11 lands)
-Phase 11 will publish the canonical `umbra.<domain>.nz`. Until then, demo
-locally.
+### Option A: Azure (production)
+
+Production URL: https://app-umbra-prototype.azurewebsites.net (Phase 11b).
+Sign in via Microsoft Entra SSO with a tenant-allowed account; first
+sign-in for a fresh seed prompts for the activation code.
 
 ### Option B: Local development
 
@@ -64,37 +66,55 @@ The seed produces:
 - Show the Delete button (admin only) — soft-deletes to Trash.
 
 ### 3. Upload + processing (3 min)
-- Click "Upload" on the open batch. Drop in your prepared PDF.
+- Click "Upload" on the open batch. Drop in your prepared PDFs / DOCX
+  / EML / MSG files (the pipeline handles all of these).
 - Show the upload progress / queue indicator.
-- The pipeline runs: file extraction → OCR (if scanned) → document
-  classification → regex patterns → AI detection → custom rules →
-  bbox calculation → storage.
-- Once processing completes, click into the document.
+- The pipeline runs: file extraction → OCR (Azure DI for scanned PDFs)
+  → regex patterns (NZ PII formats) → label-adjacent (table fields)
+  → AI detection (GPT-4o, PII-only prompt — Phase 12.1) → custom
+  rules → entity-propagation → bbox calculation → **tier-routing**
+  (Phase 12.2: high-confidence auto-accepted at write time, medium →
+  Tray, low → suppressed) → pageContext capture (Phase 12.4: ±100
+  chars around each match) → storage.
+- Pause on the **Auto-redact** behaviour: clean PII like passport
+  numbers, IRD numbers, phone numbers, and high-confidence names land
+  as `accepted` immediately — no reviewer touch needed.
 
-### 4. Review (4 min)
-- Show the dual-pane review view: PDF on the left, detection list
-  with sidebar on the right.
-- Walk through accept / reject for a few detections of different
-  types: a personal name, a phone number, a free-frank governance
-  finding.
-- Open the bulk review panel. Show "accept all of type X" and
-  "accept all matching this text".
-- Demonstrate adding a manual detection: drag-select text on the PDF
-  → confirm → it joins the detection list.
-- Sign off the document (admin only).
+### 4. Tray review (4 min)
+
+**The Tray (`/batches/[id]/bulk-review`) is the canonical review
+surface in v2.** Per-document review still exists as a drill-in; it
+is no longer the default.
+
+- Open the Tray.
+- Each row is a **cluster** — a group of detections with the same
+  type + text, e.g. "Sarah Mitchell (personal-name) — 8 occurrences in
+  3 docs · avg confidence 78%".
+- Expand a cluster: pageContext snippets (±100 chars) for each
+  occurrence. The matched text is bolded; surrounding context lets
+  the reviewer see "Sarah Mitchell from Finance" vs "Sarah Mitchell
+  the complainant" before approving.
+- Demonstrate **Approve cluster** — flips all 8 detections to
+  `accepted` with one click.
+- Demonstrate **Reject cluster** — same mechanism, the inverse status.
+- Demonstrate **Drill in** — opens the per-doc review for fine-grained
+  override.
+- Filter by type, sort by occurrences. Empty-state: when the Tray
+  clears, the batch transitions to `auto-redacted` (or `reviewed` if
+  any docs were drilled-in and signed off).
 
 ### 5. Export (2 min)
+
 - Navigate to /batches/{id}/export.
-- Show the readiness summary: signed-off / not-signed-off / blocked
-  counts per document.
-- Click Generate Export Package. Show the progress bar; the engine
-  redacts each document, builds the schedule + audit timeline + audit
-  log, assembles the ZIP, computes SHA-256.
-- When complete, download. Open the ZIP and walk through the
-  contents:
+- **Auto-export banner** at the top — when the batch reached
+  `auto-redacted`, an auto-export pg-boss job already kicked off.
+  States: queued → generating → verifying → complete (Download
+  button) / failed (Retry auto-export).
+- Manual Generate Export remains as the fallback and the path for
+  reviewed (not auto-redacted) batches.
+- Click Download. Open the ZIP and walk through the contents:
   - `redacted/{name}.pdf` per document
-  - `redaction-schedule.pdf` — grouped by detection type, **never
-    contains the redacted values themselves** (Amendment A4)
+  - `redaction-schedule.pdf` — grouped by detection type
   - `audit-timeline.pdf` — per-document handling timeline
   - `audit-log.pdf` + `audit-log.csv` — full immutable trail
   - `manifest.json` + `verification-report.txt`
@@ -113,25 +133,31 @@ The seed produces:
   and SHA-256 match for each archive.
 
 ### 7. Closing notes (1 min)
-- Two roles. No workflow. One ZIP per batch. Audit chain that
-  re-verifies on download.
-- Phase 11 will publish to Azure NZ North. The data model + retention
-  worker + redaction engine are all stable post-Phase 7.
+- Two roles. No workflow. **Auto-redact-by-default** with cluster
+  review for the ambiguous cases. One ZIP per batch.
+- 12 detection types, all PII-focused. No statutory grounds.
+- Live on Azure Australia East at
+  https://app-umbra-prototype.azurewebsites.net.
+- Audit chain re-verifies on download. The data model + retention
+  worker + tier-routing pipeline + Tray UI are all post-Phase-12.5
+  production state.
 
 ---
 
 ## Frequently asked questions
 
 **Q: Do I have to manually accept every detection?**
-A: No — bulk review accepts all detections of a given type, or all
-matching a given text. Auto-accept of high-confidence detections is on
-the roadmap.
+A: No — Phase 12.2 auto-accepts every high-confidence detection at
+write time. The Tray surfaces only ambiguous cases (medium-confidence)
+and the reviewer approves whole clusters across documents. Most
+batches need no per-detection review at all.
 
 **Q: What about LGOIMA grounds / public-interest tests?**
-A: Out of Umbra's scope. Umbra produces redacted documents; the
-disclosure workflow (assign, deliberate, write to requester) lives
-elsewhere. The Veil predecessor handled the full workflow; if that's
-the requirement, see `DataSing/clarivus_veil`.
+A: Out of Umbra's scope (and removed entirely in Phase 12.1). Umbra
+produces redacted documents; the disclosure workflow (assign,
+deliberate, write to requester) lives elsewhere. The Veil predecessor
+handled the full workflow; if that's the requirement, see
+`DataSing/clarivus_veil`.
 
 **Q: How do I get the audit log out for an external auditor?**
 A: Export ZIP includes `audit-log.csv` and `audit-log.pdf` for the
