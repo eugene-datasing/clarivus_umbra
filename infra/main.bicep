@@ -416,6 +416,10 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
           name: 'AZURE_AD_TENANT_ID'
           value: '@Microsoft.KeyVault(VaultName=${keyVault.name};SecretName=azure-ad-tenant-id)'
         }
+        {
+          name: 'NEXT_SERVER_ACTIONS_ENCRYPTION_KEY'
+          value: '@Microsoft.KeyVault(VaultName=${keyVault.name};SecretName=next-server-actions-encryption-key)'
+        }
       ]
     }
   }
