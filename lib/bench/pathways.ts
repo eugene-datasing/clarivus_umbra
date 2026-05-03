@@ -1,14 +1,26 @@
 /**
  * Detection-type → pathway mapping for the benchmark scorer.
  *
- * Pathways partition the 20-entry detection-type vocabulary into four
- * reviewer-facing coverage classes: personal PII, commercial, governance,
- * and enforcement. The scorer reports per-pathway precision / recall so
- * that a prompt change affecting one pathway does not silently regress
- * another.
+ * Phase 12.1 (Umbra v2) — collapsed from the v1 four-pathway split
+ * (personal / commercial / governance / enforcement) to two pathways
+ * matching the privacy-only scope:
+ *
+ *   - "personal" — deterministic-ish PII identifiers (names, phone,
+ *     email, IRD, NHI, address, bank account, passport, driver licence,
+ *     vehicle reg).
+ *   - "context"  — the new sensitive-context bucket: medical /
+ *     employment / financial-hardship / family-violence prose +
+ *     internal employee identifiers + salary values.
+ *
+ * `manual` and the `custom-*` types stay unmapped (no pathway), per
+ * the v1 convention — the scorer counts them in the overall
+ * precision/recall but excludes them from per-pathway breakdowns.
+ *
+ * The scorer reports per-pathway precision / recall so that a prompt
+ * change affecting one pathway does not silently regress another.
  */
 
-export type Pathway = "personal" | "commercial" | "governance" | "enforcement";
+export type Pathway = "personal" | "context";
 
 export const TYPE_TO_PATHWAY: Record<string, Pathway> = {
   "personal-name": "personal",
@@ -21,24 +33,12 @@ export const TYPE_TO_PATHWAY: Record<string, Pathway> = {
   nhi: "personal",
   "nz-driver-licence": "personal",
   "vehicle-reg": "personal",
-  commercial: "commercial",
-  "council-commercial": "commercial",
-  negotiation: "commercial",
-  "free-frank": "governance",
-  "legal-privilege": "governance",
-  confidential: "governance",
-  "harassment-risk": "governance",
-  "cultural-sensitivity": "governance",
-  "law-enforcement": "enforcement",
-  "safety-concern": "enforcement",
-  "health-safety": "enforcement",
+  "sensitive-context": "context",
 };
 
 export const ALL_PATHWAYS: Pathway[] = [
   "personal",
-  "commercial",
-  "governance",
-  "enforcement",
+  "context",
 ];
 
 /**

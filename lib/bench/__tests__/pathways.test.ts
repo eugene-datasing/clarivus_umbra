@@ -17,11 +17,10 @@ describe("pathwayFor", () => {
   });
 
   it("covers every type in lib/detection-type-grounds.ts that has a pathway meaning", () => {
-    // Spot-check all four pathways have at least one type mapped.
+    // Phase 12.1 (Umbra v2) — collapsed to two pathways per the
+    // privacy-only scope. Spot-check both are populated.
     const pathways = new Set(Object.values(TYPE_TO_PATHWAY));
     expect(pathways.has("personal")).toBe(true);
-    expect(pathways.has("commercial")).toBe(true);
-    expect(pathways.has("governance")).toBe(true);
-    expect(pathways.has("enforcement")).toBe(true);
+    expect(pathways.has("context")).toBe(true);
   });
 });

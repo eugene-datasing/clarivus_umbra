@@ -165,38 +165,30 @@ describe("scoreFixture — matching semantics", () => {
 });
 
 describe("scoreFixture — pathway aggregation", () => {
-  it("3 personal expected + 1 governance expected → correct per-pathway split", () => {
+  it("3 personal expected + 1 context expected → correct per-pathway split", () => {
     const score = scoreFixture(
       "t",
       fixture([
         exp("Alice", "personal-name", "exact"),
         exp("a@x.com", "email-addr", "exact"),
         exp("021 111 2222", "phone", "exact"),
-        exp("legally privileged memo", "legal-privilege", "substring"),
+        exp("on a performance improvement plan", "sensitive-context", "substring"),
       ]),
       [
         actual("Alice", "personal-name"),
         actual("a@x.com", "email-addr"),
         // miss: phone
-        // miss: legal-privilege
-        actual("unexpected commercial", "commercial"), // FP → commercial pathway
+        // miss: sensitive-context
+        actual("unexpected diagnosis", "sensitive-context"), // FP → context pathway
       ],
     );
     expect(score.byPathway.personal.tp).toBe(2);
     expect(score.byPathway.personal.fn).toBe(1);
     expect(score.byPathway.personal.fp).toBe(0);
 
-    expect(score.byPathway.governance.tp).toBe(0);
-    expect(score.byPathway.governance.fn).toBe(1);
-    expect(score.byPathway.governance.fp).toBe(0);
-
-    expect(score.byPathway.commercial.tp).toBe(0);
-    expect(score.byPathway.commercial.fn).toBe(0);
-    expect(score.byPathway.commercial.fp).toBe(1);
-
-    expect(score.byPathway.enforcement.tp).toBe(0);
-    expect(score.byPathway.enforcement.fn).toBe(0);
-    expect(score.byPathway.enforcement.fp).toBe(0);
+    expect(score.byPathway.context.tp).toBe(0);
+    expect(score.byPathway.context.fn).toBe(1);
+    expect(score.byPathway.context.fp).toBe(1);
   });
 
   it("unknown actual type is counted in overall FP but not any pathway FP", () => {
@@ -210,15 +202,10 @@ describe("scoreFixture — pathway aggregation", () => {
     );
     expect(score.overall.tp).toBe(1);
     expect(score.overall.fp).toBe(1);
-    for (const p of ["personal", "commercial", "governance", "enforcement"] as const) {
-      // unknown-type FP lands nowhere — acceptable for v1 since unknown
-      // types are custom rules or future additions. Only overall FP moves.
-      if (p === "personal") {
-        expect(score.byPathway[p].fp).toBe(0);
-      } else {
-        expect(score.byPathway[p].fp).toBe(0);
-      }
-    }
+    // Phase 12.1 — pathways collapsed to personal + context. Unknown-
+    // type FP still lands nowhere (consistent with v1 convention).
+    expect(score.byPathway.personal.fp).toBe(0);
+    expect(score.byPathway.context.fp).toBe(0);
   });
 });
 
