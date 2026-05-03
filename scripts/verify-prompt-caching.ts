@@ -39,10 +39,9 @@ const client = new AzureOpenAI({
   apiVersion: "2024-10-21",
 });
 
-// Same shape ai-detect.ts builds — full prompt with grounds + worked
-// examples + structural heuristics. classification stays undefined so
-// we only get the stable prefix (matches the cache-friendly path).
-const systemPrompt = buildSystemPrompt(undefined, undefined);
+// Same shape ai-detect.ts builds — Phase 12.1 dropped the
+// classification arg; the prompt is now a single stable string.
+const systemPrompt = buildSystemPrompt();
 
 // Three short, distinct user payloads simulating three batches of a
 // single document's processing run. Each looks like a real ai-detect
