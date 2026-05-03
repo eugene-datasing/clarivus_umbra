@@ -18,6 +18,7 @@ export const SETTING_KEYS = {
   INSTANCE_CONFIG: "instance_config",
   VIEWER_MODE: "VIEWER_MODE",
   RETENTION_CONFIG: "retention_config",
+  AUTO_REDACT_CONFIG: "auto_redact_config",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
@@ -318,4 +319,65 @@ export async function setRetentionConfig(
   updatedBy: string,
 ): Promise<void> {
   await setSetting(SETTING_KEYS.RETENTION_CONFIG, config, updatedBy);
+}
+
+// ---------------------------------------------------------------------------
+// Auto-redact config (Phase 12.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Auto-redact tier policy. Drives `bucketConfidence` in
+ * `lib/pipeline/tier-routing.ts`, which decides at write time whether a
+ * detection lands at status `accepted` (auto-redacted, no review),
+ * `pending` (review tray), or `rejected` (audit trail only).
+ *
+ *   highThreshold       — confidence ≥ this → tier "high" (auto-accept)
+ *   mediumThreshold     — confidence ≥ this AND < high → tier "medium" (tray)
+ *                          confidence < this → tier "low" (rejected/silenced)
+ *   autoExportEnabled   — when a batch transitions to "auto-redacted" with
+ *                          empty tray, fire the export action automatically
+ *                          via the auto-export-batch pg-boss queue.
+ *
+ * Source-aware semantics live in `bucketConfidence`, not here:
+ * deterministic sources (pattern / label-adjacent / custom-rule / manual)
+ * always tier "high" regardless of the confidence number.
+ */
+export interface AutoRedactConfig {
+  highThreshold: number;
+  mediumThreshold: number;
+  autoExportEnabled: boolean;
+}
+
+export const DEFAULT_AUTO_REDACT_CONFIG: AutoRedactConfig = {
+  highThreshold: 85,
+  mediumThreshold: 50,
+  autoExportEnabled: true,
+};
+
+export async function getAutoRedactConfig(): Promise<AutoRedactConfig> {
+  const stored = await getSetting<Partial<AutoRedactConfig>>(
+    SETTING_KEYS.AUTO_REDACT_CONFIG,
+    DEFAULT_AUTO_REDACT_CONFIG,
+  );
+  return {
+    highThreshold:
+      typeof stored.highThreshold === "number"
+        ? stored.highThreshold
+        : DEFAULT_AUTO_REDACT_CONFIG.highThreshold,
+    mediumThreshold:
+      typeof stored.mediumThreshold === "number"
+        ? stored.mediumThreshold
+        : DEFAULT_AUTO_REDACT_CONFIG.mediumThreshold,
+    autoExportEnabled:
+      typeof stored.autoExportEnabled === "boolean"
+        ? stored.autoExportEnabled
+        : DEFAULT_AUTO_REDACT_CONFIG.autoExportEnabled,
+  };
+}
+
+export async function setAutoRedactConfig(
+  config: AutoRedactConfig,
+  updatedBy: string,
+): Promise<void> {
+  await setSetting(SETTING_KEYS.AUTO_REDACT_CONFIG, config, updatedBy);
 }
