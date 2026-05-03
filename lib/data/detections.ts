@@ -198,6 +198,61 @@ export async function getBatchTrayClusters(
   return out;
 }
 
+/**
+ * Phase 12.3 — latest ExportJob for a batch.
+ *
+ * Returns the most-recent ExportJob row for the batch (irrespective of
+ * status — manual or auto-export, generating or complete or error).
+ * The export-client UI uses this to surface "auto-export running",
+ * "auto-export complete with download link", or "auto-export failed
+ * with retry button" without forking the existing polling logic.
+ *
+ * Returns `null` when the batch has no ExportJob rows yet.
+ */
+export interface LatestExportSummary {
+  id: string;
+  status: string;
+  progress: number;
+  currentStep: string | null;
+  error: string | null;
+  filename: string | null;
+  sha256: string | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export async function getLatestExportForBatch(
+  batchId: string,
+): Promise<LatestExportSummary | null> {
+  const job = await prisma.exportJob.findFirst({
+    where: { batchId },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      status: true,
+      progress: true,
+      currentStep: true,
+      error: true,
+      filename: true,
+      sha256: true,
+      createdAt: true,
+      completedAt: true,
+    },
+  });
+  if (!job) return null;
+  return {
+    id: job.id,
+    status: job.status,
+    progress: job.progress,
+    currentStep: job.currentStep,
+    error: job.error,
+    filename: job.filename,
+    sha256: job.sha256,
+    createdAt: job.createdAt.toISOString(),
+    completedAt: job.completedAt ? job.completedAt.toISOString() : null,
+  };
+}
+
 export async function getWithholdingItems(batchId: string) {
   const acceptedDetections = await prisma.detection.findMany({
     where: {

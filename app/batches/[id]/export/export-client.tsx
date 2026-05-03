@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import {
@@ -13,7 +14,10 @@ import {
   AlertTriangle,
   XCircle,
   Info,
+  Sparkles,
+  RefreshCw,
 } from "lucide-react";
+import { retryAutoExport } from "@/lib/actions/batch-actions";
 
 const tabs = [
   { label: "Documents", href: "" },
@@ -63,11 +67,29 @@ function readinessLabel(cat: ReadinessCategory): {
   }
 }
 
+/**
+ * Phase 12.3 — latest ExportJob shape passed from the server. May be
+ * a manual export from a prior session, or an auto-export run kicked
+ * off when the batch transitioned to "auto-redacted".
+ */
+export interface LatestExportSummary {
+  id: string;
+  status: string;
+  progress: number;
+  currentStep: string | null;
+  error: string | null;
+  filename: string | null;
+  sha256: string | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
 interface ExportClientProps {
   requestId: string;
   caseReference: string;
   caseDescription: string;
   documents: ExportDocument[];
+  latestExport: LatestExportSummary | null;
 }
 
 function formatSize(kb: number): string {
@@ -76,12 +98,34 @@ function formatSize(kb: number): string {
   return `~${kb} KB`;
 }
 
+/**
+ * Map an ExportJob.status to the client's exportState union. The
+ * server stores `pending | generating | verifying | complete | error`;
+ * the client aggregates `pending`/`generating` into "generating" since
+ * the UI presentation is the same.
+ */
+function exportStateFromStatus(
+  status: string,
+): "idle" | "generating" | "verifying" | "complete" | "error" {
+  if (status === "complete") return "complete";
+  if (status === "error") return "error";
+  if (status === "verifying") return "verifying";
+  if (status === "generating" || status === "pending") return "generating";
+  return "idle";
+}
+
 export default function ExportClient({
   requestId,
   caseReference,
   caseDescription,
   documents,
+  latestExport,
 }: ExportClientProps) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
+
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(() => {
     const initial = new Set<string>();
     for (const doc of documents) {
@@ -92,15 +136,21 @@ export default function ExportClient({
 
   const [warningAcknowledged, setWarningAcknowledged] = useState(false);
 
+  // Phase 12.3 — initialise from the server-provided latestExport so a
+  // user landing on this page mid-auto-export sees the correct state.
+  // The polling effect below picks it up from "generating"/"verifying"
+  // and tracks to completion / error without a manual click.
   const [exportState, setExportState] = useState<
     "idle" | "generating" | "verifying" | "complete" | "error"
-  >("idle");
-  const [exportProgress, setExportProgress] = useState(0);
-  const [exportStep, setExportStep] = useState("");
-  const [exportError, setExportError] = useState("");
-  const [exportId, setExportId] = useState<string | null>(null);
-  const [sha256, setSha256] = useState<string | null>(null);
-  const [exportFilename, setExportFilename] = useState<string | null>(null);
+  >(() => (latestExport ? exportStateFromStatus(latestExport.status) : "idle"));
+  const [exportProgress, setExportProgress] = useState(latestExport?.progress ?? 0);
+  const [exportStep, setExportStep] = useState(latestExport?.currentStep ?? "");
+  const [exportError, setExportError] = useState(latestExport?.error ?? "");
+  const [exportId, setExportId] = useState<string | null>(latestExport?.id ?? null);
+  const [sha256, setSha256] = useState<string | null>(latestExport?.sha256 ?? null);
+  const [exportFilename, setExportFilename] = useState<string | null>(
+    latestExport?.filename ?? null,
+  );
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -251,6 +301,35 @@ export default function ExportClient({
     setWarningAcknowledged(false);
   };
 
+  // Phase 12.3 — re-enqueue a failed auto-export. Calls the
+  // retryAutoExport server action; the existing polling effect
+  // picks up the new job once the latestExport refresh arrives.
+  const handleRetryAutoExport = async () => {
+    setRetrying(true);
+    setRetryError(null);
+    try {
+      await retryAutoExport(requestId);
+      // Reset local state so the refresh picks the new job from the
+      // server-side latestExport.
+      setExportState("generating");
+      setExportProgress(0);
+      setExportStep("Re-queued auto-export…");
+      setExportError("");
+      startTransition(() => router.refresh());
+    } catch (err) {
+      setRetryError(
+        err instanceof Error ? err.message : "Failed to retry auto-export",
+      );
+    } finally {
+      setRetrying(false);
+    }
+  };
+
+  // Whether to show the dedicated auto-export status banner. Only
+  // surface when there's actually a server-side job to talk about —
+  // the manual-export flow below handles its own state without it.
+  const showAutoExportBanner = latestExport !== null;
+
   return (
     <div className="p-6 max-w-[1400px]">
       {/* Breadcrumb */}
@@ -293,6 +372,85 @@ export default function ExportClient({
           {caseReference} — {caseDescription}
         </p>
       </div>
+
+      {/* Phase 12.3 — auto-export status banner */}
+      {showAutoExportBanner && latestExport && (
+        <div
+          className={cn(
+            "card mb-6 border-l-4",
+            exportState === "complete" && "border-l-green-500",
+            exportState === "error" && "border-l-red-500",
+            (exportState === "generating" || exportState === "verifying") &&
+              "border-l-amber-500",
+          )}
+        >
+          <div className="flex items-start gap-3">
+            <Sparkles className="w-5 h-5 text-brand-primary mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <h2 className="text-base font-heading font-semibold text-txt-primary">
+                  Auto-export
+                </h2>
+                <span
+                  className={cn(
+                    "text-[10px] uppercase tracking-wider font-semibold rounded-full px-2 py-0.5",
+                    exportState === "complete" && "bg-green-50 text-green-700",
+                    exportState === "error" && "bg-red-50 text-red-700",
+                    (exportState === "generating" || exportState === "verifying") &&
+                      "bg-amber-50 text-amber-700",
+                    exportState === "idle" && "bg-gray-50 text-gray-700",
+                  )}
+                >
+                  {exportState === "complete" && "Complete"}
+                  {exportState === "error" && "Failed"}
+                  {exportState === "generating" && "Generating"}
+                  {exportState === "verifying" && "Verifying"}
+                  {exportState === "idle" && latestExport.status}
+                </span>
+              </div>
+              <p className="text-xs text-txt-secondary">
+                {exportState === "complete" &&
+                  `Export package ready · ${exportFilename ?? latestExport.filename ?? ""}`}
+                {exportState === "error" &&
+                  `Auto-export failed: ${exportError || latestExport.error || "unknown error"}`}
+                {(exportState === "generating" ||
+                  exportState === "verifying") &&
+                  `${exportStep || latestExport.currentStep || "Working…"} (${exportProgress}%)`}
+                {exportState === "idle" &&
+                  `Latest export job created ${new Date(latestExport.createdAt).toLocaleString()}`}
+              </p>
+              {retryError && (
+                <p className="text-xs text-red-600 mt-1">{retryError}</p>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {exportState === "complete" && (
+                <button
+                  onClick={handleDownload}
+                  className="btn btn-primary btn-sm flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download
+                </button>
+              )}
+              {exportState === "error" && (
+                <button
+                  onClick={handleRetryAutoExport}
+                  disabled={retrying}
+                  className="btn btn-primary btn-sm flex items-center gap-1.5"
+                >
+                  {retrying ? (
+                    <Loader className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  )}
+                  Retry auto-export
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Document Readiness Summary */}
       <div className="card mb-6">

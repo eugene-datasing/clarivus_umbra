@@ -7,7 +7,7 @@ import { getRetentionConfig } from "@/lib/data/settings";
 import { requireUser } from "@/lib/auth/session";
 import { requireAdmin } from "@/lib/auth/authorize";
 import { createBatchSchema } from "@/lib/validation/schemas";
-import { getBoss, QUEUE_PURGE_BATCH } from "@/lib/jobs/runner";
+import { getBoss, QUEUE_PURGE_BATCH, QUEUE_AUTO_EXPORT_BATCH, type AutoExportBatchPayload } from "@/lib/jobs/runner";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -220,4 +220,46 @@ export async function purgeNowBatch(
     skipGrace,
     purgeScheduledAt: purgeAt.toISOString(),
   };
+}
+
+/**
+ * Re-enqueue an auto-export job for a batch (Phase 12.3). Admin-only.
+ * Used by the export-client UI's "Retry auto-export" button when the
+ * previous auto-export run failed (latest ExportJob.status === "error").
+ *
+ * The job goes through the same `runExportForBatch` runner the
+ * original auto-export used, so it picks up any state changes the
+ * admin made between failures (e.g. the audit-integrity issue was
+ * resolved, blocked docs were signed off).
+ */
+export async function retryAutoExport(batchId: string) {
+  const user = await requireUser();
+  await requireAdmin(user);
+
+  const batch = await prisma.batch.findUnique({
+    where: { id: batchId },
+    select: { id: true, reference: true, deletedAt: true },
+  });
+  if (!batch) throw new Error("Batch not found");
+  if (batch.deletedAt !== null) {
+    throw new Error("Cannot retry auto-export on a deleted batch");
+  }
+
+  const boss = await getBoss();
+  const payload: AutoExportBatchPayload = { batchId };
+  const jobId = await boss.send(QUEUE_AUTO_EXPORT_BATCH, payload);
+
+  await createAuditEntry({
+    userName: user.name,
+    userRole: user.role,
+    type: "system",
+    description: `Re-enqueued auto-export job for batch ${batch.reference}`,
+    target: batch.reference,
+    batchId,
+    detail: jobId ? `pg-boss jobId: ${jobId}` : undefined,
+  });
+
+  revalidatePath(`/batches/${batchId}/export`);
+
+  return { success: true, jobId };
 }

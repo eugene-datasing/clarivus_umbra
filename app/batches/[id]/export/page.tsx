@@ -1,4 +1,5 @@
 import { getBatch } from "@/lib/data/batches";
+import { getLatestExportForBatch } from "@/lib/data/detections";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { requireUser } from "@/lib/auth/session";
@@ -59,12 +60,18 @@ export default async function ExportPage({
       acceptedCount: acceptedMap.get(d.id) ?? 0,
     }));
 
+  // Phase 12.3 — surface the latest ExportJob (auto-export run or
+  // manual) so the client can show "running" / "complete" / "failed"
+  // state without waiting for the user to kick off a new run.
+  const latestExport = await getLatestExportForBatch(id);
+
   return (
     <ExportClient
       requestId={id}
       caseReference={batchData.reference}
       caseDescription={batchData.name}
       documents={exportDocs}
+      latestExport={latestExport}
     />
   );
 }
