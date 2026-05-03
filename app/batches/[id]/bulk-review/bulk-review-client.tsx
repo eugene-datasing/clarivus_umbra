@@ -24,7 +24,13 @@ import {
   bulkAcceptBySimilar,
   bulkAcceptByType,
 } from "@/lib/actions/detection-actions";
-import { lgoimaGrounds } from "@/lib/lgoima-grounds";
+// Phase 12.1 (Umbra v2) — LGOIMA grounds vocabulary dropped. Local
+// empty-stub keeps the bulk-apply-ground UI compiling so this
+// scope-drop commit doesn't entangle with the full Phase 12.3 tray
+// rewrite. Bulk-ground dropdowns render empty option lists; the
+// bulk-apply-ground action paths are reachable but emit no useful
+// label. The full ground-aware bulk-apply UI is deleted in Phase 12.3.
+const lgoimaGrounds: Array<{ id: string; reference: string; label: string }> = [];
 
 interface SnippetPart {
   text: string;

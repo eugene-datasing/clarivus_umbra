@@ -334,17 +334,17 @@ export function detectLabelAdjacent(
   // Filter by enabled types if a set was supplied.
   //  - `nhi` is always included (matches the patterns.ts convention
   //    that treats NHI as a safety default irrespective of toggle state).
-  //  - `confidential` is always included because the toggle system has
-  //    no "Confidential" toggle — it is a catch-all type that `ai-detect.ts`
-  //    also always allows (`buildSystemPrompt`'s type filter treats it
-  //    the same way). Without this, the "Employee number"/"Salary band"/
-  //    "ICD-10" label entries — all of which target `confidential` —
-  //    would silently never fire in production.
+  //  - `sensitive-context` is always included because the
+  //    employee-number / salary / ICD-10 label entries target it as the
+  //    catch-all PII bucket (Phase 12.1, retargeted from the dropped
+  //    `confidential` type). Without the always-on guard those entries
+  //    would silently miss when an admin disables the
+  //    "Sensitive Context" toggle.
   const activeEntries = enabledTypes
     ? LABEL_DICTIONARY.filter(
         (e) =>
           e.type === "nhi" ||
-          e.type === "confidential" ||
+          e.type === "sensitive-context" ||
           enabledTypes.has(e.type),
       )
     : LABEL_DICTIONARY;

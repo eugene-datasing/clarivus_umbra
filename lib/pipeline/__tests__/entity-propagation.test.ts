@@ -81,34 +81,22 @@ describe("propagateNameDetections — variant generation + search", () => {
     expect(bareMatches).toHaveLength(0);
   });
 
-  it("harassment-risk seed propagates as harassment-risk (type preserved)", () => {
-    const seeds: PropagationSeed[] = [
-      seed({ type: "harassment-risk", text: "Angela Torres", page: 2 }),
-    ];
-    const pages: ExtractedPage[] = [
-      page(2, "Witness: Angela Torres, Graduate Planner."),
-      page(3, "Ms Torres corroborated the complainant's account. Torres also noted the timing."),
-    ];
-    const out = propagateNameDetections(pages, seeds);
-    for (const d of out) {
-      expect(d.type).toBe("harassment-risk");
-      expect(d.seedType).toBe("harassment-risk");
-    }
-    const texts = out.map((d) => `${d.text}@p${d.page}`);
-    expect(texts).toContain("Ms Torres@p3");
-    expect(texts).toContain("Torres@p3");
-  });
+  // Phase 12.1 (Umbra v2) — harassment-risk dropped; entity-
+  // propagation now seeds off personal-name only. The previous
+  // "harassment-risk seed propagates as harassment-risk" test is
+  // obsolete (the seed type no longer exists). Witness/grievance
+  // names route directly to personal-name in v2.
 
-  it("sentence-typed seeds (free-frank, legal-privilege, commercial) do not seed propagation", () => {
+  it("non-personal-name seeds (e.g. dropped types or sentence types) do not seed propagation", () => {
     const seeds: PropagationSeed[] = [
-      seed({ type: "free-frank", text: "Council's fallback position is to settle.", page: 1 }),
-      seed({ type: "legal-privilege", text: "Counsel advised at $55,000.", page: 2 }),
-      seed({ type: "commercial", text: "TenderCo bid $4.2M.", page: 3 }),
+      // Use plausible v1-era types that no longer exist as seed types
+      // — the propagator should reject anything not in SEED_TYPES.
+      seed({ type: "sensitive-context", text: "performance improvement plan since March", page: 1 }),
+      seed({ type: "address", text: "22 Mahoe Avenue", page: 2 }),
     ];
     const pages: ExtractedPage[] = [
-      page(1, "Council's fallback position is to settle. Settlement is Council's position."),
-      page(2, "Counsel advised again. TenderCo's price was Council's concern."),
-      page(3, "TenderCo bid $4.2M. TenderCo is confidential."),
+      page(1, "performance improvement plan since March 2026."),
+      page(2, "22 Mahoe Avenue is the lodgement address."),
     ];
     const out = propagateNameDetections(pages, seeds);
     expect(out).toHaveLength(0);

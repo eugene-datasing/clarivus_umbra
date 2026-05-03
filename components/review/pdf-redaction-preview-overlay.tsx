@@ -1,7 +1,12 @@
 "use client";
 
 import type { MergedOverlay } from "@/lib/review/overlay-grouping";
-import { groundLabel } from "@/lib/lgoima-grounds";
+// Phase 12.1 (Umbra v2) — groundLabel removed (no LGOIMA vocabulary
+// in v2). The citation overlay below is conditionally rendered only
+// when a ground is set; with grounds dropped, the conditional always
+// resolves false and the citation never renders. The conditional is
+// kept (not deleted) so the component stays diff-minimal until the
+// full Phase 12.3 review-UI rework deletes the citation feature.
 
 /**
  * Slice B redaction preview overlay — display-only companion to the
@@ -162,8 +167,9 @@ export default function PdfRedactionPreviewOverlay({
         // `appliedGround` per row). Existing prod rows with
         // `appliedGround=null` start showing citations the moment this
         // ships — no backfill needed.
-        const groundForCitation = merged.appliedGround ?? merged.suggestedGround;
-        const showCitation = merged.status === "accepted" && !!groundForCitation;
+        // Phase 12.1 — citation always hidden post-rewrite (no
+        // ground vocabulary). Phase 12.3 will rip the conditional.
+        const showCitation = false;
         return (
           <div
             key={merged.primaryId}
@@ -177,7 +183,7 @@ export default function PdfRedactionPreviewOverlay({
                 className="absolute right-0.5 top-0 text-[7px] leading-none font-mono font-semibold text-white/85 select-none whitespace-nowrap pointer-events-none"
                 data-redaction-citation="true"
               >
-                {groundLabel(groundForCitation)}
+                {/* Phase 12.1 — never renders post-rewrite. */}
               </span>
             )}
           </div>

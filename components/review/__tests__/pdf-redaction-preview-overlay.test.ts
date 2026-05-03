@@ -175,57 +175,15 @@ describe("PdfRedactionPreviewOverlay source — Slice B display-only contract", 
     expect(src).toMatch(/if \(pageVisible\.length === 0\) return null;/);
   });
 
-  it("renders a ground citation span on accepted overlays only (post-2026-04-25 dual-panel-ux PR)", () => {
-    // The citation is conditional on `accepted` AND a non-null
-    // ground — pending and rejected don't get the label.
-    // Post-2026-04-27 the conditional uses `appliedGround ??
-    // suggestedGround` so accepted-without-explicit-applied-ground
-    // (the dominant prod shape pre-bulk-accept-normalisation, plus
-    // any future detection that takes the same path) still renders.
-    // The conditional gates on `merged.status === "accepted"`.
-    expect(src).toMatch(/merged\.status === "accepted"/);
-    // The span itself uses the exact Tailwind classes Eugene specced:
-    // top-right anchored, white-on-black, 7px font-mono.
-    expect(src).toMatch(/right-0\.5/);
-    expect(src).toMatch(/top-0/);
-    expect(src).toMatch(/text-\[7px\]/);
-    expect(src).toMatch(/font-mono/);
-    expect(src).toMatch(/text-white\/85/);
-    // pointer-events-none + select-none + whitespace-nowrap so the
-    // citation neither blocks clicks nor selects with the canvas
-    // text and never wraps onto a second line inside the rectangle.
-    expect(src).toMatch(/pointer-events-none/);
-    expect(src).toMatch(/select-none/);
-    expect(src).toMatch(/whitespace-nowrap/);
-    // data-attr for e2e / DOM-inspection grep.
-    expect(src).toMatch(/data-redaction-citation="true"/);
-  });
-
-  it("formats the citation via the shared groundLabel helper, not a local copy", () => {
-    // groundLabel is defined in `lib/lgoima-grounds.ts` and shared
-    // with the sidebar's accepted-row footer in review-client.tsx —
-    // both surfaces format applied-ground identically. Post-2026-04-27
-    // groundLabel matches by EITHER `.id` (s7_2a) OR `.reference`
-    // (s7(2)(a)), so the same call site handles appliedGround AND the
-    // suggestedGround fallback without format normalisation in the
-    // overlay.
-    expect(src).toMatch(/import\s*\{\s*groundLabel\s*\}\s*from\s*"@\/lib\/lgoima-grounds"/);
-    // The citation render passes the resolved fallback value, not
-    // appliedGround alone.
-    expect(src).toMatch(/groundLabel\(groundForCitation\)/);
-  });
-
-  it("computes the citation ground via appliedGround ?? suggestedGround fallback (Bug 2 fix)", () => {
-    // The fallback is the load-bearing fix: bulkAcceptDetections
-    // pre-2026-04-27 left appliedGround=null on every row it touched,
-    // and the overlay's citation conditional was strict on
-    // appliedGround alone — so the citation never rendered for the
-    // dominant prod accepted shape. The local `groundForCitation`
-    // const captures the resolved value and gates both the
-    // conditional and the render.
-    expect(src).toMatch(/const\s+groundForCitation\s*=\s*merged\.appliedGround\s*\?\?\s*merged\.suggestedGround/);
-    expect(src).toMatch(/showCitation\s*=\s*merged\.status === "accepted"\s*&&\s*!!groundForCitation/);
-  });
+  // Phase 12.1 (Umbra v2) — three ground-citation tests dropped.
+  // The citation feature renders an LGOIMA-ground reference next to
+  // accepted redactions; v2 dropped the ground vocabulary, so the
+  // citation conditional is hard-wired to `false` until Phase 12.3
+  // deletes the conditional entirely. The three tests below pinned
+  // the import + helper call + appliedGround ?? suggestedGround
+  // fallback — all gone post-rewrite. The "clips silently" test
+  // below survives because overflow-hidden is still applied
+  // structurally regardless of whether the citation ever renders.
 
   it("clips the citation silently inside narrow rectangles via overflow-hidden on the parent", () => {
     // Parent rectangle div applies overflow-hidden when status is

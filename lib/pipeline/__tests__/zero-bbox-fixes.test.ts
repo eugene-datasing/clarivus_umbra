@@ -40,12 +40,13 @@ function stripComments(src: string): string {
 describe("Fix A — process.ts wires AI source as literal-capture for bbox", () => {
   const src = stripComments(readFileSync(PROCESS_PATH, "utf-8"));
 
-  it("isLiteralCapture includes BOTH section-marker AND ai", () => {
-    // Pre-fix this was just `det.source === "section-marker"`, leaving
-    // every AI long-narrative emission to fall through the
-    // LONG_NARRATIVE_THRESHOLD branch and land at (0,0,0,0).
+  it("isLiteralCapture includes ai (the surviving literal-capture source)", () => {
+    // Phase 12.1 dropped section-marker (430-LoC detector for
+    // (free-and-frank) sections). The literal-capture set narrows to
+    // AI alone — same protective effect for AI long-narrative
+    // emissions, just one entry in the OR.
     expect(src).toMatch(
-      /const\s+isLiteralCapture\s*=\s*[\s\S]*?det\.source\s*===\s*"section-marker"[\s\S]*?det\.source\s*===\s*"ai"/,
+      /const\s+isLiteralCapture\s*=\s*det\.source\s*===\s*"ai"/,
     );
   });
 

@@ -50,7 +50,27 @@ export const docTypeConfig: Record<DocType, { label: string; color: string; icon
 };
 
 // --- Detection type ---
-export type DetectionType = "personal-name" | "phone" | "email-addr" | "ird" | "address" | "bank-account" | "nz-passport" | "vehicle-reg" | "nhi" | "commercial" | "free-frank" | "legal-privilege" | "confidential" | "negotiation" | "safety-concern" | "law-enforcement" | "council-commercial" | "harassment-risk" | "cultural-sensitivity" | "health-safety" | "manual" | "custom-keyword" | "custom-pattern" | "custom-entity" | "custom-combination";
+// Phase 12.1 (Umbra v2) — strict-PII detection scope. The 11 LGOIMA-
+// style governance/commercial types are dropped; sensitive-context is
+// the new catch-all for personal-circumstance content. nz-driver-licence
+// added (was missing from the v1 union despite being a canonical type).
+export type DetectionType =
+  | "personal-name"
+  | "phone"
+  | "email-addr"
+  | "ird"
+  | "address"
+  | "bank-account"
+  | "nz-passport"
+  | "nz-driver-licence"
+  | "vehicle-reg"
+  | "nhi"
+  | "sensitive-context"
+  | "manual"
+  | "custom-keyword"
+  | "custom-pattern"
+  | "custom-entity"
+  | "custom-combination";
 export type DetectionStatus = "pending" | "accepted" | "rejected" | "modified";
 
 export const detectionTypeConfig: Record<DetectionType, { label: string; color: string }> = {
@@ -61,19 +81,10 @@ export const detectionTypeConfig: Record<DetectionType, { label: string; color: 
   address: { label: "Address", color: "bg-blue-100 text-blue-700" },
   "bank-account": { label: "Bank Account", color: "bg-red-100 text-red-700" },
   "nz-passport": { label: "Passport Number", color: "bg-red-100 text-red-700" },
+  "nz-driver-licence": { label: "Driver Licence", color: "bg-red-100 text-red-700" },
   "vehicle-reg": { label: "Vehicle Registration", color: "bg-blue-100 text-blue-700" },
   nhi: { label: "NHI Number", color: "bg-red-100 text-red-700" },
-  commercial: { label: "Commercial", color: "bg-amber-100 text-amber-700" },
-  "free-frank": { label: "Free & Frank", color: "bg-purple-100 text-purple-700" },
-  "legal-privilege": { label: "Legal Privilege", color: "bg-orange-100 text-orange-700" },
-  confidential: { label: "Confidential", color: "bg-pink-100 text-pink-700" },
-  negotiation: { label: "Negotiation Position", color: "bg-amber-100 text-amber-700" },
-  "safety-concern": { label: "Safety Concern", color: "bg-red-100 text-red-700" },
-  "law-enforcement": { label: "Law Enforcement", color: "bg-red-100 text-red-700" },
-  "council-commercial": { label: "Council Commercial", color: "bg-amber-100 text-amber-700" },
-  "harassment-risk": { label: "Harassment Risk", color: "bg-orange-100 text-orange-700" },
-  "cultural-sensitivity": { label: "Cultural Sensitivity", color: "bg-purple-100 text-purple-700" },
-  "health-safety": { label: "Health & Safety", color: "bg-red-100 text-red-700" },
+  "sensitive-context": { label: "Sensitive Context", color: "bg-purple-100 text-purple-700" },
   manual: { label: "Manual", color: "bg-gray-100 text-gray-700" },
   "custom-keyword": { label: "Custom Keyword", color: "bg-teal-100 text-teal-700" },
   "custom-pattern": { label: "Custom Pattern", color: "bg-teal-100 text-teal-700" },

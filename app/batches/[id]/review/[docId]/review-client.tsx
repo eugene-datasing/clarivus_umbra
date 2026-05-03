@@ -52,7 +52,20 @@ const PdfViewer = dynamic(() => import("@/components/review/pdf-viewer"), {
     </div>
   ),
 });
-import { lgoimaGrounds, groundLabel } from "@/lib/lgoima-grounds";
+// Phase 12.1 (Umbra v2) — LGOIMA grounds vocabulary dropped. Local
+// empty-stubs keep the surrounding ground-aware UI compiling so this
+// scope-drop commit doesn't entangle with the full Phase 12.3 review-
+// UI rework. Dropdowns render empty; citations render empty strings.
+// The ground UI surfaces are deleted entirely in Phase 12.3.
+const lgoimaGrounds: Array<{
+  id: string;
+  reference: string;
+  label: string;
+  section: "s6" | "s7" | "s17";
+  common: boolean;
+  requiresPI: boolean;
+}> = [];
+const groundLabel = (_id: string | null | undefined) => "";
 import { cn } from "@/lib/utils";
 import { compareDetectionsByPosition } from "@/lib/review/sort-detections";
 import { computePdfSelectionBbox, findPdfPageWrapper } from "@/lib/review/pdf-selection";

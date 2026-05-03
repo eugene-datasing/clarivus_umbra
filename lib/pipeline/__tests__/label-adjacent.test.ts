@@ -37,17 +37,17 @@ describe("detectLabelAdjacent", () => {
   describe("employee / personnel identifiers", () => {
     it("matches 'Employee number: ADC-2284'", () => {
       const matches = detectLabelAdjacent([makePage(1, "Employee number: ADC-2284")]);
-      expect(firstMatch(matches, "confidential")?.text).toBe("ADC-2284");
+      expect(firstMatch(matches, "sensitive-context")?.text).toBe("ADC-2284");
     });
 
     it("matches 'Staff ID | EMP-2019-0847' (pipe separator)", () => {
       const matches = detectLabelAdjacent([makePage(1, "| Staff ID | EMP-2019-0847 |")]);
-      expect(firstMatch(matches, "confidential")?.text).toBe("EMP-2019-0847");
+      expect(firstMatch(matches, "sensitive-context")?.text).toBe("EMP-2019-0847");
     });
 
     it("matches 'personnel number: 4410-A' case-insensitively", () => {
       const matches = detectLabelAdjacent([makePage(1, "PERSONNEL NUMBER: 4410-A")]);
-      expect(firstMatch(matches, "confidential")?.text).toBe("4410-A");
+      expect(firstMatch(matches, "sensitive-context")?.text).toBe("4410-A");
     });
   });
 
@@ -110,7 +110,7 @@ describe("detectLabelAdjacent", () => {
       const matches = detectLabelAdjacent([
         makePage(1, "Salary band: Band 5 ($102,400 p.a.)"),
       ]);
-      expect(firstMatch(matches, "confidential")?.text).toBe(
+      expect(firstMatch(matches, "sensitive-context")?.text).toBe(
         "Band 5 ($102,400 p.a.)",
       );
     });
@@ -119,7 +119,7 @@ describe("detectLabelAdjacent", () => {
       const matches = detectLabelAdjacent([
         makePage(1, "| Remuneration | Band 6 ($124,800 p.a.) |"),
       ]);
-      expect(firstMatch(matches, "confidential")?.text).toBe(
+      expect(firstMatch(matches, "sensitive-context")?.text).toBe(
         "Band 6 ($124,800 p.a.)",
       );
     });
@@ -225,12 +225,12 @@ describe("detectLabelAdjacent", () => {
   describe("ICD-10 diagnostic code (extra guard)", () => {
     it("matches 'ICD-10: F43.23' — valid code shape", () => {
       const matches = detectLabelAdjacent([makePage(1, "ICD-10: F43.23")]);
-      expect(firstMatch(matches, "confidential")?.text).toBe("F43.23");
+      expect(firstMatch(matches, "sensitive-context")?.text).toBe("F43.23");
     });
 
     it("matches 'Diagnosis code | G31.9' pipe-separated", () => {
       const matches = detectLabelAdjacent([makePage(1, "| Diagnosis code | G31.9 |")]);
-      expect(firstMatch(matches, "confidential")?.text).toBe("G31.9");
+      expect(firstMatch(matches, "sensitive-context")?.text).toBe("G31.9");
     });
 
     it("does NOT match 'ICD-10: mixed anxiety and depressed mood' (prose, not a code)", () => {
@@ -239,7 +239,7 @@ describe("detectLabelAdjacent", () => {
       ]);
       expect(
         matches.filter(
-          (m) => m.type === "confidential" && m.labelMatched.toLowerCase().includes("icd"),
+          (m) => m.type === "sensitive-context" && m.labelMatched.toLowerCase().includes("icd"),
         ),
       ).toHaveLength(0);
     });
@@ -296,7 +296,7 @@ describe("detectLabelAdjacent", () => {
       ];
       const matches = detectLabelAdjacent(pages);
       const dob = matches.find((m) => m.type === "personal-name");
-      const emp = matches.find((m) => m.type === "confidential");
+      const emp = matches.find((m) => m.type === "sensitive-context");
       const ird = matches.find((m) => m.type === "ird");
       expect(dob?.text).toBe("14 June 1983");
       expect(emp?.text).toBe("ADC-2284");
@@ -309,7 +309,7 @@ describe("detectLabelAdjacent", () => {
       ];
       const matches = detectLabelAdjacent(pages);
       // Employee number → ADC-2284 should match.
-      expect(matches.find((m) => m.type === "confidential")?.text).toBe("ADC-2284");
+      expect(matches.find((m) => m.type === "sensitive-context")?.text).toBe("ADC-2284");
       // Date of birth → "Employee number" must NOT fire.
       const dob = matches.find((m) => m.type === "personal-name");
       expect(dob).toBeUndefined();
@@ -348,7 +348,7 @@ describe("detectLabelAdjacent", () => {
 
     it("captures the employee number and salary band distinctly (both confidential)", () => {
       const matches = detectLabelAdjacent([makePage(1, b1HeaderTable)]);
-      const confidentials = matches.filter((m) => m.type === "confidential");
+      const confidentials = matches.filter((m) => m.type === "sensitive-context");
       const texts = new Set(confidentials.map((m) => m.text));
       expect(texts.has("ADC-2284")).toBe(true);
       expect(texts.has("Band 5 ($102,400 p.a.)")).toBe(true);
@@ -395,13 +395,13 @@ describe("detectLabelAdjacent", () => {
       expect(matches.some((m) => m.type === "nhi")).toBe(true);
     });
 
-    it("always includes confidential even when enabledTypes omits it (catch-all type)", () => {
+    it("always includes sensitive-context even when enabledTypes omits it (catch-all type)", () => {
       const enabled = new Set(["phone"]);
       const matches = detectLabelAdjacent(
         [makePage(1, "Employee number: ADC-2284\nPhone: 021 123 4567")],
         enabled,
       );
-      expect(matches.some((m) => m.type === "confidential" && m.text === "ADC-2284")).toBe(true);
+      expect(matches.some((m) => m.type === "sensitive-context" && m.text === "ADC-2284")).toBe(true);
     });
   });
 });
