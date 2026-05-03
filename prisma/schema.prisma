@@ -162,6 +162,13 @@ model Detection {
   aiExplanation String  @default("")
   source        String  @default("ai")
   note          String? // free-form reviewer rationale (replaces suggestedGround/appliedGround/piConsideration)
+  // Phase 12.4 — ±100-char window of page text around the detection's
+  // text span, captured at detection-write time. Drives cluster
+  // disambiguation in the Tray expand view (e.g. "Sarah Mitchell from
+  // Finance" vs "Sarah Mitchell the complainant"). Nullable because
+  // AI paraphrase / normalised-punctuation captures sometimes have no
+  // exact substring match in the source page text.
+  pageContext   String?
 
   reviewedBy String?
   reviewedAt DateTime?
@@ -174,6 +181,8 @@ model Detection {
 
   @@index([documentId])
   @@index([status])
+  // Phase 12.4 — Tray cluster grouping (`GROUP BY type, text`).
+  @@index([type, text])
   @@map("detections")
 }
 

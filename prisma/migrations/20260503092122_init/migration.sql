@@ -100,6 +100,7 @@ CREATE TABLE "detections" (
     "aiExplanation" TEXT NOT NULL DEFAULT '',
     "source" TEXT NOT NULL DEFAULT 'ai',
     "note" TEXT,
+    "pageContext" TEXT,
     "reviewedBy" TEXT,
     "reviewedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -298,6 +299,9 @@ CREATE INDEX "detections_documentId_idx" ON "detections"("documentId");
 
 -- CreateIndex
 CREATE INDEX "detections_status_idx" ON "detections"("status");
+
+-- CreateIndex
+CREATE INDEX "detections_type_text_idx" ON "detections"("type", "text");
 
 -- CreateIndex
 CREATE INDEX "audit_entries_batchId_idx" ON "audit_entries"("batchId");
