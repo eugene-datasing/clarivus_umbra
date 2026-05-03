@@ -31,8 +31,8 @@ import { TYPE_TO_PATHWAY } from "../bench/pathways";
 const CANONICAL_TYPES = new Set(Object.keys(DEFAULT_GROUND_FOR_TYPE));
 
 describe("detection-type vocabulary parity (Phase 5 lockdown)", () => {
-  it("canonical map has 23 entries (Umbra v1 vocabulary + Phase 12.1 sensitive-context)", () => {
-    expect(CANONICAL_TYPES.size).toBe(23);
+  it("canonical map has 12 entries (Umbra v2 PII-only vocabulary)", () => {
+    expect(CANONICAL_TYPES.size).toBe(12);
   });
 
   it("includes nz-driver-licence (post-Phase-5 rename)", () => {

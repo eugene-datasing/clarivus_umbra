@@ -1,26 +1,25 @@
 /**
  * Entity propagation pass (Phase 4 of the April 2026 detection-coverage
- * plan).
+ * plan; trimmed in Phase 12.1 — Umbra v2 — to personal-name only).
  *
  * After AI detection, take each seed detection that refers to a person
- * (type `personal-name` or `harassment-risk`) and search the rest of
- * the document for additional occurrences — full name, honorific +
- * surname, and bare surname — emitting one propagated detection per
- * match. This lifts bare-surname and honorific-variant recall on
- * documents where the AI anchors the name once but misses subsequent
- * mentions; B1's in-prose "Ms Ferguson" / "Ferguson" across pages 2-3
- * is the motivating case.
+ * (type `personal-name`) and search the rest of the document for
+ * additional occurrences — full name, honorific + surname, and bare
+ * surname — emitting one propagated detection per match. This lifts
+ * bare-surname and honorific-variant recall on documents where the AI
+ * anchors the name once but misses subsequent mentions; B1's in-prose
+ * "Ms Ferguson" / "Ferguson" across pages 2-3 is the motivating case.
  *
- * Design (per Eugene's lock-in, 2026-04-23):
- *   - Seed types: `personal-name` (personal pathway) AND
- *     `harassment-risk` (governance pathway, applied to witness-in-
- *     grievance identity). Sentence-typed detections (free-frank,
- *     legal-privilege, commercial, negotiation, confidential) do NOT
- *     seed — they are sentence-shaped, not entity-shaped.
- *   - Propagated detections carry the SEED's type (never transmute
- *     personal-name into harassment-risk or vice versa) and inherit
- *     the seed's suggestedGround, piConsideration, and explanation.
- *     Source is always `"entity-propagation"`.
+ * Phase 12.1 (Umbra v2) note: pre-rip the propagator also seeded off
+ * `harassment-risk` (the LGOIMA-era witness-in-grievance type). v2
+ * drops that type entirely — names that previously routed there will
+ * now be typed `personal-name` directly by the rewritten AI prompt, so
+ * a single seed-type covers the same coverage surface.
+ *
+ * Design:
+ *   - Seed type: `personal-name` only.
+ *   - Propagated detections carry the seed's type and explanation; the
+ *     source is always `"entity-propagation"`.
  *   - Variants generated per seed:
  *       - The full seed text itself (for re-occurrences on other pages).
  *       - Honorific + surname for each title in KNOWN_TITLES.
@@ -73,11 +72,11 @@ export interface PropagatedDetection {
   reasoning: string;
   aiExplanation: string;
   source: "entity-propagation";
-  seedType: "personal-name" | "harassment-risk";
+  seedType: "personal-name";
   seedText: string;
 }
 
-const SEED_TYPES = new Set(["personal-name", "harassment-risk"]);
+const SEED_TYPES = new Set(["personal-name"]);
 const MIN_BARE_SURNAME_LENGTH = 5;
 const PROPAGATED_CONFIDENCE = 85;
 
@@ -225,7 +224,7 @@ export function propagateNameDetections(
     const parsed = parseSeedText(seed.text);
     if (!parsed) continue;
 
-    const seedType = seed.type as "personal-name" | "harassment-risk";
+    const seedType = seed.type as "personal-name";
     const variants = generateVariants(parsed, seed.text);
 
     for (const variant of variants) {

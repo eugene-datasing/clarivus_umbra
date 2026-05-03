@@ -120,10 +120,6 @@ export const ALL_AI_TYPES = [
   "personal-name", "phone", "email-addr", "ird", "address",
   "bank-account", "nz-passport", "vehicle-reg",
   "sensitive-context",
-  "commercial", "free-frank", "legal-privilege", "confidential",
-  "negotiation", "safety-concern", "law-enforcement",
-  "council-commercial", "harassment-risk", "cultural-sensitivity",
-  "health-safety",
 ];
 
 /**

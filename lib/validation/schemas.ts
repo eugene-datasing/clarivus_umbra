@@ -6,36 +6,21 @@
  */
 
 import { z } from "zod";
-import { lgoimaGrounds } from "@/lib/lgoima-grounds";
 
 // ---------------------------------------------------------------------------
-// LGOIMA ground validation
+// Phase 12.1 (Umbra v2) — LGOIMA ground vocabulary dropped
 // ---------------------------------------------------------------------------
-
-/**
- * Set of all valid ground identifiers in both ID and reference format.
- * Used by Zod schemas below to validate user-facing ground inputs.
- * Pipeline writes (pattern/AI detection) bypass Zod — they write
- * suggestedGround directly — but normalise to ID format before storage.
- */
-export const validGroundIds = new Set(
-  lgoimaGrounds.flatMap((g) => [g.id, g.reference]),
-);
-
-const groundIdSchema = z
-  .string()
-  .min(1, "Ground is required")
-  .max(30)
-  .refine((val) => validGroundIds.has(val), {
-    message: "Invalid LGOIMA ground identifier",
-  });
+//
+// v1 validated `ground` fields against the canonical LGOIMA ground list. v2
+// is a privacy-only redaction product with no statutory ground vocabulary,
+// so the validation collapses to a bounded-length string. The `ground`
+// field is kept on the input shape (deprecated) for client-payload
+// backwards compatibility — it is ignored server-side, see the
+// detection-actions accept/bulk paths.
 
 const optionalGroundIdSchema = z
   .string()
   .max(30)
-  .refine((val) => val === "" || validGroundIds.has(val), {
-    message: "Invalid LGOIMA ground identifier",
-  })
   .optional();
 
 // ---------------------------------------------------------------------------

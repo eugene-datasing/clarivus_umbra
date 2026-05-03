@@ -15,23 +15,11 @@ describe("getDefaultGroundForType", () => {
     expect(getDefaultGroundForType("nz-passport")).toBe("s7_2a");
     expect(getDefaultGroundForType("vehicle-reg")).toBe("s7_2a");
     expect(getDefaultGroundForType("nhi")).toBe("s7_2a");
-  });
-
-  it("returns correct grounds for non-PII types", () => {
-    expect(getDefaultGroundForType("commercial")).toBe("s7_2bii");
-    expect(getDefaultGroundForType("free-frank")).toBe("s7_2fi");
-    expect(getDefaultGroundForType("legal-privilege")).toBe("s7_2g");
-    expect(getDefaultGroundForType("negotiation")).toBe("s7_2i");
-    expect(getDefaultGroundForType("safety-concern")).toBe("s6d");
-    expect(getDefaultGroundForType("law-enforcement")).toBe("s6c");
-    expect(getDefaultGroundForType("council-commercial")).toBe("s7_2h");
-    expect(getDefaultGroundForType("harassment-risk")).toBe("s7_2fii");
-    expect(getDefaultGroundForType("cultural-sensitivity")).toBe("s7_2ba");
-    expect(getDefaultGroundForType("health-safety")).toBe("s7_2d");
+    expect(getDefaultGroundForType("nz-driver-licence")).toBe("s7_2a");
   });
 
   it("returns empty string for types without a default ground", () => {
-    expect(getDefaultGroundForType("confidential")).toBe("");
+    expect(getDefaultGroundForType("sensitive-context")).toBe("");
     expect(getDefaultGroundForType("manual")).toBe("");
   });
 
@@ -50,7 +38,7 @@ describe("getDefaultGroundForType", () => {
 
   it("covers all defined types in the mapping", () => {
     const mappedTypes = Object.keys(DEFAULT_GROUND_FOR_TYPE);
-    expect(mappedTypes.length).toBe(23);
+    expect(mappedTypes.length).toBe(12);
     for (const type of mappedTypes) {
       const result = getDefaultGroundForType(type);
       expect(typeof result).toBe("string");

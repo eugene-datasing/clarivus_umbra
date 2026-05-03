@@ -78,16 +78,6 @@ export const DEFAULT_DETECTION_TOGGLES: DetectionToggle[] = [
   { label: "Driver Licence Numbers", enabled: true },
   { label: "Vehicle Registration", enabled: true },
   { label: "Sensitive Context", enabled: true },
-  { label: "Commercial Sensitivity", enabled: true },
-  { label: "Legal Privilege", enabled: true },
-  { label: "Free & Frank Opinions", enabled: true },
-  { label: "Negotiation Positions", enabled: true },
-  { label: "Safety Concerns", enabled: true },
-  { label: "Law Enforcement", enabled: true },
-  { label: "Council Commercial", enabled: true },
-  { label: "Harassment Risk", enabled: true },
-  { label: "Cultural Sensitivity", enabled: true },
-  { label: "Health & Safety Measures", enabled: true },
 ];
 
 /** Maps UI toggle labels to the detection type keys used in the pipeline. */
@@ -102,16 +92,6 @@ export const DETECTION_TYPE_MAP: Record<string, string> = {
   "Driver Licence Numbers": "nz-driver-licence",
   "Vehicle Registration": "vehicle-reg",
   "Sensitive Context": "sensitive-context",
-  "Commercial Sensitivity": "commercial",
-  "Legal Privilege": "legal-privilege",
-  "Free & Frank Opinions": "free-frank",
-  "Negotiation Positions": "negotiation",
-  "Safety Concerns": "safety-concern",
-  "Law Enforcement": "law-enforcement",
-  "Council Commercial": "council-commercial",
-  "Harassment Risk": "harassment-risk",
-  "Cultural Sensitivity": "cultural-sensitivity",
-  "Health & Safety Measures": "health-safety",
 };
 
 /**
