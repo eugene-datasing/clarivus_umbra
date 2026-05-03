@@ -50,7 +50,7 @@ describe("getDefaultGroundForType", () => {
 
   it("covers all defined types in the mapping", () => {
     const mappedTypes = Object.keys(DEFAULT_GROUND_FOR_TYPE);
-    expect(mappedTypes.length).toBe(22);
+    expect(mappedTypes.length).toBe(23);
     for (const type of mappedTypes) {
       const result = getDefaultGroundForType(type);
       expect(typeof result).toBe("string");

@@ -133,7 +133,8 @@ const LABEL_DICTIONARY: LabelEntry[] = [
     reasoning: "Labelled vehicle registration.",
   },
 
-  // --- Confidential identifiers (no dedicated type) ------------------------
+  // --- Sensitive-context identifiers (Phase 12.1 — retargeted from
+  //     `confidential` catch-all to the new `sensitive-context` bucket) ----
   {
     labels: [
       "employee number",
@@ -143,12 +144,12 @@ const LABEL_DICTIONARY: LabelEntry[] = [
       "personnel number",
       "badge number",
     ],
-    type: "confidential",
+    type: "sensitive-context",
     reasoning: "Labelled employee identifier — re-identifies an individual.",
   },
   {
     labels: ["salary", "salary band", "salary range", "remuneration", "pay band"],
-    type: "confidential",
+    type: "sensitive-context",
     reasoning: "Labelled salary / remuneration — privacy-sensitive compensation.",
   },
 
@@ -177,10 +178,10 @@ const LABEL_DICTIONARY: LabelEntry[] = [
   },
   // ICD-10 diagnostic code prefix heuristic. A label like "ICD-10" /
   // "ICD 10" / "ICD-10-AM" followed by an F/G/Z/etc. code is a
-  // confidential diagnostic identifier.
+  // sensitive-context diagnostic identifier.
   {
     labels: ["icd-10", "icd 10", "icd-10-am", "icd 10 am", "diagnosis code"],
-    type: "confidential",
+    type: "sensitive-context",
     reasoning: "Labelled diagnostic code — individual medical identifier.",
     extraGuard: (_pageText, _labelEnd, value) => {
       // Must start with a letter+digits pattern like F43.23 / G31.9 /

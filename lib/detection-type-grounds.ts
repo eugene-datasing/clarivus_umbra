@@ -28,6 +28,10 @@ export const DEFAULT_GROUND_FOR_TYPE: Record<string, string> = {
   "harassment-risk": "s7_2fii",
   "cultural-sensitivity": "s7_2ba",
   "health-safety": "s7_2d",
+  // Phase 12.1 (Umbra v2) — catch-all for personal-circumstance content
+  // (medical conditions, health status, employment grievances, financial
+  // hardship, etc. per REQ-006). No LGOIMA ground.
+  "sensitive-context": "",
   manual: "",
 };
 
