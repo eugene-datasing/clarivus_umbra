@@ -30,6 +30,7 @@ export default auth((req) => {
     pathname.startsWith("/api/auth") ||
     pathname === "/api/activation-status" ||
     pathname.startsWith("/api/demo-request") ||
+    pathname === "/api/health" ||
     pathname === "/manifest.json" ||
     pathname === "/sw.js" ||
     pathname === "/offline.html"
