@@ -34,7 +34,7 @@ const notifIconMap: Record<string, { icon: typeof AlertTriangle; color: string }
   approval: { icon: CheckCircle, color: "text-green-600 bg-green-50" },
   review: { icon: FileText, color: "text-blue-600 bg-blue-50" },
   detection: { icon: AlertTriangle, color: "text-amber-600 bg-amber-50" },
-  ingestion: { icon: Clock, color: "text-purple-600 bg-purple-50" },
+  ingestion: { icon: Clock, color: "text-brand-600 bg-brand-50" },
   system: { icon: FileText, color: "text-gray-600 bg-gray-50" },
 };
 

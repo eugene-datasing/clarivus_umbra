@@ -1399,7 +1399,7 @@ export default function ReviewClient({
           )}
           {docStatus === "reviewed" && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-purple-600 font-medium bg-purple-50 px-2 py-1 rounded hidden lg:inline">
+              <span className="text-xs text-brand-600 font-medium bg-brand-50 px-2 py-1 rounded hidden lg:inline">
                 Signed Off — Awaiting Final Approval
               </span>
               <div className="relative">

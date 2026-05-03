@@ -435,7 +435,7 @@ export default function LandingPage() {
       {/* ============================================================ */}
       {/*  HERO                                                         */}
       {/* ============================================================ */}
-      <section className="relative overflow-hidden" style={{ background: "linear-gradient(145deg, #1a0940 0%, #3e13af 45%, #5a2dd6 100%)" }}>
+      <section className="relative overflow-hidden" style={{ background: "linear-gradient(145deg, #21383a 0%, #2d544c 45%, #458077 100%)" }}>
         {/* Grain texture */}
         <div
           className="absolute inset-0 opacity-[0.04] pointer-events-none mix-blend-overlay"
@@ -826,7 +826,7 @@ export default function LandingPage() {
       <section id="security" className="relative py-20 lg:py-28 overflow-hidden" ref={sec.ref}>
         <div
           className="absolute inset-0"
-          style={{ background: "linear-gradient(160deg, #1a0940 0%, #3e13af 60%, #2d0e80 100%)" }}
+          style={{ background: "linear-gradient(160deg, #21383a 0%, #2d544c 60%, #458077 100%)" }}
         />
         <div
           className="absolute inset-0 opacity-[0.03] pointer-events-none"

@@ -546,7 +546,7 @@ export default function ExportClient({
                       isBlocked
                         ? "opacity-50 cursor-not-allowed"
                         : "hover:bg-surface-hover cursor-pointer",
-                      isSelected && !isBlocked && "bg-purple-50/30",
+                      isSelected && !isBlocked && "bg-brand-50/30",
                     )}
                     onClick={() => !isBlocked && toggleDoc(doc.id)}
                   >
@@ -576,7 +576,7 @@ export default function ExportClient({
                           doc.status === "signed-off"
                             ? "text-green-600"
                             : doc.status === "reviewed"
-                              ? "text-purple-600"
+                              ? "text-brand-600"
                               : doc.status === "in-review"
                                 ? "text-blue-600"
                                 : "text-amber-600",

@@ -47,7 +47,7 @@ interface RulesClientProps {
 
 const typeBadge: Record<string, string> = {
   Keyword: "bg-blue-50 text-blue-700",
-  Pattern: "bg-purple-50 text-purple-700",
+  Pattern: "bg-brand-50 text-brand-700",
   Entity: "bg-teal-50 text-teal-700",
   Combination: "bg-amber-50 text-amber-700",
 };

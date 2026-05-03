@@ -16,7 +16,7 @@ const docStatusConfig: Record<string, { label: string; color: string; bg: string
   processing: { label: "Processing", color: "text-blue-700", bg: "bg-blue-50" },
   ready: { label: "Ready for Review", color: "text-amber-600", bg: "bg-amber-50" },
   "in-review": { label: "In Review", color: "text-blue-700", bg: "bg-blue-50" },
-  reviewed: { label: "Reviewed", color: "text-purple-600", bg: "bg-purple-50" },
+  reviewed: { label: "Reviewed", color: "text-brand-600", bg: "bg-brand-50" },
   "signed-off": { label: "Signed Off", color: "text-green-700", bg: "bg-green-50" },
   excluded: { label: "Excluded", color: "text-gray-500", bg: "bg-gray-100" },
   error: { label: "Error", color: "text-red-700", bg: "bg-red-50" },
@@ -26,7 +26,7 @@ const batchStatusConfig: Record<string, { label: string; color: string; bg: stri
   draft: { label: "Draft", color: "text-gray-600", bg: "bg-gray-100" },
   processing: { label: "Processing", color: "text-blue-700", bg: "bg-blue-50" },
   "ready-for-review": { label: "Ready for Review", color: "text-amber-600", bg: "bg-amber-50" },
-  reviewed: { label: "Reviewed", color: "text-purple-600", bg: "bg-purple-50" },
+  reviewed: { label: "Reviewed", color: "text-brand-600", bg: "bg-brand-50" },
   exported: { label: "Exported", color: "text-green-700", bg: "bg-green-50" },
   deleted: { label: "Deleted", color: "text-red-700", bg: "bg-red-50" },
 };

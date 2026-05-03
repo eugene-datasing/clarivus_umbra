@@ -112,8 +112,8 @@ export default function ProcessingDashboard({
       label: "Avg Time",
       value: formatMs(avgTotalMs),
       icon: Clock,
-      color: "text-purple-600",
-      bg: "bg-purple-50",
+      color: "text-brand-600",
+      bg: "bg-brand-50",
       isText: true,
     },
   ];
@@ -185,7 +185,7 @@ export default function ProcessingDashboard({
               label="AI Detection"
               value={avgAiMs}
               maxValue={avgTotalMs}
-              color="bg-purple-400"
+              color="bg-brand-400"
             />
             <TimingBar
               label="Total"

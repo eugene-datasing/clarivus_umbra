@@ -118,7 +118,7 @@ Per-row context is set out in the schedule below.`
             Types:{" "}
             {sortedTypes.map(([type, count], idx) => (
               <span key={type}>
-                <span className="font-mono text-xs bg-purple-50 text-brand-primary px-1.5 py-0.5 rounded">
+                <span className="font-mono text-xs bg-brand-50 text-brand-primary px-1.5 py-0.5 rounded">
                   {type}
                 </span>
                 {" "}x {count}
@@ -204,7 +204,7 @@ Per-row context is set out in the schedule below.`
                     </div>
                   </td>
                   <td className="px-4 py-3 align-top">
-                    <span className="font-mono text-[10px] bg-purple-50 text-brand-primary px-1.5 py-0.5 rounded whitespace-nowrap">
+                    <span className="font-mono text-[10px] bg-brand-50 text-brand-primary px-1.5 py-0.5 rounded whitespace-nowrap">
                       {item.type}
                     </span>
                   </td>

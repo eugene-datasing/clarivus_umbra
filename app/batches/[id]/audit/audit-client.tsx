@@ -53,7 +53,7 @@ const tabs = [
 const typeIconMap: Record<string, { icon: typeof Check; color: string; bg: string }> = {
   approval: { icon: Check, color: "text-confidence-high", bg: "bg-green-50" },
   ingestion: { icon: Upload, color: "text-blue-600", bg: "bg-blue-50" },
-  detection: { icon: Sparkles, color: "text-brand-primary", bg: "bg-purple-50" },
+  detection: { icon: Sparkles, color: "text-brand-primary", bg: "bg-brand-50" },
   review: { icon: Edit, color: "text-amber-600", bg: "bg-amber-50" },
   admin: { icon: Shield, color: "text-gray-600", bg: "bg-gray-100" },
   access: { icon: Eye, color: "text-blue-500", bg: "bg-blue-50" },
@@ -65,7 +65,7 @@ const roleColors: Record<string, string> = {
   "Request Manager": "bg-blue-50 text-blue-700",
   System: "bg-gray-100 text-gray-600",
   Reviewer: "bg-amber-50 text-amber-700",
-  "Senior Reviewer": "bg-purple-50 text-brand-primary",
+  "Senior Reviewer": "bg-brand-50 text-brand-primary",
   "Final Approver": "bg-green-50 text-green-700",
 };
 

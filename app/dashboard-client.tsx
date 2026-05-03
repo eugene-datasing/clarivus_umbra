@@ -41,7 +41,7 @@ const batchStatusConfig: Record<string, { label: string; color: string; bg: stri
   draft: { label: "Draft", color: "text-gray-600", bg: "bg-gray-100" },
   processing: { label: "Processing", color: "text-blue-700", bg: "bg-blue-50" },
   "ready-for-review": { label: "Ready for Review", color: "text-amber-600", bg: "bg-amber-50" },
-  reviewed: { label: "Reviewed", color: "text-purple-600", bg: "bg-purple-50" },
+  reviewed: { label: "Reviewed", color: "text-brand-600", bg: "bg-brand-50" },
   exported: { label: "Exported", color: "text-green-700", bg: "bg-green-50" },
   deleted: { label: "Deleted", color: "text-red-700", bg: "bg-red-50" },
 };
@@ -53,7 +53,7 @@ export default function DashboardClient({ batches, dashboardStats, recentActivit
     .reduce((sum, b) => sum + (b.documentCount - b.reviewedCount), 0);
 
   const stats = [
-    { label: "Active Batches", value: String(dashboardStats.activeBatches), icon: FolderOpen, color: "text-brand-primary", bg: "bg-purple-50" },
+    { label: "Active Batches", value: String(dashboardStats.activeBatches), icon: FolderOpen, color: "text-brand-primary", bg: "bg-brand-50" },
     { label: "Total Documents", value: String(dashboardStats.totalDocuments), icon: FileText, color: "text-blue-600", bg: "bg-blue-50" },
     { label: "Docs Pending Review", value: String(pendingDocs), icon: FileText, color: "text-amber-600", bg: "bg-amber-50" },
     { label: "Total Redactions", value: String(dashboardStats.totalDetections), icon: CheckCircle, color: "text-green-600", bg: "bg-green-50" },

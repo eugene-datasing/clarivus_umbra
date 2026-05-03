@@ -45,7 +45,7 @@ export default function AIGovernanceClient({ metrics, fnMetrics, modelConfig }: 
   const overallStats = [
     { label: "Precision", value: pct(metrics.precision), color: "text-green-700", bg: "bg-green-50" },
     { label: "Total AI Detections", value: metrics.aiDetections.toString(), color: "text-blue-700", bg: "bg-blue-50" },
-    { label: "Reviewed", value: metrics.totalReviewed.toString(), color: "text-purple-700", bg: "bg-purple-50" },
+    { label: "Reviewed", value: metrics.totalReviewed.toString(), color: "text-brand-700", bg: "bg-brand-50" },
     { label: "False Positive Rate", value: pct(metrics.totalReviewed > 0 ? metrics.fp / metrics.totalReviewed : 0), color: "text-amber-700", bg: "bg-amber-50" },
   ];
 
@@ -245,7 +245,7 @@ export default function AIGovernanceClient({ metrics, fnMetrics, modelConfig }: 
       {/* Model Info Card */}
       <div className="card mb-6">
         <div className="flex items-start gap-4">
-          <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center flex-shrink-0">
+          <div className="w-10 h-10 rounded-lg bg-brand-50 flex items-center justify-center flex-shrink-0">
             <Brain className="w-5 h-5 text-brand-primary" />
           </div>
           <div>

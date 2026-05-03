@@ -76,12 +76,12 @@ const statusLabel: Record<string, { text: string; color: string }> = {
   error: { text: "Error", color: "text-red-600" },
   pending: { text: "Pending", color: "text-gray-500" },
   "in-review": { text: "In Review", color: "text-blue-600" },
-  reviewed: { text: "Reviewed (Initial)", color: "text-purple-600" },
+  reviewed: { text: "Reviewed (Initial)", color: "text-brand-600" },
   "signed-off": { text: "Signed Off", color: "text-green-600" },
   submitted: { text: "Submitted", color: "text-amber-600" },
   approved: { text: "Approved", color: "text-green-600" },
   rejected: { text: "Rejected", color: "text-red-600" },
-  released: { text: "Released", color: "text-purple-600" },
+  released: { text: "Released", color: "text-brand-600" },
   complete: { text: "Complete", color: "text-green-600" },
 };
 
@@ -362,7 +362,7 @@ export default function IngestClient({
         className={cn(
           "card border-2 border-dashed text-center py-16 mb-6 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-primary/60 focus:ring-offset-1",
           dragActive
-            ? "border-brand-primary bg-purple-50/50"
+            ? "border-brand-primary bg-brand-50/50"
             : "border-border hover:border-brand-primary/40 hover:bg-surface-hover"
         )}
         onDragOver={(e) => {
@@ -380,7 +380,7 @@ export default function IngestClient({
         }}
       >
         <div className="flex flex-col items-center">
-          <div className="w-16 h-16 rounded-full bg-purple-50 flex items-center justify-center mb-4">
+          <div className="w-16 h-16 rounded-full bg-brand-50 flex items-center justify-center mb-4">
             {isUploading ? (
               <Loader className="w-8 h-8 text-brand-primary animate-spin" />
             ) : (
