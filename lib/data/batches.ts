@@ -1,4 +1,9 @@
 import { prisma } from "@/lib/db/prisma";
+import { getAutoRedactConfig } from "@/lib/data/settings";
+import { getBoss, QUEUE_AUTO_EXPORT_BATCH, type AutoExportBatchPayload } from "@/lib/jobs/runner";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ module: "data/batches" });
 
 /**
  * List active (non-soft-deleted) batches.
@@ -217,6 +222,27 @@ export async function recomputeBatchStatus(batchId: string): Promise<string | nu
       where: { id: batchId },
       data: { status: newStatus },
     });
+
+    // Phase 12.2 — when a batch lands in "auto-redacted" and
+    // autoExportEnabled is on, enqueue an auto-export job. Fire-and-
+    // forget; failures must not block the status update.
+    if (newStatus === "auto-redacted") {
+      try {
+        const config = await getAutoRedactConfig();
+        if (config.autoExportEnabled) {
+          const boss = await getBoss();
+          const payload: AutoExportBatchPayload = { batchId };
+          await boss.send(QUEUE_AUTO_EXPORT_BATCH, payload);
+          log.info("Auto-export enqueued for batch", { batchId });
+        }
+      } catch (err) {
+        log.error("Failed to enqueue auto-export job", {
+          batchId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
     return newStatus;
   }
   return null;

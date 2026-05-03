@@ -20,11 +20,13 @@ import { getStorage } from "@/lib/storage";
 import { archiveAuditChain, type BatchMeta } from "./audit-archive";
 import { getRetentionConfig } from "@/lib/data/settings";
 import { createAuditEntry } from "@/lib/data/audit";
+import { runExportForBatch } from "@/lib/pipeline/export-runner";
 
 const log = logger.child({ module: "jobs/runner" });
 
 export const QUEUE_PURGE_BATCH = "purge-batch";
 export const QUEUE_RETENTION_SWEEP = "retention-sweep";
+export const QUEUE_AUTO_EXPORT_BATCH = "auto-export-batch";
 
 let boss: PgBoss | null = null;
 let workerStarted = false;
@@ -54,6 +56,7 @@ export async function startWorker(): Promise<void> {
 
   await b.createQueue(QUEUE_PURGE_BATCH);
   await b.createQueue(QUEUE_RETENTION_SWEEP);
+  await b.createQueue(QUEUE_AUTO_EXPORT_BATCH);
 
   await b.work(QUEUE_PURGE_BATCH, async ([job]) => {
     const data = job.data as PurgeBatchPayload;
@@ -77,6 +80,46 @@ export async function startWorker(): Promise<void> {
     } catch (err) {
       log.error("[retention-sweep] failed", {
         jobId: job.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    }
+  });
+
+  // Phase 12.2 — auto-export queue. Fires when recomputeBatchStatus
+  // transitions a batch to "auto-redacted" AND
+  // AUTO_REDACT_CONFIG.autoExportEnabled is true. The handler delegates
+  // to runExportForBatch (the same orchestration the manual API route
+  // uses) so the validation guards + audit-integrity check + export
+  // generation stay shared. On failure the job retries via pg-boss's
+  // default retry policy.
+  await b.work(QUEUE_AUTO_EXPORT_BATCH, async ([job]) => {
+    const data = job.data as AutoExportBatchPayload;
+    log.info("[auto-export-batch] received", { jobId: job.id, batchId: data.batchId });
+    try {
+      const result = await runExportForBatch(data.batchId, {
+        generatedBy: "auto-export",
+      });
+      if (!result.ok) {
+        log.warn("[auto-export-batch] runner declined", {
+          jobId: job.id,
+          batchId: data.batchId,
+          errorCode: result.errorCode,
+          errorMessage: result.errorMessage,
+        });
+        // Audit-integrity failure / blocked docs are not retryable —
+        // the job has done what it can; the batch needs human attention.
+        return;
+      }
+      log.info("[auto-export-batch] kicked off export", {
+        jobId: job.id,
+        batchId: data.batchId,
+        exportId: result.exportId,
+      });
+    } catch (err) {
+      log.error("[auto-export-batch] failed", {
+        jobId: job.id,
+        batchId: data.batchId,
         error: err instanceof Error ? err.message : String(err),
       });
       throw err;
@@ -110,6 +153,14 @@ export interface PurgeBatchPayload {
   requestedBy: string;
   reason: string | null;
   skipGrace: boolean;
+}
+
+/**
+ * Phase 12.2 — auto-export job payload. Fired by recomputeBatchStatus
+ * when a batch transitions to "auto-redacted" with autoExportEnabled.
+ */
+export interface AutoExportBatchPayload {
+  batchId: string;
 }
 
 /**

@@ -1,11 +1,9 @@
 import { requireCsrfHeader } from "@/lib/csrf";
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db/prisma";
-import { generateExportPackage } from "@/lib/pipeline/export";
+import { runExportForBatch } from "@/lib/pipeline/export-runner";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeForBatch } from "@/lib/auth/authorize";
 import { applyRateLimit } from "@/lib/api-utils";
-import { verifyAuditIntegrity } from "@/lib/data/audit";
 import { logger } from "@/lib/logger";
 import { trackException } from "@/lib/telemetry";
 
@@ -27,53 +25,27 @@ export async function POST(
 
     await authorizeForBatch(user, batchId);
 
-    // Verify all documents in the batch are reviewed
-    const documents = await prisma.document.findMany({
-      where: { batchId },
-      select: { id: true, name: true, status: true },
-    });
+    // Phase 12.2 — orchestration extracted to runExportForBatch so the
+    // auto-export pg-boss handler calls the same function. The route
+    // owns CSRF / auth / rate-limit / authorisation; the runner owns
+    // batch-state validation + audit integrity + the generateExportPackage
+    // kick-off.
+    const result = await runExportForBatch(batchId, { generatedBy: user.name });
 
-    if (documents.length === 0) {
-      return NextResponse.json(
-        { error: "Batch has no documents to export" },
-        { status: 400 },
-      );
+    if (result.ok) {
+      return NextResponse.json({ exportId: result.exportId });
     }
 
-    const blockedDocs = documents.filter((d) =>
-      ["pending", "processing", "ready", "error"].includes(d.status),
-    );
-    if (blockedDocs.length > 0) {
-      return NextResponse.json(
-        {
-          error: `Cannot export unreviewed documents: ${blockedDocs.map((d) => d.name).join(", ")}`,
-        },
-        { status: 400 },
-      );
+    if (result.errorCode === "BATCH_EMPTY" || result.errorCode === "BLOCKED_DOCS") {
+      return NextResponse.json({ error: result.errorMessage }, { status: 400 });
     }
-
-    const auditCheck = await verifyAuditIntegrity(batchId);
-    if (!auditCheck.valid) {
-      log.error("Audit integrity check failed before export", {
-        batchId,
-        totalEntries: auditCheck.totalEntries,
-        brokenAt: auditCheck.brokenAt,
-      });
+    if (result.errorCode === "AUDIT_INTEGRITY_FAILURE") {
       return NextResponse.json(
-        {
-          error:
-            "Audit trail integrity check failed. The audit chain may have been tampered with. Export blocked — contact an administrator.",
-          code: "AUDIT_INTEGRITY_FAILURE",
-        },
+        { error: result.errorMessage, code: "AUDIT_INTEGRITY_FAILURE" },
         { status: 409 },
       );
     }
-
-    const exportId = await generateExportPackage(batchId, {
-      generatedBy: user.name,
-    });
-
-    return NextResponse.json({ exportId });
+    return NextResponse.json({ error: result.errorMessage ?? "Export failed" }, { status: 400 });
   } catch (error) {
     log.error("Export generation failed", {
       error: error instanceof Error ? error.message : String(error),
