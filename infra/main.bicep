@@ -311,8 +311,14 @@ resource kvAdminAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' 
 resource asp 'Microsoft.Web/serverfarms@2023-12-01' = {
   name: aspName
   location: location
+  // Phase 12.5.1 — bumped B1 → B2 (1 vCPU / 1.75 GB → 2 vCPU / 3.5 GB)
+  // to relieve event-loop starvation while pg-boss workers run
+  // LibreOffice + PyMuPDF subprocesses on the same instance. Polling
+  // routes (/api/documents/[docId]/status, /queue-status) were hitting
+  // 30s+ wall-time under load; the second vCPU lets the web tier
+  // serve requests while the worker is mid-canonical-PDF or mid-AOAI.
   sku: {
-    name: 'B1'
+    name: 'B2'
     tier: 'Basic'
   }
   kind: 'linux'
