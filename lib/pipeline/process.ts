@@ -532,7 +532,7 @@ export async function processDocument(docId: string): Promise<void> {
     }
 
     // ------------------------------------------------------------------
-    // 6. Pattern detection
+    // 6. Pattern detection (sequential — feeds dedup texts to AI)
     // ------------------------------------------------------------------
     const enabledTypes = await getEnabledDetectionTypes();
     log.info("Running pattern detection", { docId, enabledTypes: [...enabledTypes] });
@@ -541,48 +541,81 @@ export async function processDocument(docId: string): Promise<void> {
     patternDetectionMs = Date.now() - patternStart;
     log.info("Pattern detection complete", { docId, matches: patternMatches.length });
 
-    // Label-adjacent detection (Phase 5, April 2026). Deterministic
-    // regex pass for labelled table rows ("Date of birth: 14 June
-    // 1983", "| Employee number | ADC-2284 |") the AI classifies
-    // inconsistently. Runs alongside detectPatterns; output merges
-    // through the same bbox enrichment + (page, type, text,
-    // posY_rounded) dedup. Targets personal / commercial pathways;
-    // orthogonal to governance. See lib/pipeline/label-adjacent.ts.
-    const labelAdjacentMatches = detectLabelAdjacent(extraction.pages, enabledTypes);
+    // ------------------------------------------------------------------
+    // 6.5 / 7 — label-adjacent + custom-rules + AI detection in parallel
+    // ------------------------------------------------------------------
+    // Phase 12.5.1 latency win #2: these three detection passes are
+    // independent (label-adjacent is a regex over page text, custom
+    // rules execute admin-defined keyword/regex matchers, AI calls
+    // AOAI). Pre-fix they ran sequentially after pattern detection;
+    // now they run concurrently via Promise.all. AI dominates the
+    // duration so the gain is mostly the small ones (label / custom)
+    // overlapping with AI's 5-30s wall-time. Saves 100-500ms per doc
+    // on top of the pure-AI baseline.
+    //
+    // patternTexts feeds AI's de-dup filter; we have it here already.
+    // feedbackPrompt is fetched once and shared (same for every batch
+    // in this doc). AI failure still re-throws the typed error; the
+    // outer catch records Document.status = "error".
+    const patternTexts = patternMatches.map((m) => m.text);
+    const feedbackPrompt = await buildFeedbackPromptSection();
+    log.info("Dispatching label-adjacent + custom-rules + AI in parallel", {
+      docId,
+    });
+    const aiStart = Date.now();
+    const [labelAdjacentMatches, customRuleResult, aiResult] =
+      await Promise.allSettled([
+        Promise.resolve(detectLabelAdjacent(extraction.pages, enabledTypes)),
+        executeCustomRules(extraction.pages),
+        detectWithAI(
+          extraction.pages,
+          patternTexts,
+          feedbackPrompt || undefined,
+          enabledTypes,
+        ),
+      ]);
+
+    // Label-adjacent is synchronous; its Promise.resolve wrapper can
+    // only fail if detectLabelAdjacent throws synchronously (shouldn't,
+    // but treat the rejection cleanly).
+    const labelAdjacentList =
+      labelAdjacentMatches.status === "fulfilled"
+        ? labelAdjacentMatches.value
+        : (() => {
+            log.error("Label-adjacent detection failed", {
+              docId,
+              error: String(labelAdjacentMatches.reason),
+            });
+            return [];
+          })();
     log.info("Label-adjacent detection complete", {
       docId,
-      matches: labelAdjacentMatches.length,
+      matches: labelAdjacentList.length,
     });
 
-    // ------------------------------------------------------------------
-    // 6.5 Custom rules detection (WP8)
-    // ------------------------------------------------------------------
     let customRuleMatches: Awaited<ReturnType<typeof executeCustomRules>> = [];
-    try {
-      log.info("Running custom rules", { docId });
-      customRuleMatches = await executeCustomRules(extraction.pages);
-      log.info("Custom rules complete", { docId, matches: customRuleMatches.length });
-    } catch (rulesError) {
+    if (customRuleResult.status === "fulfilled") {
+      customRuleMatches = customRuleResult.value;
+      log.info("Custom rules complete", {
+        docId,
+        matches: customRuleMatches.length,
+      });
+    } else {
       log.error("Custom rules failed, continuing", {
         docId,
-        error: rulesError instanceof Error ? rulesError.message : String(rulesError),
+        error:
+          customRuleResult.reason instanceof Error
+            ? customRuleResult.reason.message
+            : String(customRuleResult.reason),
       });
     }
 
-    // ------------------------------------------------------------------
-    // 7. AI detection
-    // ------------------------------------------------------------------
     let aiDetections: Awaited<ReturnType<typeof detectWithAI>> = [];
-
-    try {
-      log.info("Running AI detection", { docId });
-      const aiStart = Date.now();
-      const patternTexts = patternMatches.map((m) => m.text);
-      const feedbackPrompt = await buildFeedbackPromptSection();
-      aiDetections = await detectWithAI(extraction.pages, patternTexts, feedbackPrompt || undefined, enabledTypes);
+    if (aiResult.status === "fulfilled") {
+      aiDetections = aiResult.value;
       aiDetectionMs = Date.now() - aiStart;
       log.info("AI detection complete", { docId, detections: aiDetections.length });
-    } catch (aiError) {
+    } else {
       // Phase 12.5.1 — AI-degraded sentinel. Pre-fix this swallowed AI
       // failures and proceeded with pattern-only output, which produced
       // a privacy regression: detections that depend on AI (personal
@@ -592,11 +625,15 @@ export async function processDocument(docId: string): Promise<void> {
       // 4xx/5xx, parse) errors the document and the outer catch sets
       // Document.status = "error" with a clear message. The reviewer
       // can retry once the AOAI service recovers.
-      log.error("AI detection unavailable; failing document to prevent privacy regression", {
-        docId,
-        error: aiError instanceof Error ? aiError.message : String(aiError),
-        circuitOpen: aiError instanceof CircuitOpenError,
-      });
+      const aiError = aiResult.reason;
+      log.error(
+        "AI detection unavailable; failing document to prevent privacy regression",
+        {
+          docId,
+          error: aiError instanceof Error ? aiError.message : String(aiError),
+          circuitOpen: aiError instanceof CircuitOpenError,
+        },
+      );
       trackException(aiError, { docId, stage: "ai-detection" });
       throw new Error(
         "AI detection unavailable; please retry when service recovers",
@@ -686,7 +723,7 @@ export async function processDocument(docId: string): Promise<void> {
         aiExplanation: `Custom rule: ${crm.ruleName}. ${crm.reasoning}`,
         source: "custom-rule",
       })),
-      ...labelAdjacentMatches.map((la) => ({
+      ...labelAdjacentList.map((la) => ({
         type: la.type,
         text: la.text,
         confidence: la.confidence,
