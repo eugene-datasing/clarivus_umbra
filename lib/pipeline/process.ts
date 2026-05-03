@@ -846,42 +846,47 @@ export async function processDocument(docId: string): Promise<void> {
       pageTextByNumber.set(page.pageNumber, page.text ?? "");
     }
 
-    const allDetectionRecords = [];
+    // Phase 12.5.1 — single-round-trip detection write via
+    // createManyAndReturn. Pre-fix this was a serial for-loop calling
+    // prisma.detection.create N times, producing N round-trips at
+    // ~30ms each on the prod DB. Typical 50-detection DOCX took ~1.5s
+    // of write-phase latency; createManyAndReturn collapses it to a
+    // single INSERT … RETURNING. Status counters are computed in the
+    // same pass for the post-write log.
     let acceptedCount = 0;
     let pendingCount = 0;
     let rejectedCount = 0;
-    for (const det of dedupedDetections) {
+    const detectionRows = dedupedDetections.map((det) => {
       const tier = bucketConfidence(det, autoRedactConfig);
       const status = tierToStatus(tier);
       if (status === "accepted") acceptedCount++;
       else if (status === "pending") pendingCount++;
       else rejectedCount++;
+      return {
+        documentId: docId,
+        type: det.type,
+        text: det.text,
+        confidence: det.confidence,
+        page: det.page,
+        reasoning: det.reasoning,
+        aiExplanation: det.aiExplanation,
+        source: det.source,
+        status,
+        posX: det.posX,
+        posY: det.posY,
+        posW: det.posW,
+        posH: det.posH,
+        pageContext: extractPageContext(
+          pageTextByNumber.get(det.page) ?? "",
+          det.text,
+        ),
+      };
+    });
 
-      const pageContext = extractPageContext(
-        pageTextByNumber.get(det.page) ?? "",
-        det.text,
-      );
-
-      const record = await prisma.detection.create({
-        data: {
-          documentId: docId,
-          type: det.type,
-          text: det.text,
-          confidence: det.confidence,
-          page: det.page,
-          reasoning: det.reasoning,
-          aiExplanation: det.aiExplanation,
-          source: det.source,
-          status,
-          posX: det.posX,
-          posY: det.posY,
-          posW: det.posW,
-          posH: det.posH,
-          pageContext,
-        },
-      });
-      allDetectionRecords.push(record);
-    }
+    const allDetectionRecords =
+      detectionRows.length > 0
+        ? await prisma.detection.createManyAndReturn({ data: detectionRows })
+        : [];
 
     const totalDetections = allDetectionRecords.length;
     log.info("Tier-routed detection write complete", {
