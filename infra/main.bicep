@@ -380,6 +380,13 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
           name: 'AZURE_STORAGE_CONTAINER'
           value: 'documents'
         }
+        // ---- Auth flow URL (NextAuth v5 invitation-email base, also a v4 fallback) ----
+        // NextAuth v5 itself uses trustHost: true so OAuth callbacks come from the
+        // request Host header; this var is for invitation-email links.
+        {
+          name: 'NEXTAUTH_URL'
+          value: 'https://${webAppName}.azurewebsites.net'
+        }
         // ---- Secrets (Key Vault references) ----
         // Each secret is wired via `@Microsoft.KeyVault(SecretUri=...)`.
         // The vault's secret URI is stable; provision.sh writes the
