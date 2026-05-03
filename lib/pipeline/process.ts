@@ -22,9 +22,7 @@ import { validateFile } from "./file-validator";
 import { convertFromPages, convertToReviewFormat } from "./format-converter";
 import { detectPatterns } from "./patterns";
 import { detectLabelAdjacent } from "./label-adjacent";
-import { detectSectionMarkers } from "./section-marker-detect";
 import { detectWithAI } from "./ai-detect";
-import { classifyDocument, type DocumentClassification } from "./doc-classify";
 import { detectDuplicates } from "./duplicate-detect";
 import { executeCustomRules } from "./custom-rules";
 import { calculateBBoxAll } from "./bbox";
@@ -476,26 +474,6 @@ export async function processDocument(docId: string): Promise<void> {
     }
 
     // ------------------------------------------------------------------
-    // 4.7 Document-level classification
-    // ------------------------------------------------------------------
-    let docClassification: DocumentClassification | null = null;
-    try {
-      log.info("Running document classification", { docId });
-      docClassification = await classifyDocument(extraction.pages);
-      log.info("Document classification complete", {
-        docId,
-        documentType: docClassification.documentType,
-        likelyGrounds: docClassification.likelyGrounds,
-      });
-    } catch (classifyError) {
-      // Classification is non-critical — log and continue without it
-      log.error("Document classification failed, continuing without context", {
-        docId,
-        error: classifyError instanceof Error ? classifyError.message : String(classifyError),
-      });
-    }
-
-    // ------------------------------------------------------------------
     // 5. Store pages in DocumentPage table
     // ------------------------------------------------------------------
     // Wrap in a transaction to prevent race conditions when processing
@@ -574,22 +552,6 @@ export async function processDocument(docId: string): Promise<void> {
       matches: labelAdjacentMatches.length,
     });
 
-    // Section-marker detection (April 2026 free-frank backstop).
-    // Deterministic regex pass for sections whose header marks the
-    // section as "(free and frank)" / "candid commentary" / similar.
-    // Inside such a section, every prose-shaped sentence becomes a
-    // free-frank candidate at confidence 75. Closes the prompt-
-    // engineering ceiling on ambiguous-type sentence content
-    // documented in docs/detection-coverage-retrospective-2026-04.md.
-    // Orthogonal to AI variance — same input feeds the AI pass below
-    // and downstream dedup keeps duplicates collapsed. See
-    // lib/pipeline/section-marker-detect.ts.
-    const sectionMarkerMatches = detectSectionMarkers(extraction.pages, enabledTypes);
-    log.info("Section-marker detection complete", {
-      docId,
-      matches: sectionMarkerMatches.length,
-    });
-
     // ------------------------------------------------------------------
     // 6.5 Custom rules detection (WP8)
     // ------------------------------------------------------------------
@@ -615,7 +577,7 @@ export async function processDocument(docId: string): Promise<void> {
       const aiStart = Date.now();
       const patternTexts = patternMatches.map((m) => m.text);
       const feedbackPrompt = await buildFeedbackPromptSection();
-      aiDetections = await detectWithAI(extraction.pages, patternTexts, feedbackPrompt || undefined, enabledTypes, docClassification || undefined);
+      aiDetections = await detectWithAI(extraction.pages, patternTexts, feedbackPrompt || undefined, enabledTypes);
       aiDetectionMs = Date.now() - aiStart;
       log.info("AI detection complete", { docId, detections: aiDetections.length });
     } catch (aiError) {
@@ -723,15 +685,6 @@ export async function processDocument(docId: string): Promise<void> {
         aiExplanation: `Label-adjacent match on "${la.labelMatched}". ${la.reasoning}`,
         source: "label-adjacent",
       })),
-      ...sectionMarkerMatches.map((sm) => ({
-        type: sm.type,
-        text: sm.text,
-        confidence: sm.confidence,
-        page: sm.page,
-        reasoning: sm.reasoning,
-        aiExplanation: `Section-marker match inside "${sm.markerMatched}" section. ${sm.reasoning}`,
-        source: "section-marker",
-      })),
     ];
 
     // Entity propagation (Phase 4, April 2026). Deterministic pass over
@@ -799,8 +752,7 @@ export async function processDocument(docId: string): Promise<void> {
       // preserves the prior "long AI is always sidebar-visible"
       // contract while letting the common case (the AI-emitted
       // sentence is verbatim from the page) gain a real bbox.
-      const isLiteralCapture =
-        det.source === "section-marker" || det.source === "ai";
+      const isLiteralCapture = det.source === "ai";
       let bboxes;
       if (!layout) {
         bboxes = [{ posX: 0, posY: 0, posW: 0, posH: 0 }];
@@ -836,17 +788,6 @@ export async function processDocument(docId: string): Promise<void> {
 
     // Deduplicate by (page, type, text, posY_rounded). Keep the entry
     // with highest confidence.
-    //
-    // Section-marker source uses (page, type, text) without posY —
-    // logical-sentence emission combined with calculateBBoxAll's
-    // per-visual-line bbox return produces N rows of identical text
-    // for an N-line wrapped sentence. The bench scorer's first-match-
-    // wins semantics counts those duplicates as FPs (only one row per
-    // expected entry can be claimed). Collapsing the dupes here means
-    // one Detection row per logical sentence; the canvas overlay
-    // shows a single black rectangle on the first visual line, and
-    // the export-time PyMuPDF Tier-2 text-search redacts every
-    // occurrence of the sentence text in the produced PDF.
     const beforeDedup = enrichedDetections.length;
     const seen = new Map<string, number>();
     const dedupedDetections: (UnifiedDetection & { posX: number; posY: number; posW: number; posH: number })[] = [];
@@ -854,10 +795,7 @@ export async function processDocument(docId: string): Promise<void> {
     for (const det of enrichedDetections) {
       const posYRounded = Math.round(det.posY * 10) / 10;
       const normalisedText = det.text.toLowerCase().trim();
-      const key =
-        det.source === "section-marker"
-          ? `${det.page}|${det.type}|${normalisedText}|section-marker`
-          : `${det.page}|${det.type}|${normalisedText}|${posYRounded}`;
+      const key = `${det.page}|${det.type}|${normalisedText}|${posYRounded}`;
       const existingIdx = seen.get(key);
       if (existingIdx !== undefined) {
         if (det.confidence > dedupedDetections[existingIdx].confidence) {
@@ -970,9 +908,6 @@ export async function processDocument(docId: string): Promise<void> {
         where: { id: docId },
         data: {
           contentJson: JSON.parse(JSON.stringify(content)),
-          classification: docClassification
-            ? JSON.parse(JSON.stringify(docClassification))
-            : undefined,
           detectionCount: totalDetections,
           avgConfidence: Math.round(avgConfidence * 10) / 10,
           status: "ready",
