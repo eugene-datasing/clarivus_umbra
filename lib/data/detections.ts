@@ -91,6 +91,113 @@ export async function getThresholdPreview(batchId: string) {
   return detections;
 }
 
+/**
+ * Phase 12.3 — Tray clusters.
+ *
+ * Group all `pending` detections in a batch by `(type, normalisedText)`
+ * so the Tray UI can present "Sarah Mitchell — 8 occurrences in 3 docs"
+ * cluster rows. Reviewer approves / rejects whole clusters via
+ * `bulkAcceptBySimilar` (already takes case-insensitive matching).
+ *
+ * Implementation note: we group in memory rather than via raw SQL.
+ * Prisma's groupBy doesn't support `array_agg` of related-row fields,
+ * and a raw SQL path would have to thread Document.name back manually
+ * anyway. Pending-detection counts per batch typically sit in the
+ * 10s-to-hundreds, well within in-memory budget; if that ever flips
+ * we can swap to a `prisma.$queryRaw` GROUP BY without changing the
+ * caller shape.
+ */
+export interface TrayClusterOccurrence {
+  detectionId: string;
+  documentId: string;
+  documentName: string;
+  page: number;
+  confidence: number;
+  aiExplanation: string;
+}
+
+export interface TrayCluster {
+  /** Detection type (e.g. "personal-name", "sensitive-context"). */
+  type: string;
+  /** Canonical text — taken from the first occurrence in the cluster. */
+  text: string;
+  /** Lowercased + whitespace-normalised text used as the cluster key. */
+  normalisedText: string;
+  /** Number of pending detections in the cluster. */
+  occurrences: number;
+  /** Number of distinct documents the cluster spans. */
+  documentCount: number;
+  /** Mean confidence across the cluster. */
+  averageConfidence: number;
+  /** Per-occurrence detail for the expand-row UI. */
+  occurrenceList: TrayClusterOccurrence[];
+}
+
+export async function getBatchTrayClusters(
+  batchId: string,
+): Promise<TrayCluster[]> {
+  const detections = await prisma.detection.findMany({
+    where: { document: { batchId }, status: "pending" },
+    include: { document: { select: { name: true } } },
+    orderBy: [{ confidence: "desc" }],
+  });
+
+  const clusterMap = new Map<string, TrayCluster>();
+  for (const d of detections) {
+    const normalisedText = d.text.toLowerCase().replace(/\s+/g, " ").trim();
+    const key = `${d.type}::${normalisedText}`;
+
+    let cluster = clusterMap.get(key);
+    if (!cluster) {
+      cluster = {
+        type: d.type,
+        text: d.text,
+        normalisedText,
+        occurrences: 0,
+        documentCount: 0,
+        averageConfidence: 0,
+        occurrenceList: [],
+      };
+      clusterMap.set(key, cluster);
+    }
+    cluster.occurrenceList.push({
+      detectionId: d.id,
+      documentId: d.documentId,
+      documentName: d.document.name,
+      page: d.page,
+      confidence: d.confidence,
+      aiExplanation: d.aiExplanation,
+    });
+  }
+
+  // Finalise per-cluster aggregates.
+  const out: TrayCluster[] = [];
+  for (const cluster of clusterMap.values()) {
+    cluster.occurrences = cluster.occurrenceList.length;
+    cluster.documentCount = new Set(
+      cluster.occurrenceList.map((o) => o.documentId),
+    ).size;
+    cluster.averageConfidence = Math.round(
+      cluster.occurrenceList.reduce((s, o) => s + o.confidence, 0) /
+        cluster.occurrenceList.length,
+    );
+    // Stable per-cluster ordering of occurrences: by document then page.
+    cluster.occurrenceList.sort(
+      (a, b) =>
+        a.documentName.localeCompare(b.documentName) || a.page - b.page,
+    );
+    out.push(cluster);
+  }
+
+  // Default sort: most-occurrences-first, then alphabetically by type.
+  out.sort(
+    (a, b) =>
+      b.occurrences - a.occurrences || a.type.localeCompare(b.type) ||
+      a.normalisedText.localeCompare(b.normalisedText),
+  );
+  return out;
+}
+
 export async function getWithholdingItems(batchId: string) {
   const acceptedDetections = await prisma.detection.findMany({
     where: {

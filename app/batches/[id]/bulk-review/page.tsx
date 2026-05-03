@@ -1,12 +1,22 @@
-import { getGroupedDetectionsForCase, getThresholdPreview } from "@/lib/data/detections";
+import { getBatchTrayClusters } from "@/lib/data/detections";
 import { getBatch } from "@/lib/data/batches";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeForBatch } from "@/lib/auth/authorize";
 import BulkReviewClient from "./bulk-review-client";
-import { detectionTypeConfig, type DetectionType } from "@/lib/db/mappers";
 
-
+/**
+ * Phase 12.3 — Tray page.
+ *
+ * The "Bulk Review" route is now the canonical Tray surface for
+ * medium-confidence detections (those that tier-routed to "pending"
+ * in `lib/pipeline/process.ts`). The Tray groups detections by
+ * (type, normalisedText) per batch and lets the reviewer approve /
+ * reject whole clusters via `bulkAcceptBySimilar`.
+ *
+ * The URL stays `/batches/[id]/bulk-review` for back-compat. The
+ * conceptual rename (Tray) is reflected in the page title + UI copy.
+ */
 export default async function BulkReviewPage({
   params,
 }: {
@@ -15,109 +25,21 @@ export default async function BulkReviewPage({
   const { id } = await params;
   const user = await requireUser();
   await authorizeForBatch(user, id);
-  const [batchData, detections, thresholdDetections] = await Promise.all([
+
+  const [batchData, clusters] = await Promise.all([
     getBatch(id),
-    getGroupedDetectionsForCase(id),
-    getThresholdPreview(id),
+    getBatchTrayClusters(id),
   ]);
 
   if (!batchData) notFound();
 
-  // Group detections by text to create entity groups
-  const groupMap = new Map<string, typeof detections>();
-  for (const d of detections) {
-    const key = d.text;
-    if (!groupMap.has(key)) groupMap.set(key, []);
-    groupMap.get(key)!.push(d);
-  }
-
-  const entityGroups = Array.from(groupMap.entries()).map(
-    ([entity, dets], idx) => {
-      const first = dets[0];
-      const typeCfg = detectionTypeConfig[first.type as DetectionType];
-      const uniqueDocs = new Set(dets.map((d) => d.documentId));
-
-      // Build snippets from up to 3 unique-document detections
-      const seenDocs = new Set<string>();
-      const snippets = dets
-        .filter((d) => {
-          if (seenDocs.has(d.documentId)) return false;
-          seenDocs.add(d.documentId);
-          return true;
-        })
-        .slice(0, 3)
-        .map((d) => ({
-          doc: d.documentName,
-          parts: [
-            ...(d.aiExplanation
-              ? [
-                  {
-                    text: `...${d.aiExplanation.substring(0, 60)} `,
-                    highlight: false,
-                  },
-                ]
-              : [{ text: "...", highlight: false }]),
-            { text: d.text, highlight: true },
-            { text: "...", highlight: false },
-          ],
-        }));
-
-      // Compute per-group status counts
-      const pendingCount = dets.filter((d) => d.status === "pending").length;
-      const acceptedCount = dets.filter((d) => d.status === "accepted").length;
-      const rejectedCount = dets.filter((d) => d.status === "rejected").length;
-      const totalCount = dets.length;
-
-      let groupStatus: "pending" | "accepted" | "partial" | "rejected";
-      if (acceptedCount === totalCount) groupStatus = "accepted";
-      else if (rejectedCount === totalCount) groupStatus = "rejected";
-      else if (pendingCount === totalCount) groupStatus = "pending";
-      else groupStatus = "partial";
-
-      return {
-        id: idx + 1,
-        entity,
-        type: typeCfg?.label || first.type,
-        docCount: uniqueDocs.size,
-        occurrences: dets.length,
-        confidence: Math.round(
-          dets.reduce((sum, d) => sum + d.confidence, 0) / dets.length
-        ),
-        snippets,
-        detectionIds: dets.map((d) => d.id),
-        detectionStatuses: dets.map((d) => ({
-          id: d.id,
-          status: d.status,
-          confidence: d.confidence,
-        })),
-        totalCount,
-        pendingCount,
-        acceptedCount,
-        rejectedCount,
-        groupStatus,
-      };
-    }
-  );
-
-  // Map threshold detection types to display labels
-  const thresholdData = thresholdDetections.map((d) => {
-    const typeCfg = detectionTypeConfig[d.type as DetectionType];
-    return {
-      id: d.id,
-      type: d.type,
-      typeLabel: typeCfg?.label || d.type,
-      confidence: d.confidence,
-      documentId: d.documentId,
-    };
-  });
-
   return (
     <BulkReviewClient
-      entityGroups={entityGroups}
-      caseReference={batchData.reference}
-      requestId={id}
+      batchId={id}
+      batchReference={batchData.reference}
+      batchStatus={batchData.status}
       totalDocuments={batchData.documentCount}
-      thresholdData={thresholdData}
+      clusters={clusters}
     />
   );
 }
