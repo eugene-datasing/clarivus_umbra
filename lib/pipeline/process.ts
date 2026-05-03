@@ -696,13 +696,9 @@ export async function processDocument(docId: string): Promise<void> {
     // lib/pipeline/entity-propagation.ts for the full design rationale.
     const propagated = propagateNameDetections(extraction.pages, allDetections);
     if (propagated.length > 0) {
-      const personalCount = propagated.filter((d) => d.seedType === "personal-name").length;
-      const harassmentCount = propagated.filter((d) => d.seedType === "harassment-risk").length;
       log.info("Entity propagation complete", {
         docId,
         propagated: propagated.length,
-        fromPersonalName: personalCount,
-        fromHarassmentRisk: harassmentCount,
       });
       for (const p of propagated) {
         allDetections.push({

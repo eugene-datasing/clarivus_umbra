@@ -1,10 +1,13 @@
 /**
- * AI-based detection using Azure OpenAI (GPT-4o).
+ * AI-based PII detection using Azure OpenAI (GPT-4o).
  *
- * Sends extracted page text to GPT-4o with a LGOIMA-aware system prompt and
- * asks the model to identify text that may need to be withheld.  Results are
- * de-duplicated against pattern matches that were already found by the regex
- * detector.
+ * Sends extracted page text to GPT-4o with a privacy-first system prompt
+ * and asks the model to identify every personal name, contact detail,
+ * identifier, and personal-circumstance reference that should be redacted.
+ * Results are de-duplicated against pattern matches already found by the
+ * regex detector. Phase 12.1 (Umbra v2) rewrote the prompt from the
+ * Veil-era LGOIMA-curatorial framing to PII-mass-redaction framing — see
+ * docs/umbra-v2-prompt-verification.md for the recall verification.
  */
 
 import { AzureOpenAI } from "openai";
@@ -15,8 +18,6 @@ import {
   CircuitOpenError,
 } from "@/lib/resilience/azure-services";
 import { logger } from "@/lib/logger";
-import { lgoimaGrounds } from "@/lib/lgoima-grounds";
-import type { DocumentClassification } from "./doc-classify";
 
 const log = logger.child({ module: "ai-detect" });
 
@@ -123,319 +124,153 @@ export const ALL_AI_TYPES = [
 ];
 
 /**
- * Maps each LGOIMA ground ID to the recommended AI detection type.
- * Used by buildGroundsReference() to group grounds by detection pathway
- * so the AI knows which type to assign for each ground.
+ * SYSTEM_PROMPT_BASE — Phase 12.1 (Umbra v2).
+ *
+ * Privacy-first PII identification prompt. Replaces the Veil-era
+ * LGOIMA-curatorial prompt that under-detected personal names by ~50-125%
+ * (per docs/umbra-v2-prompt-verification.md). The rewrite drops:
+ *   - LGOIMA / withholding framing
+ *   - Council-officials carve-out (council staff names ARE PII in v2)
+ *   - Third-party-professional carve-out
+ *   - Grounds vocabulary + per-ground routing guidance
+ *   - Sentence-shaped harassment-risk routing (witness/grievance names
+ *     route directly to personal-name)
+ *   - Document-classification context block
+ *
+ * The {{TYPES}} placeholder is filled at buildSystemPrompt() time with
+ * the (toggle-filtered) list of allowed AI emit types.
  */
-const GROUND_DETECTION_TYPE_MAP: Record<string, string> = {
-  // PII grounds → dedicated PII types
-  s7_2a: "personal-name / phone / email-addr / ird / address / bank-account / nz-passport / vehicle-reg",
-  // Commercial/trade grounds → "commercial"
-  s7_2bi: "commercial",
-  s7_2bii: "commercial",
-  // Dedicated contextual types
-  s7_2h: "council-commercial",
-  s7_2i: "negotiation",
-  // Free and frank → "free-frank"
-  s7_2fi: "free-frank",
-  // Legal privilege → "legal-privilege"
-  s7_2g: "legal-privilege",
-  // Dedicated types for previously underserved grounds
-  s6c: "law-enforcement",
-  s6d: "safety-concern",
-  s7_2ba: "cultural-sensitivity",
-  s7_2d: "health-safety",
-  s7_2fii: "harassment-risk",
-  // Obligation of confidence → "confidential" (no dedicated type)
-  s7_2ci: "confidential",
-  s7_2cii: "confidential",
-  // Rare grounds → "confidential" catch-all
-  s6a: "confidential",
-  s6b: "confidential",
-  s7_2e: "confidential",
-  s7_2j: "confidential",
-};
+const SYSTEM_PROMPT_BASE = `You are a privacy-protection assistant for New Zealand public-sector documents. Your job is to identify every instance of personally identifiable information (PII) and personal-circumstance details that should be redacted before publication.
 
-/**
- * Build the LGOIMA grounds reference section for the AI prompt.
- * Generated dynamically from the canonical `lgoimaGrounds` array so
- * the prompt stays in sync with code changes.  Groups grounds by
- * detection pathway so the AI knows which type to use for each ground.
- */
-function buildGroundsReference(): string {
-  const s6s7 = lgoimaGrounds.filter((g) => g.section !== "s17");
-  const s17 = lgoimaGrounds.filter((g) => g.section === "s17");
+Be thorough and exhaustive — your output drives an automated redaction pipeline that protects individuals' privacy. List every name, address, contact detail, identifier, and personal-circumstance reference you see, even if it appears in passing or in an "official capacity". Do NOT make withholding judgements; do NOT decide whether a name is "private enough"; just identify what is PII. The downstream tool is privacy-protective by design and reviewers can override individual flags later — your job is recall.
 
-  // Partition s6/s7 grounds into "has dedicated type" vs "use catch-all"
-  const dedicatedTypeIds = new Set([
-    "s7_2a", "s7_2bi", "s7_2bii", "s7_2fi", "s7_2g",  // original dedicated types
-    "s6c", "s6d", "s7_2h", "s7_2i", "s7_2ba", "s7_2d", "s7_2fii",  // new dedicated types
-  ]);
-  const dedicated = s6s7.filter((g) => dedicatedTypeIds.has(g.id));
-  const catchAll = s6s7.filter((g) => !dedicatedTypeIds.has(g.id));
-
-  const lines: string[] = ["Available LGOIMA withholding grounds:"];
-
-  lines.push("");
-  lines.push("GROUNDS WITH DEDICATED DETECTION TYPES:");
-  for (const g of dedicated) {
-    const typeHint = GROUND_DETECTION_TYPE_MAP[g.id] || "confidential";
-    const piNote = g.requiresPI ? " [requires public interest test]" : " [conclusive — no PI override]";
-    lines.push(`- ${g.reference}: ${g.label} — use type "${typeHint}"${piNote}`);
-  }
-
-  lines.push("");
-  lines.push("GROUNDS WITHOUT DEDICATED TYPES (use \"confidential\"):");
-  for (const g of catchAll) {
-    const typeHint = GROUND_DETECTION_TYPE_MAP[g.id] || "confidential";
-    const piNote = g.requiresPI ? " [requires public interest test]" : " [conclusive — no PI override]";
-    lines.push(`- ${g.reference}: ${g.label} — use type "${typeHint}"${piNote}`);
-  }
-
-  lines.push("");
-  lines.push("SECTION 17 — REQUEST-LEVEL REFUSAL REASONS (do NOT suggest these for content-level detections):");
-  for (const g of s17) {
-    lines.push(`- ${g.reference}: ${g.label} — ${g.description}`);
-  }
-
-  return lines.join("\n");
-}
-
-const SYSTEM_PROMPT_BASE = `You are an expert LGOIMA (Local Government Official Information and Meetings Act 1987) document reviewer for a New Zealand local council.
-
-Analyze the following document pages and identify text that may need to be withheld under LGOIMA. For each detection:
-
-1. Classify the type using ONLY these values: {{TYPES}}
-2. Assign a confidence score (0-100)
-3. Suggest the appropriate LGOIMA withholding ground from the reference table below
-4. Provide reasoning for the reviewer
-5. Note any public interest considerations
+Detection types (use ONLY these values for the "type" field):
+{{TYPES}}
 
 Type descriptions:
-- "personal-name": A personal name of a private individual, submitter, complainant, or junior staff member. Also includes dates of birth in any format, including those with month names spelled out (e.g. "22 September 1986", "3 November 1978", "14/06/1983"). When flagging a date of birth, include "DOB" in the aiExplanation so reviewers can see why it was flagged. This type also covers labelled values in tables (e.g. "Date of birth: 14 June 1983" in a two-cell row — flag the value, not the label).
-- "phone": A personal phone number
-- "email-addr": A personal email address
-- "ird": An NZ IRD number
-- "address": A personal residential or postal address
-- "bank-account": An NZ bank account number
-- "nz-passport": An NZ passport number
-- "vehicle-reg": An NZ vehicle registration plate
-- "commercial": Trade secrets or third-party commercial position content. Use for trade secrets (s7(2)(b)(i)) and content that could prejudice a third party's competitive standing (s7(2)(b)(ii)).
-- "free-frank": Free and frank internal opinions, advice, or recommendations by council staff or elected officials
-- "legal-privilege": Content protected by legal professional privilege (solicitor-client communications, legal advice, litigation strategy)
-- "negotiation": Council negotiation positions, strategy documents, settlement terms, BATNA analysis, commercial or industrial negotiation content. Use with ground s7(2)(i).
-- "safety-concern": Content where release could endanger a specific person — protection orders, hidden addresses for threatened persons, family violence details, witness protection information, threats, stalking records. Use with ground s6(d).
-- "law-enforcement": Investigation material, prosecution details, enforcement actions, witness statements in legal proceedings, search warrants, evidence summaries. Use with ground s6(c).
-- "council-commercial": Council's own commercial activities — investment portfolios, pricing strategy for services in competitive markets, joint venture terms, commercial property management strategy. Use with ground s7(2)(h). Distinguish from "commercial" which protects third-party positions.
-- "harassment-risk": Content that could expose people to improper pressure, harassment, threats, or retaliation — complainant identities, disciplinary details, staff opinions on controversial matters with identifying information. Use with ground s7(2)(f)(ii). Distinguish from "free-frank" which protects candour of advice.
-- "cultural-sensitivity": Tikanga Māori references, wāhi tapu locations, kōiwi tangata, iwi consultation records, cultural impact assessments in RMA/resource consent contexts. Use with ground s7(2)(ba).
-- "health-safety": Public health or safety measures — emergency response plans, water treatment procedures, infrastructure vulnerability assessments, pandemic protocols, building safety reports. Use with ground s7(2)(d). This protects the measures themselves, not individual safety (which is s6(d) / "safety-concern").
-- "confidential": Catch-all type for sensitive content that does not fit any other detection type. Use for: obligation of confidence (s7(2)(c)(i), s7(2)(c)(ii)), material loss prevention measures (s7(2)(e)), content enabling improper gain or advantage (s7(2)(j)), and rare grounds like national security (s6(a)) or foreign government information (s6(b)). Always pair "confidential" with the most specific LGOIMA ground.
 
-{{GROUNDS_REFERENCE}}
+- "personal-name": A personal name of any individual. Includes:
+  - First names, surnames, full names, names with titles (Mr / Mrs / Ms / Dr / Hon / Cr / Councillor / etc.)
+  - Names of council staff and elected officials (mayors, group managers, councillors, CEOs)
+  - Names of private individuals (submitters, complainants, witnesses)
+  - Names of third-party professionals (doctors, lawyers, GPs, expert witnesses, contractors)
+  - Names mentioned in passing
+  - Honorific + surname forms ("Ms Ferguson", "Dr Liang") — flag each occurrence
+  - Bare surnames when a person has been introduced earlier in the document
+  - **Dates of birth** in any format ("22 September 1986", "3/11/1978", "14/06/1983"). When flagging a DOB, include "DOB" in aiExplanation so reviewers can see why it was flagged.
 
-Ground selection guidance:
-- Section 6 grounds are CONCLUSIVE — there is no public interest override. Use them only when the threshold is clearly met.
-- Section 7 grounds require a public interest balancing test. State what the competing interest is.
-- If content relates to an active investigation or prosecution, suggest s6(c) (maintenance of the law) rather than defaulting to s7(2)(a).
-- If releasing an address could endanger a person's safety (e.g. family violence, threatened witness, stalking context), suggest s6(d) (safety of any person) rather than s7(2)(a).
-- For free and frank opinions by council staff or elected officials, use s7(2)(f)(i). For protection from harassment/pressure, use s7(2)(f)(ii).
-- For obligation of confidence, distinguish between s7(2)(c)(i) (prejudice to supply of similar information) and s7(2)(c)(ii) (damage to public interest).
-- For tikanga Māori or wāhi tapu locations in resource consent contexts, use s7(2)(ba).
-- s7(2)(j) is about improper gain or advantage (NOT incomplete negotiations — that is s7(2)(i)).
-- Do NOT suggest section 17 grounds — those are request-level refusal reasons, not content-level withholding grounds.
+- "phone": A personal or business phone number. NZ format prefixes (+64, 0X, 02X, 06X, 09X) are typical but any phone-shaped digit string with separators counts.
 
-DETECTION GUIDANCE BY GROUND:
+- "email-addr": An email address.
 
-When you encounter the following content patterns, use the specified detection type and suggest the indicated ground:
+- "ird": An NZ IRD (tax) number.
 
-- Law enforcement / investigation material (witness statements, prosecution details, enforcement actions, investigation notes, search warrants, evidence summaries): Use type "law-enforcement", suggest s6(c). This is a CONCLUSIVE ground — no public interest override.
+- "address": A residential, postal, or business street address. Includes named-residence references ("the Smith residence at 22 Kowhai Lane"). Do NOT flag organisation addresses that already appear in the document's official letterhead, but DO flag addresses of individuals named in the body.
 
-- Content where release could endanger a specific person (hidden addresses for threatened persons, family violence details, witness protection information, threats, stalking records): Use type "safety-concern", suggest s6(d). This is a CONCLUSIVE ground — no public interest override. Prefer s6(d) over s7(2)(a) when there is a genuine safety risk, not merely a privacy concern.
+- "bank-account": An NZ bank account number (typical shape BB-bbbb-AAAAAAA-SS).
 
-- National security, defence, or international relations material: Use type "confidential", suggest s6(a). Extremely rare in local council documents.
+- "nz-passport": An NZ passport number (two letters followed by six digits).
 
-- Information entrusted by another government or international organisation on a confidential basis: Use type "confidential", suggest s6(b). Extremely rare in local council documents.
+- "vehicle-reg": An NZ vehicle registration plate.
 
-- Tikanga Māori references, wāhi tapu locations, or culturally sensitive sites in resource consent / RMA contexts: Use type "cultural-sensitivity", suggest s7(2)(ba). Look for: iwi consultation records, cultural impact assessments, references to urupā, marae, or sacred sites, archaeological authority applications.
+- "sensitive-context": Personal-circumstance details that re-identify or expose private aspects of a named individual. Use this for prose like:
+  - Medical diagnoses, conditions, mental-health references ("a diagnosis of adjustment disorder", "PTSD diagnosed in 2024", "ICD-10 code F43.23")
+  - Health status, treatment plans, hospitalisation references
+  - Employment grievances, performance management, disciplinary records ("on a performance improvement plan since March", "subject to formal warning")
+  - Financial hardship details ("currently on income support", "facing bankruptcy proceedings")
+  - Family-violence context, protection orders, witness-protection references
+  - Immigration status references
+  - Internal employee identifiers (employee numbers, staff IDs, badge numbers)
+  - Salary / remuneration values
+  Flag the substantive personal detail (the diagnosis, the grievance, the financial fact) — the person's name itself is a separate "personal-name" detection.
 
-- Information received under an obligation of confidence where release would prejudice future supply of similar information: Use type "confidential", suggest s7(2)(c)(i). Look for: third-party submissions marked confidential, commercially sensitive information shared voluntarily, information from informants or whistleblowers.
+IMPORTANT BEHAVIOURAL RULES:
 
-- Information received under an obligation of confidence where release would damage the public interest: Use type "confidential", suggest s7(2)(c)(ii). Distinguish from s7(2)(c)(i) — this limb is about broader public interest harm, not just prejudice to future supply.
+- DO flag personal names regardless of context. Official, professional, junior, senior, public, private — all PII. The redaction pipeline is privacy-protective; do not second-guess whether a name is "private enough".
 
-- Council negotiation positions, strategy documents, BATNA analysis, settlement offers, commercial or industrial negotiation terms: Use type "negotiation", suggest s7(2)(i). Distinguish from "commercial" — "negotiation" is about the process and council's position, "commercial" is about prejudice to a third party's competitive standing.
+- DO NOT flag headings, labels, field names, or column headers that merely describe a category of information without containing actual personal data. "Email Address" as a label is not PII; "alex.example@example.com" is. "Phone" as a column header is not PII; "021 544 908" is. Only flag text that IS the actual sensitive data, not text that DESCRIBES where such data would appear.
 
-- Content enabling improper gain or advantage from official information (e.g. advance notice of zoning changes, undisclosed tender evaluation criteria, insider knowledge of council investment decisions): Use type "confidential", suggest s7(2)(j). Distinguish from "negotiation" — improper gain is about misuse of information, not about protecting negotiation positions.
+- A label does not "immunise" its value. When you see <label>: <value> or a two-cell row [label | value], flag the value using the type implied by the label and skip the label itself. Applies to "Date of birth", "Phone", "Email", "Address", "IRD", "NHI", "NZ Passport", "Driver Licence", "Employee number", "Salary", "ICD-10", "GP", "Diagnosis", and similar.
 
-- Council commercial activity details (investment portfolios, commercial property management strategy, pricing for council services in competitive markets, joint venture terms): Use type "council-commercial", suggest s7(2)(h). Distinguish from "commercial" — "council-commercial" protects the council's own commercial activities, "commercial" protects third-party commercial positions.
+- Honorific-surname forms always count as personal names. "Ms Ferguson" / "Dr Smith" / "Hon Mark Robinson" — every occurrence is a separate "personal-name" detection. Bare surnames count when a person has already been introduced earlier in the document.
 
-- Content where release could expose staff or elected members to improper pressure, harassment, threats, doxxing, or retaliation (complaint details identifying complainants, disciplinary records, personal opinions about controversial decisions with identifying details): Use type "harassment-risk", suggest s7(2)(f)(ii). Distinguish from "free-frank" — free and frank is about protecting candour of advice; harassment-risk is about protecting people from harm.
+- Pseudonyms used in lieu of a real name (e.g. "Witness B", "Complainant 1", "Director X") are NOT personal names. Do not flag pseudonyms unless they are paired with a real name on the same page.
 
-- Public health or safety measures (emergency response plans, water treatment procedures, infrastructure vulnerability assessments, pandemic response protocols, building safety reports): Use type "health-safety", suggest s7(2)(d). This is about protecting the measures themselves, not individual safety (which is s6(d) / "safety-concern").
+- Long sentences that wrap up a personal circumstance (medical, employment, family) are "sensitive-context" — emit the full sentence span. The named individual within is a separate "personal-name" detection.
 
-- Material loss prevention measures (fraud prevention procedures, insurance claim processes, financial controls documentation, asset protection protocols): Use type "confidential", suggest s7(2)(e). Rare — only use when the content describes protective measures whose disclosure would undermine them.
+WORKED EXAMPLES:
 
-STRUCTURAL HEURISTICS — section-level and labelled-field signals:
+Example 1 — Personal name in a memo header (type "personal-name"):
+Input: "Mayor Margaret Hopkirk and Tama Ngata, Group Manager — Policy & Strategy, will brief Council on Thursday."
+Output: TWO detections —
+  { "type": "personal-name", "text": "Margaret Hopkirk", "page": 1, "reasoning": "Personal name (Mayor).", "aiExplanation": "Personal name — flag regardless of official capacity." }
+  { "type": "personal-name", "text": "Tama Ngata", "page": 1, "reasoning": "Personal name (Group Manager).", "aiExplanation": "Personal name." }
 
-- If a section header cites a specific LGOIMA ground (e.g. "Free and frank section (s7(2)(f))", "Without prejudice — legal advice", "In confidence"), treat candid-opinion / advice / strategic-assessment sentences in that section as strong candidates for detection under the cited ground. Flag each such sentence with the appropriate type; do NOT try to summarise the section into one detection. Do NOT flag factual procedural content inside these sections — attendance lists, interview dates, document citations, case numbers, section headings, attribution-only sentences ("X was interviewed on 12 March"), or neutral narrative that reports on events without expressing opinion or advice. The heuristic protects candour, not procedure.
-- Section markers and the type/ground to use:
-  - "free and frank", "candid", "candour", "candidly" applied to *advice or opinion content* → type "free-frank", ground s7(2)(f)(i). This is the default when a section is simply labelled "(free and frank)" without further specialisation.
-  - Within a "(free and frank)" section, if a specific sentence instead identifies a complainant, a witness, or a subject of a grievance alongside personal details → type "harassment-risk", ground s7(2)(f)(ii). Triggers: complainant name + complaint detail, witness name + characterisation, grievance subject + personal attribute. The s7(2)(f)(ii) ground applies when the protective need is individual-harm avoidance rather than advice-candour preservation.
-  - "without prejudice", "privileged", "legal advice", "counsel's view", "solicitor-client" → type "legal-privilege", ground s7(2)(g)
-  - "in confidence", "confidential", "not for circulation" → scrutinise every sentence; use the type that best fits the specific sentence content
-- **Commercial triggers.** "commercially sensitive", "commercial in confidence", "trade secret", "proprietary", "tender evaluation matrix", "tender evaluation criteria", "bid price", "competitor pricing", "provided on condition of confidentiality", "confidential to [third party]" → type "commercial", ground s7(2)(b)(i) for trade secrets (formulae, processes, know-how), s7(2)(b)(ii) for third-party competitive prejudice (pricing, bid structure, financial information). When the content describes the council's own commercial activity (investment strategy, pricing council services, joint venture terms) rather than a third party's, use type "council-commercial", ground s7(2)(h).
-- **Health-safety public-measure triggers.** "vulnerability assessment", "security protocol", "emergency response plan", "pandemic response", "critical infrastructure", "backup procedure", "fallback threshold", "contamination response", "building safety report" → type "health-safety", ground s7(2)(d). Distinguish from "safety-concern" (s6(d)), which protects an individual — health-safety protects the protective measures themselves.
-- **Tikanga-cultural triggers (RMA and resource-consent contexts).** "tapu", "urupā", "wāhi tapu", "kōiwi tangata" → type "cultural-sensitivity", ground s7(2)(ba). These are strong literal triggers; avoid over-extending to procedural phrases like "mana whenua consultation" or "cultural impact assessment" (which are document-type references rather than sensitive content), where the AI should rely on semantic judgement rather than structural match.
-- Investigation / disciplinary / grievance documents (inferred from classification context or in-body signals): treat witness names, witness descriptions, and positional identifiers as candidates for "harassment-risk" (s7(2)(f)(ii)) even without other identifying PII.
-- A label does not "immunise" its value. When you see <label>: <value> or a two-cell row [label | value], flag the value using the type implied by the label; skip the label itself. This applies to "Date of birth", "Phone", "Email", "Address", "IRD", "NHI", "NZ Passport", "Driver Licence", "Employee number", and any similar field name.
+Example 2 — Date of birth in a labelled table (type "personal-name"):
+Input table row: | Date of birth | 14 June 1983 |
+Output: { "type": "personal-name", "text": "14 June 1983", "page": 1, "reasoning": "Labelled date of birth — flag the value, not the label.", "aiExplanation": "DOB — date of birth of an individual." }
 
-WORKED EXAMPLES of non-PII detections:
+Example 3 — Honorific + surname in body (type "personal-name", multiple instances):
+Input: "Ms Ferguson confirmed the timeline at the meeting; Mr Kellogg disagreed. Ferguson later withdrew."
+Output: THREE detections —
+  { "type": "personal-name", "text": "Ms Ferguson", "page": 2, ... }
+  { "type": "personal-name", "text": "Mr Kellogg", "page": 2, ... }
+  { "type": "personal-name", "text": "Ferguson", "page": 2, "reasoning": "Bare surname; person introduced earlier on the page.", ... }
 
-Example 1 — Negotiation position (type "negotiation", ground s7(2)(i)):
-Input text: "Council's fallback position is to accept $2.1M if the developer rejects the initial $2.8M offer"
-Output: { "type": "negotiation", "text": "Council's fallback position is to accept $2.1M if the developer rejects the initial $2.8M offer", "confidence": 85, "page": 1, "suggestedGround": "s7(2)(i)", "reasoning": "Reveals council's negotiation strategy and fallback position for a commercial negotiation", "piConsideration": "Releasing negotiation positions would prejudice council's ability to achieve best outcome for ratepayers", "aiExplanation": "This text reveals the council's fallback price in an active negotiation — releasing it would undermine their bargaining position." }
+Example 4 — Sensitive context (medical diagnosis) + companion name (types "sensitive-context" + "personal-name"):
+Input: "Dr Sarah Liang's letter of 14 March 2026 records a diagnosis of adjustment disorder with mixed anxiety and depressed mood (ICD-10 F43.23) for the complainant."
+Output: TWO detections —
+  { "type": "personal-name", "text": "Dr Sarah Liang", "page": 3, "reasoning": "Third-party professional name.", "aiExplanation": "Personal name." }
+  { "type": "sensitive-context", "text": "a diagnosis of adjustment disorder with mixed anxiety and depressed mood", "page": 3, "reasoning": "Medical diagnosis attributed to an identified complainant.", "aiExplanation": "Personal medical information." }
 
-Example 2 — Safety concern (type "safety-concern", ground s6(d)):
-Input text: "Ms Tūhoe has been relocated to 14 Kowhai Lane following the protection order granted on 14 March"
-Output: { "type": "safety-concern", "text": "Ms Tūhoe has been relocated to 14 Kowhai Lane following the protection order granted on 14 March", "confidence": 95, "page": 1, "suggestedGround": "s6(d)", "reasoning": "Reveals the new location of a person subject to a protection order — release could endanger their safety", "piConsideration": "Section 6 ground — conclusive, no public interest override applies", "aiExplanation": "This text reveals a protected person's new address alongside the reason for their relocation, creating a serious safety risk." }
+Example 5 — Address in prose (type "address"):
+Input: "The submitter, who lives at 22 Mahoe Avenue in Awatere 4310, opposes the rezoning."
+Output: { "type": "address", "text": "22 Mahoe Avenue in Awatere 4310", "page": 1, "reasoning": "Personal residential address.", "aiExplanation": "Personal address." }
 
-Example 3 — Free and frank internal opinion (type "free-frank", ground s7(2)(f)(i)):
-Input text: "Frankly, I think the proposed bylaw is unenforceable and we should advise the committee to abandon it"
-Output: { "type": "free-frank", "text": "Frankly, I think the proposed bylaw is unenforceable and we should advise the committee to abandon it", "confidence": 80, "page": 1, "suggestedGround": "s7(2)(f)(i)", "reasoning": "Internal staff opinion expressing candid professional view on policy matter", "piConsideration": "Withholding must be balanced against public interest in transparency of council decision-making", "aiExplanation": "This is a candid internal opinion from a staff member advising against a policy — releasing it could inhibit future free and frank advice." }
+Example 6 — Employment grievance context (type "sensitive-context"):
+Input: "Ms Patel has been on a performance improvement plan since March 2026 following the complaint lodged by her direct report."
+Output: TWO detections —
+  { "type": "personal-name", "text": "Ms Patel", "page": 1, ... }
+  { "type": "sensitive-context", "text": "has been on a performance improvement plan since March 2026 following the complaint lodged by her direct report", "page": 1, "reasoning": "Employment grievance / performance management detail attributed to a named individual.", "aiExplanation": "Personal employment circumstance." }
 
-Example 4 — Tikanga Māori / wāhi tapu (type "cultural-sensitivity", ground s7(2)(ba)):
-Input text: "The archaeological assessment identified kōiwi tangata at grid ref NZTM 1758432E 5673291N, adjacent to the proposed subdivision"
-Output: { "type": "cultural-sensitivity", "text": "The archaeological assessment identified kōiwi tangata at grid ref NZTM 1758432E 5673291N, adjacent to the proposed subdivision", "confidence": 90, "page": 1, "suggestedGround": "s7(2)(ba)", "reasoning": "Discloses the location of human remains (kōiwi tangata) — a wāhi tapu site in an RMA/resource consent context", "piConsideration": "Disclosure would cause serious offence to tikanga Māori and reveal a wāhi tapu location", "aiExplanation": "This text identifies the precise location of kōiwi tangata (ancestral human remains), which is a wāhi tapu. Disclosing this in a resource consent context would cause serious cultural offence." }
+Example 7 — Pseudonym alone (do NOT flag):
+Input: "Witness B has documented concerns about Ms Patel's management style."
+Output: { "type": "personal-name", "text": "Ms Patel", "page": 2, ... }
+(Note: "Witness B" is a pseudonym used to anonymise the witness; do NOT flag pseudonyms.)
 
-Example 5 — Law enforcement material (type "law-enforcement", ground s6(c)):
-Input text: "The inspector's notes confirm that Unit 4B was entered under warrant on 22 February and samples were seized for testing under the Food Act 2014"
-Output: { "type": "law-enforcement", "text": "The inspector's notes confirm that Unit 4B was entered under warrant on 22 February and samples were seized for testing under the Food Act 2014", "confidence": 90, "page": 1, "suggestedGround": "s6(c)", "reasoning": "Details of a regulatory investigation including warrant execution and evidence seizure — release could prejudice the investigation and right to fair trial", "piConsideration": "Section 6 ground — conclusive, no public interest override applies", "aiExplanation": "This text describes an active enforcement action with warrant details and evidence collection. Releasing it could compromise the investigation or prejudice legal proceedings." }
-
-Example 6 — Council commercial activity (type "council-commercial", ground s7(2)(h)):
-Input text: "The forestry portfolio is projected to return 6.2% p.a. over the harvest cycle; management recommends deferring Block 7 sales until Q3 to capture the anticipated price uplift"
-Output: { "type": "council-commercial", "text": "The forestry portfolio is projected to return 6.2% p.a. over the harvest cycle; management recommends deferring Block 7 sales until Q3 to capture the anticipated price uplift", "confidence": 85, "page": 1, "suggestedGround": "s7(2)(h)", "reasoning": "Reveals council's commercial forestry strategy including timing and pricing expectations — release would disadvantage council in timber markets", "piConsideration": "Withholding must be balanced against public interest in transparency of council asset management", "aiExplanation": "This text reveals the council's internal commercial strategy for its forestry assets, including projected returns and planned sale timing. Releasing it would disadvantage the council in competitive timber markets." }
-
-Example 7 — Harassment risk (type "harassment-risk", ground s7(2)(f)(ii)):
-Input text: "The complaint was lodged by Mrs Rātima of 8 Tui Street regarding Councillor Hughes's conduct at the 12 March hearing"
-Output: { "type": "harassment-risk", "text": "The complaint was lodged by Mrs Rātima of 8 Tui Street regarding Councillor Hughes's conduct at the 12 March hearing", "confidence": 85, "page": 1, "suggestedGround": "s7(2)(f)(ii)", "reasoning": "Identifies the complainant by name and address in a complaint about an elected member — release could expose the complainant to pressure or retaliation", "piConsideration": "Withholding must be balanced against public interest in accountability of elected officials, but complainant identity is distinct from the substance of the complaint", "aiExplanation": "This text identifies who made a complaint against a councillor, including their home address. Releasing this could expose the complainant to improper pressure or harassment from supporters of the named councillor." }
-
-Example 8 — Date of birth (type "personal-name", ground s7(2)(a)):
-Input text: "Date of birth: 22 September 1986"
-Output: { "type": "personal-name", "text": "22 September 1986", "confidence": 90, "page": 1, "suggestedGround": "s7(2)(a)", "reasoning": "Date of birth of a private individual", "piConsideration": "Date of birth is a sensitive personal identifier frequently used for identity verification; public interest in disclosure is generally low", "aiExplanation": "DOB — date of birth of a private individual, flagged as personal information under s7(2)(a). Note the month-name long-date format." }
-
-Example 9 — HR candid commentary (type "free-frank", ground s7(2)(f)(i)):
-Input text: "Counsel's view, expressed candidly in our Tuesday meeting, is that Ms Ferguson's personal grievance has substantial merit — we should move to settlement rather than contest at the ERA."
-Output: { "type": "free-frank", "text": "Counsel's view, expressed candidly in our Tuesday meeting, is that Ms Ferguson's personal grievance has substantial merit — we should move to settlement rather than contest at the ERA.", "confidence": 85, "page": 2, "suggestedGround": "s7(2)(f)(i)", "reasoning": "Candid strategic assessment of a personnel grievance's merit and recommended course of action", "piConsideration": "Disclosure would chill future candid internal advice on grievance matters", "aiExplanation": "Candid internal advice in a grievance context — protect the advice-candour under s7(2)(f)(i)." }
-
-Example 10 — Legal-privileged settlement range (type "legal-privilege", ground s7(2)(g)):
-Input text: "Ben Mahuika's advice is that a settlement in the range of $55,000 — $110,000 would be defensible; he recommends we open at $75,000."
-Output: { "type": "legal-privilege", "text": "Ben Mahuika's advice is that a settlement in the range of $55,000 — $110,000 would be defensible; he recommends we open at $75,000.", "confidence": 90, "page": 3, "suggestedGround": "s7(2)(g)", "reasoning": "External counsel's privileged advice on settlement range and opening position", "piConsideration": "Solicitor-client privilege is near-absolute in LGOIMA practice; public interest override is rare", "aiExplanation": "Legal-privileged settlement advice from external counsel — protect under s7(2)(g)." }
-
-Example 11 — Witness identity in grievance context (type "harassment-risk", ground s7(2)(f)(ii)):
-Input text: "Witness B (a senior staff member who worked under Ms Patel for three years) has documented concerns about her management style."
-Output: { "type": "harassment-risk", "text": "Witness B (a senior staff member who worked under Ms Patel for three years) has documented concerns about her management style.", "confidence": 85, "page": 2, "suggestedGround": "s7(2)(f)(ii)", "reasoning": "Identifies a witness in a personnel grievance alongside role characterisation — exposes the witness to potential retaliation", "piConsideration": "Public interest in grievance accountability is served by the outcome, not by identifying witnesses", "aiExplanation": "Witness-in-grievance identity — flag under s7(2)(f)(ii) because the protective need is individual-harm avoidance, not advice-candour preservation." }
-
-Example 12 — Labelled DOB in a table (type "personal-name", ground s7(2)(a)):
-Input text (table row): | Date of birth | 14 June 1983 |
-Output: { "type": "personal-name", "text": "14 June 1983", "confidence": 95, "page": 1, "suggestedGround": "s7(2)(a)", "reasoning": "Labelled date of birth in a two-cell row — value only", "piConsideration": "Date of birth is a sensitive personal identifier; public interest in disclosure is generally low", "aiExplanation": "DOB — labelled date of birth in a table; flag the value only, not the 'Date of birth' label." }
-
-Example 13 — Labelled employee number (type "confidential", ground s7(2)(a)):
-Input text (table row): | Employee number | EMP-2019-0847 |
-Output: { "type": "confidential", "text": "EMP-2019-0847", "confidence": 90, "page": 1, "suggestedGround": "s7(2)(a)", "reasoning": "Internal employee identifier that re-identifies an individual when cross-referenced with payroll / HR records", "piConsideration": "Employee numbers are not published and serve no public-transparency purpose; privacy prevails", "aiExplanation": "Employee number — internal identifier that can re-identify an individual; flag the value, not the label." }
-
-Example 14 — Labelled driver licence in a table (type "nz-driver-licence", ground s7(2)(a)):
-Input text (table row): | NZ Driver Licence | HM847219 |
-Output: { "type": "nz-driver-licence", "text": "HM847219", "confidence": 95, "page": 1, "suggestedGround": "s7(2)(a)", "reasoning": "NZ driver licence number — a statutory identifier", "piConsideration": "Driver licence numbers are sensitive identifiers frequently used for identity verification", "aiExplanation": "Driver licence — flag the value only, not the 'NZ Driver Licence' label." }
-
-Example 15 — Third-party professional in document body (type "personal-name", ground s7(2)(a)):
-Input text: "Dr Sarah Liang of Central Medical Centre certified the complainant unfit to attend mediation on 14 March."
-Output: { "type": "personal-name", "text": "Dr Sarah Liang", "confidence": 90, "page": 3, "suggestedGround": "s7(2)(a)", "reasoning": "Third-party GP named in document body — not a council-published official", "piConsideration": "Private professional's identity in a personnel matter; privacy prevails over accountability", "aiExplanation": "Third-party professional (GP) named in document body; not within the council's published-official carve-out — flag despite professional role." }
-
-Example 16 — Commercial / third-party competitive prejudice (type "commercial", ground s7(2)(b)(ii)):
-Input text: "TenderCo's bid price of $4.2M assumes a 15% margin on installation and includes a $280k contingency for foundation work — this pricing is confidential to TenderCo and was provided to Council on the basis it would not be disclosed."
-Output: { "type": "commercial", "text": "TenderCo's bid price of $4.2M assumes a 15% margin on installation and includes a $280k contingency for foundation work — this pricing is confidential to TenderCo and was provided to Council on the basis it would not be disclosed.", "confidence": 90, "page": 1, "suggestedGround": "s7(2)(b)(ii)", "reasoning": "Third-party bid pricing including margin structure and contingency — disclosure would prejudice TenderCo's competitive position in future procurements", "piConsideration": "Public interest in procurement transparency weighed against commercial harm to the third-party bidder; the confidentiality caveat was an explicit condition of submission", "aiExplanation": "Third-party tender pricing provided under confidentiality — protect to preserve bidder willingness to engage with council procurements." }
-
-Example 17 — Public health-safety protective measure (type "health-safety", ground s7(2)(d)):
-Input text: "The water treatment plant's backup chlorination threshold is 0.3 mg/L; on sensor failure the system falls back to UV treatment alone for up to 48 hours before a boil-water notice is issued to the affected reticulation zone."
-Output: { "type": "health-safety", "text": "The water treatment plant's backup chlorination threshold is 0.3 mg/L; on sensor failure the system falls back to UV treatment alone for up to 48 hours before a boil-water notice is issued to the affected reticulation zone.", "confidence": 90, "page": 1, "suggestedGround": "s7(2)(d)", "reasoning": "Discloses specific fallback thresholds and the 48-hour window during which chlorination is absent — operational detail that could inform deliberate contamination attempts on a public water supply", "piConsideration": "Public interest in knowing water treatment is occurring can be met at a higher level ('multi-stage treatment with redundant sensing') rather than at the specific threshold and fallback-window level", "aiExplanation": "Public health-safety measure whose disclosure would undermine it — protects the measures, distinct from s6(d) which protects an individual." }
-
-Example 18 — Obligation of confidence / whistleblower (type "confidential", ground s7(2)(c)(i)):
-Input text: "Submission received from a former building inspector on condition of anonymity: 'I raised concerns about the CCC signoff process at [named commercial site] to my manager in October 2022. I was told the signoff would proceed regardless. I am making this submission on the condition of anonymity due to fear of professional retaliation.'"
-Output: { "type": "confidential", "text": "Submission received from a former building inspector on condition of anonymity: 'I raised concerns about the CCC signoff process at [named commercial site] to my manager in October 2022. I was told the signoff would proceed regardless. I am making this submission on the condition of anonymity due to fear of professional retaliation.'", "confidence": 90, "page": 1, "suggestedGround": "s7(2)(c)(i)", "reasoning": "Whistleblower submission explicitly provided under confidentiality; disclosure would prejudice future supply of similar information from current or former inspectors with compliance concerns", "piConsideration": "Public interest in building-compliance oversight is high; balance against the chilling effect on future whistleblowers willing to submit under anonymity", "aiExplanation": "Third-party submission under explicit obligation of confidence — s7(2)(c)(i) applies where disclosure would prejudice future similar supply." }
-
-Example 19 — Medical diagnosis in prose (type "personal-name", ground s7(2)(a)):
-Input text: "Dr Sarah Liang's letter dated 14 March 2026 records a diagnosis of adjustment disorder with mixed anxiety and depressed mood (ICD-10 F43.23) and recommends a graduated return-to-work programme."
-Output: { "type": "personal-name", "text": "a diagnosis of adjustment disorder with mixed anxiety and depressed mood", "confidence": 90, "page": 3, "suggestedGround": "s7(2)(a)", "reasoning": "Medical diagnosis attributed to an identified individual — private health information", "piConsideration": "Medical diagnoses are sensitive personal information; public interest in disclosure is generally low", "aiExplanation": "Medical diagnosis attributed to an individual — private health information under s7(2)(a). Flag the diagnosis text; the doctor's name and the ICD-10 code are separate detections." }
-
-Important context:
-- Public officials acting in their official capacity have lower privacy expectations
-- Published contact information is generally public
-- Information already in the public domain should not be flagged
-- Consider both individual privacy and the public interest in disclosure
-- Names of **THE COUNCIL'S OWN** elected officials, chief executives, and senior managers acting in their official capacity on council-policy matters should NOT be flagged. Third-party professional service providers named in the document body (external counsel, GPs, specialist contractors, mental health providers, auditors, consultants) ARE flagged as personal-name even when operating in a professional capacity — their identity is not within the council's published-official carve-out. Investigators and HR staff acting in a grievance or disciplinary context ARE flagged when their identity co-occurs with grievance-specific detail (under "harassment-risk").
-- Focus on identifying personal names of private individuals, submitters, complainants, and junior staff
-- Do NOT flag headings, labels, field names, or column headers that merely describe a category of information without containing actual personal data (e.g. "Registered Office Address", "Email Address", "Phone Number", "Contact Details")
-- Only flag text that IS the actual sensitive data, not text that DESCRIBES or LABELS where such data would appear
+OUTPUT FORMAT:
 
 Respond with a JSON object containing a "detections" array. Each detection must have:
 {
-  "type": string,
-  "text": string (the exact text to withhold),
-  "confidence": number (0-100),
+  "type": string (one of the allowed types listed above),
+  "text": string (the exact text to redact, as it appears in the input),
+  "confidence": number (0-100; deterministic-shape PII like passport numbers can be 95+; ambiguous names in context 70-90; speculative flags <50),
   "page": number (1-based page number from the input),
-  "suggestedGround": string (e.g. "s7(2)(a)"),
-  "reasoning": string,
-  "piConsideration": string (public interest consideration),
-  "aiExplanation": string (plain-language explanation for reviewer)
+  "reasoning": string (short rationale for the reviewer),
+  "aiExplanation": string (plain-language explanation; include "DOB" for dates of birth)
 }
 
 If there is nothing to detect, return {"detections": []}.`;
 
 /**
- * Build the document context block from the pre-classification result.
- * Returns an empty string if no classification is available.
+ * Build the system prompt with the (toggle-filtered) detection types
+ * substituted into the {{TYPES}} placeholder. Phase 12.1 simplified —
+ * no document-classification context, no LGOIMA grounds reference,
+ * no special-case for the dropped `confidential` catch-all.
+ *
+ * Phase 12.0/12.1 prompt-cache note: prompt is ~3,500 chars (~900
+ * tokens) without classification, well above Azure's 1024-token
+ * minimum for caching. Stable across calls within a deploy → ~99%
+ * prefix-cache hit rate as observed on v1.
  */
-function buildClassificationContext(classification?: DocumentClassification): string {
-  if (!classification || classification.documentType === "other" && classification.likelyGrounds.length === 0 && !classification.contextNotes) {
-    return "";
-  }
-  const lines = [
-    "DOCUMENT CONTEXT (from pre-classification):",
-    `Document type: ${classification.documentType}`,
-    `Likely relevant grounds: ${classification.likelyGrounds.length > 0 ? classification.likelyGrounds.join(", ") : "none identified"}`,
-    `Context: ${classification.contextNotes || "none"}`,
-    `Contains legal advice: ${classification.containsLegalAdvice}`,
-    `Contains personnel information: ${classification.containsPersonnelInfo}`,
-    `Contains commercial information: ${classification.containsCommercialInfo}`,
-    `Contains cultural content: ${classification.containsCulturalContent}`,
-    `Contains enforcement information: ${classification.containsEnforcementInfo}`,
-    "",
-    "Use this context to inform your detection decisions. For example, if this is a legal opinion, be alert for legal professional privilege (s7(2)(g)). If it contains enforcement information, consider s6(c) for relevant content.",
-    "",
-  ];
-  return lines.join("\n");
-}
-
-/**
- * Build the system prompt with only the enabled detection types listed.
- * The "confidential" type is always included as a catch-all.
- * Optionally appends document classification context at the END so the
- * stable prefix (type descriptions, ground reference, worked examples,
- * JSON output spec) stays cacheable under Azure OpenAI's prompt-cache
- * rules. Cache applies to identical prefix strings of ≥1024 tokens
- * within a 5-minute TTL; the stable prefix here is ~3,000 tokens and
- * easily clears the threshold. Per-document classification content at
- * the start would invalidate the cache on every call.
- */
-export function buildSystemPrompt(enabledTypes?: Set<string>, classification?: DocumentClassification): string {
+export function buildSystemPrompt(enabledTypes?: Set<string>): string {
   const types = enabledTypes
-    ? ALL_AI_TYPES.filter((t) => t === "confidential" || enabledTypes.has(t))
+    ? ALL_AI_TYPES.filter((t) => enabledTypes.has(t))
     : ALL_AI_TYPES;
-  const classificationBlock = buildClassificationContext(classification);
-  const basePrompt = SYSTEM_PROMPT_BASE
-    .replace("{{TYPES}}", types.map((t) => `"${t}"`).join(", "))
-    .replace("{{GROUNDS_REFERENCE}}", buildGroundsReference());
-  return classificationBlock ? basePrompt + "\n\n---\n\n" + classificationBlock : basePrompt;
+  return SYSTEM_PROMPT_BASE.replace(
+    "{{TYPES}}",
+    types.map((t) => `"${t}"`).join(", "),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -465,7 +300,7 @@ function validateDetection(raw: unknown): AIDetection | null {
   if (!text) return null;
 
   return {
-    type: typeof obj.type === "string" ? obj.type : "confidential",
+    type: typeof obj.type === "string" ? obj.type : "sensitive-context",
     text,
     confidence:
       typeof obj.confidence === "number"
@@ -537,7 +372,7 @@ export function preparePages(pages: ExtractedPage[]): ExtractedPage[] {
 }
 
 /**
- * Send extracted page text to Azure OpenAI for LGOIMA-aware detection.
+ * Send extracted page text to Azure OpenAI for PII detection.
  *
  * Pages are processed in batches to stay within token limits.  Results are
  * filtered to remove detections that overlap with text already found by the
@@ -548,7 +383,6 @@ export function preparePages(pages: ExtractedPage[]): ExtractedPage[] {
  *   pattern detector (used for de-duplication).
  * @param feedbackPrompt - Optional feedback loop prompt section.
  * @param enabledTypes - Set of enabled detection type keys.
- * @param classification - Optional document-level classification result.
  * @returns Array of AI detections.
  */
 export async function detectWithAI(
@@ -556,7 +390,6 @@ export async function detectWithAI(
   existingPatternTexts: string[],
   feedbackPrompt?: string,
   enabledTypes?: Set<string>,
-  classification?: DocumentClassification,
 ): Promise<AIDetection[]> {
   const detectionDeployment = resolveDetectionDeployment();
   const client = getClient(detectionDeployment);
@@ -626,7 +459,7 @@ export async function detectWithAI(
       limit(async () => {
         const batchStart = Date.now();
         try {
-          const systemPrompt = buildSystemPrompt(enabledTypes, classification);
+          const systemPrompt = buildSystemPrompt(enabledTypes);
           const systemContent = feedbackPrompt
             ? systemPrompt + feedbackPrompt
             : systemPrompt;
