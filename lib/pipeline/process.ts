@@ -583,16 +583,24 @@ export async function processDocument(docId: string): Promise<void> {
       aiDetectionMs = Date.now() - aiStart;
       log.info("AI detection complete", { docId, detections: aiDetections.length });
     } catch (aiError) {
-      if (aiError instanceof CircuitOpenError) {
-        log.warn("AI detection unavailable, proceeding with pattern detection only", { docId });
-      } else {
-        // AI detection is non-critical -- log and continue with pattern-only
-        log.error("AI detection failed, continuing with pattern-only results", {
-          docId,
-          error: aiError instanceof Error ? aiError.message : String(aiError),
-        });
-        trackException(aiError, { docId, stage: "ai-detection" });
-      }
+      // Phase 12.5.1 — AI-degraded sentinel. Pre-fix this swallowed AI
+      // failures and proceeded with pattern-only output, which produced
+      // a privacy regression: detections that depend on AI (personal
+      // names, addresses, sensitive-context) silently went missing
+      // while the document promoted to auto-redacted + auto-exported.
+      // The new behaviour: ANY AI failure (circuit open, network,
+      // 4xx/5xx, parse) errors the document and the outer catch sets
+      // Document.status = "error" with a clear message. The reviewer
+      // can retry once the AOAI service recovers.
+      log.error("AI detection unavailable; failing document to prevent privacy regression", {
+        docId,
+        error: aiError instanceof Error ? aiError.message : String(aiError),
+        circuitOpen: aiError instanceof CircuitOpenError,
+      });
+      trackException(aiError, { docId, stage: "ai-detection" });
+      throw new Error(
+        "AI detection unavailable; please retry when service recovers",
+      );
     }
 
     // ------------------------------------------------------------------
@@ -1044,6 +1052,10 @@ export async function processDocument(docId: string): Promise<void> {
       userMessage = `File is password-protected or encrypted. Please remove protection and re-upload.`;
     } else if (rawMessage.includes("unsupported") || rawMessage.includes("Unsupported")) {
       userMessage = `Unsupported file format. ${rawMessage}`;
+    } else if (rawMessage.includes("AI detection unavailable")) {
+      // Phase 12.5.1 — surfaced as-is. The pipeline's AI-degraded
+      // sentinel above already produced the user-friendly form.
+      userMessage = rawMessage;
     } else {
       userMessage = `Processing failed: ${rawMessage.slice(0, 200)}`;
     }

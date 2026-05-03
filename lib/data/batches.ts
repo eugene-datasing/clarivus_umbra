@@ -184,6 +184,12 @@ export async function recomputeBatchStatus(batchId: string): Promise<string | nu
 
   const statuses: string[] = docs.map((d) => d.status);
   const hasProcessingOrPending = statuses.some((s) => s === "processing" || s === "pending");
+  // Phase 12.5.1 — any errored doc blocks auto-redacted/auto-export
+  // promotion. The privacy contract is that auto-redact only fires when
+  // the full pipeline (including AI) succeeded for every doc; one
+  // errored doc keeps the batch surface in "processing" so the
+  // reviewer sees it and can retry.
+  const hasError = statuses.some((s) => s === "error");
   const allAutoRedacted = statuses.every((s) => s === "auto-redacted");
   const allDone = statuses.every((s) => s === "signed-off" || s === "auto-redacted");
   const allSignedOff = statuses.every((s) => s === "signed-off");
@@ -199,6 +205,13 @@ export async function recomputeBatchStatus(batchId: string): Promise<string | nu
 
   let newStatus: string | null = null;
   if (hasProcessingOrPending) {
+    newStatus = "processing";
+  } else if (hasError) {
+    // Phase 12.5.1 — at least one doc errored. Hold the batch in
+    // "processing" so the surface stays visibly "in-flight" rather
+    // than misleadingly promoting to a terminal state. Reviewer can
+    // retry the errored doc; once it succeeds, recompute promotes
+    // normally.
     newStatus = "processing";
   } else if (allAutoRedacted) {
     // Pure auto-redact path — every doc finished without reviewer
