@@ -38,6 +38,7 @@ import { buildFeedbackPromptSection } from "./feedback-examples";
 import { createAuditEntry } from "@/lib/data/audit";
 import { getEnabledDetectionTypes, getAutoRedactConfig } from "@/lib/data/settings";
 import { bucketConfidence, tierToStatus } from "./tier-routing";
+import { extractPageContext } from "./page-context";
 import { CircuitOpenError } from "@/lib/resilience/azure-services";
 import { logger } from "@/lib/logger";
 import { trackException, trackEvent, trackMetric } from "@/lib/telemetry";
@@ -826,6 +827,17 @@ export async function processDocument(docId: string): Promise<void> {
     // post-loop status decision below.
     const autoRedactConfig = await getAutoRedactConfig();
 
+    // Phase 12.4 — pageContext capture. Build a per-page text lookup
+    // once so the per-detection extraction is O(pageLen) per row
+    // rather than O(N pages). Detections whose `text` doesn't appear
+    // in the source page (AI paraphrase, normalised punctuation) land
+    // with pageContext = null; the Tray's expand view falls back to
+    // aiExplanation.
+    const pageTextByNumber = new Map<number, string>();
+    for (const page of extraction.pages) {
+      pageTextByNumber.set(page.pageNumber, page.text ?? "");
+    }
+
     const allDetectionRecords = [];
     let acceptedCount = 0;
     let pendingCount = 0;
@@ -836,6 +848,11 @@ export async function processDocument(docId: string): Promise<void> {
       if (status === "accepted") acceptedCount++;
       else if (status === "pending") pendingCount++;
       else rejectedCount++;
+
+      const pageContext = extractPageContext(
+        pageTextByNumber.get(det.page) ?? "",
+        det.text,
+      );
 
       const record = await prisma.detection.create({
         data: {
@@ -852,6 +869,7 @@ export async function processDocument(docId: string): Promise<void> {
           posY: det.posY,
           posW: det.posW,
           posH: det.posH,
+          pageContext,
         },
       });
       allDetectionRecords.push(record);
