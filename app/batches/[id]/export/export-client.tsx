@@ -36,7 +36,13 @@ export interface ExportDocument {
 type ReadinessCategory = "exportable" | "warning" | "blocked";
 
 function getReadiness(doc: ExportDocument): ReadinessCategory {
-  if (doc.status === "signed-off") return "exportable";
+  // Phase 12.2 — `auto-redacted` is treated as exportable: the
+  // document finished processing without human review needed (every
+  // detection tier-routed to "accepted" at write time), so it has
+  // the same export-readiness as a human-signed-off document.
+  if (doc.status === "signed-off" || doc.status === "auto-redacted") {
+    return "exportable";
+  }
   if (doc.status === "reviewed" || doc.status === "in-review") return "warning";
   return "blocked";
 }

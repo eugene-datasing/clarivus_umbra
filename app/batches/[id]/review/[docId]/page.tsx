@@ -56,7 +56,11 @@ export default async function ReviewPage({
 
   const currentDocIndex = documentIds.indexOf(docId);
 
-  // Determine effective doc status after potential transition
+  // Determine effective doc status after potential transition.
+  // Phase 12.2 — `auto-redacted` documents pass through unchanged.
+  // They're terminal (no review needed); opening one in the review
+  // UI is read-only by default, with admin override available via
+  // regressDocumentIfNeeded if a detection is reverted.
   const docStatus = doc.status === "ready" ? "in-review" : doc.status;
 
   // PDF viewer URL — built from the canonical PDF when one exists. The

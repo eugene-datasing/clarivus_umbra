@@ -40,9 +40,10 @@ async function recordHistory(
 
 /**
  * After any detection status change, recompute whether the parent document
- * should move to "reviewed" (all detections actioned) or stay "in-review".
- * Only touches documents already in "in-review" status — won't regress a
- * document that has been signed-off.
+ * should move forward in the state machine. Only touches documents in
+ * "in-review" status — won't regress signed-off, won't disturb auto-
+ * redacted (admin override of an auto-accepted detection regresses
+ * via `regressDocumentIfNeeded` which fires on the same call paths).
  */
 async function recomputeDocumentStatus(documentId: string) {
   const doc = await prisma.document.findUnique({
@@ -69,8 +70,12 @@ async function recomputeDocumentStatus(documentId: string) {
 }
 
 /**
- * If a detection is reverted back to pending on a "reviewed" document,
- * move the document back to "in-review".
+ * If a detection is reverted back to pending, move the document back to
+ * an in-review-style state. Phase 12.2: an admin overriding a
+ * previously-auto-accepted detection on an "auto-redacted" document
+ * regresses the document to "in-review" — once a human is intervening,
+ * the auto-redacted contract no longer holds and the doc needs the
+ * full review path.
  */
 async function regressDocumentIfNeeded(documentId: string) {
   const doc = await prisma.document.findUnique({
@@ -79,7 +84,12 @@ async function regressDocumentIfNeeded(documentId: string) {
   });
   if (!doc) return;
 
-  if (doc.status === "reviewed" || doc.status === "in-review") {
+  if (
+    doc.status === "reviewed" ||
+    doc.status === "in-review" ||
+    doc.status === "auto-redacted" ||
+    doc.status === "ready"
+  ) {
     await prisma.document.update({
       where: { id: documentId },
       data: { status: "in-review" },

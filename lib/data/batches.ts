@@ -131,23 +131,29 @@ export async function getDashboardStats() {
  * and export jobs. Called after document/export status transitions to keep
  * the batch status in sync.
  *
- * Status transitions (Umbra v1, simplified from the LGOIMA milestone flow):
+ * Status transitions (Umbra v2, Phase 12.2):
  *   - Any document pending|processing -> batch "processing"
- *   - All documents signed-off (excluding excluded) -> batch "reviewed"
- *   - All documents ready (none in in-review|reviewed|signed-off) -> batch "ready-for-review"
+ *   - All documents auto-redacted -> batch "auto-redacted" (Phase 12.2)
+ *   - All documents signed-off OR auto-redacted (mixed) -> batch "reviewed"
+ *   - All documents ready (none in in-review|reviewed|signed-off|auto-redacted) -> batch "ready-for-review"
  *   - Any export job complete -> batch "exported"
  *
  * Soft-deleted batches and batches in `draft` are not recomputed; `deleted`
  * is set by the soft-delete action, not here.
+ *
+ * Returns the new status if a transition occurred (or the status is
+ * unchanged but recomputed), or null if no transition was applicable.
+ * Callers (e.g. the auto-export trigger) use the return value to decide
+ * whether to fire follow-on side effects.
  */
-export async function recomputeBatchStatus(batchId: string) {
+export async function recomputeBatchStatus(batchId: string): Promise<string | null> {
   const batch = await prisma.batch.findUnique({
     where: { id: batchId },
     select: { status: true, deletedAt: true },
   });
-  if (!batch) return;
-  if (batch.deletedAt !== null) return;
-  if (batch.status === "draft" || batch.status === "deleted") return;
+  if (!batch) return null;
+  if (batch.deletedAt !== null) return null;
+  if (batch.status === "draft" || batch.status === "deleted") return null;
 
   // Any export job complete -> batch "exported"
   const completedExport = await prisma.exportJob.findFirst({
@@ -160,35 +166,50 @@ export async function recomputeBatchStatus(batchId: string) {
         where: { id: batchId },
         data: { status: "exported" },
       });
+      return "exported";
     }
-    return;
+    return null;
   }
 
   const docs = await prisma.document.findMany({
     where: { batchId, status: { notIn: ["excluded"] } },
     select: { status: true },
   });
-  if (docs.length === 0) return;
+  if (docs.length === 0) return null;
 
   const statuses: string[] = docs.map((d) => d.status);
   const hasProcessingOrPending = statuses.some((s) => s === "processing" || s === "pending");
+  const allAutoRedacted = statuses.every((s) => s === "auto-redacted");
+  const allDone = statuses.every((s) => s === "signed-off" || s === "auto-redacted");
   const allSignedOff = statuses.every((s) => s === "signed-off");
   const everyReady = statuses.every((s) => s === "ready");
   const noneInReviewOrLater = !statuses.some(
-    (s) => s === "in-review" || s === "reviewed" || s === "signed-off",
+    (s) =>
+      s === "in-review" ||
+      s === "reviewed" ||
+      s === "signed-off" ||
+      s === "auto-redacted",
   );
   const allReady = everyReady && noneInReviewOrLater;
 
   let newStatus: string | null = null;
   if (hasProcessingOrPending) {
     newStatus = "processing";
-  } else if (allSignedOff) {
+  } else if (allAutoRedacted) {
+    // Pure auto-redact path — every doc finished without reviewer
+    // touch. Batch lands in "auto-redacted" so the auto-export
+    // trigger can pick it up.
+    newStatus = "auto-redacted";
+  } else if (allSignedOff || allDone) {
+    // Either all human-signed-off, or a mix of signed-off + auto-
+    // redacted (some docs were trayed and then signed off, others
+    // went straight through). Either way the batch is reviewed.
     newStatus = "reviewed";
   } else if (allReady) {
     newStatus = "ready-for-review";
   } else {
-    // Mixed states (some ready, some in-review/reviewed but not all signed-off) -> leave alone
-    return;
+    // Mixed states (some ready, some in-review/reviewed but not all done) -> leave alone
+    return null;
   }
 
   if (newStatus !== batch.status) {
@@ -196,5 +217,7 @@ export async function recomputeBatchStatus(batchId: string) {
       where: { id: batchId },
       data: { status: newStatus },
     });
+    return newStatus;
   }
+  return null;
 }

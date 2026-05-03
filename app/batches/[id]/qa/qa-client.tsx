@@ -81,9 +81,15 @@ function buildQAGroups(
   const totalDocs = batchData?.documentCount ?? documents.length;
 
   const reviewedDocs = documents.filter((d) =>
-    ["reviewed", "signed-off"].includes(d.status),
+    ["reviewed", "signed-off", "auto-redacted"].includes(d.status),
   ).length;
-  const signedOffDocs = documents.filter((d) => d.status === "signed-off").length;
+  // Phase 12.2 — auto-redacted documents count as done for QA
+  // sign-off accounting. The doc finished without reviewer touch
+  // (every detection tier-routed to "accepted" at write time); the
+  // QA dashboard should reflect "done" not "outstanding".
+  const signedOffDocs = documents.filter(
+    (d) => d.status === "signed-off" || d.status === "auto-redacted",
+  ).length;
 
   const totalWithholding = withholdingItems.length;
   const shortDescriptions = withholdingItems.filter(

@@ -36,7 +36,8 @@ import {
 import { buildContent, buildContentFromBlocks, verifyDetectionCoverage } from "./content-builder";
 import { buildFeedbackPromptSection } from "./feedback-examples";
 import { createAuditEntry } from "@/lib/data/audit";
-import { getEnabledDetectionTypes } from "@/lib/data/settings";
+import { getEnabledDetectionTypes, getAutoRedactConfig } from "@/lib/data/settings";
+import { bucketConfidence, tierToStatus } from "./tier-routing";
 import { CircuitOpenError } from "@/lib/resilience/azure-services";
 import { logger } from "@/lib/logger";
 import { trackException, trackEvent, trackMetric } from "@/lib/telemetry";
@@ -812,9 +813,30 @@ export async function processDocument(docId: string): Promise<void> {
       });
     }
 
-    // Insert deduplicated detections
+    // ------------------------------------------------------------------
+    // 8.5 Tier-routing (Phase 12.2 — Umbra v2)
+    // ------------------------------------------------------------------
+    // Decide each detection's initial status based on the auto-redact
+    // policy: deterministic-source matches and high-confidence AI go
+    // straight to "accepted" (auto-redacted, no review); medium-
+    // confidence land in the tray as "pending"; low-confidence are
+    // recorded as "rejected" so the audit trail captures what the
+    // pipeline saw + chose to suppress. The downstream document state
+    // becomes "auto-redacted" when nothing landed pending — see the
+    // post-loop status decision below.
+    const autoRedactConfig = await getAutoRedactConfig();
+
     const allDetectionRecords = [];
+    let acceptedCount = 0;
+    let pendingCount = 0;
+    let rejectedCount = 0;
     for (const det of dedupedDetections) {
+      const tier = bucketConfidence(det, autoRedactConfig);
+      const status = tierToStatus(tier);
+      if (status === "accepted") acceptedCount++;
+      else if (status === "pending") pendingCount++;
+      else rejectedCount++;
+
       const record = await prisma.detection.create({
         data: {
           documentId: docId,
@@ -825,7 +847,7 @@ export async function processDocument(docId: string): Promise<void> {
           reasoning: det.reasoning,
           aiExplanation: det.aiExplanation,
           source: det.source,
-          status: "pending",
+          status,
           posX: det.posX,
           posY: det.posY,
           posW: det.posW,
@@ -836,6 +858,13 @@ export async function processDocument(docId: string): Promise<void> {
     }
 
     const totalDetections = allDetectionRecords.length;
+    log.info("Tier-routed detection write complete", {
+      docId,
+      totalDetections,
+      accepted: acceptedCount,
+      pending: pendingCount,
+      rejected: rejectedCount,
+    });
 
     log.info("Detections stored", {
       docId,
@@ -898,6 +927,14 @@ export async function processDocument(docId: string): Promise<void> {
 
     const totalProcessingMs = Date.now() - timingStart;
 
+    // Phase 12.2 — final document status. If everything tier-routed to
+    // accepted (no pending in the tray) AND at least one detection
+    // landed accepted, the document is "auto-redacted" — no reviewer
+    // touch needed. Otherwise (pending detections OR zero detections)
+    // it goes to "ready" for the reviewer.
+    const finalDocStatus =
+      pendingCount === 0 && acceptedCount > 0 ? "auto-redacted" : "ready";
+
     // Wrap document update + case counter increment in a transaction
     await prisma.$transaction(async (tx) => {
       await tx.document.update({
@@ -906,7 +943,7 @@ export async function processDocument(docId: string): Promise<void> {
           contentJson: JSON.parse(JSON.stringify(content)),
           detectionCount: totalDetections,
           avgConfidence: Math.round(avgConfidence * 10) / 10,
-          status: "ready",
+          status: finalDocStatus,
           processingError: null,
           processingCompletedAt: new Date(),
           extractionMs,

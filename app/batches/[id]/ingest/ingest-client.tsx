@@ -17,7 +17,7 @@ import {
   Settings,
 } from "lucide-react";
 
-type DocStatus = "queued" | "processing" | "ready" | "error" | "pending" | "in-review" | "submitted" | "approved" | "rejected" | "released" | "complete" | "signed-off" | "reviewed";
+type DocStatus = "queued" | "processing" | "ready" | "error" | "pending" | "in-review" | "submitted" | "approved" | "rejected" | "released" | "complete" | "signed-off" | "reviewed" | "auto-redacted";
 
 interface DocItem {
   id: string;
@@ -105,8 +105,14 @@ export default function IngestClient({
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   // Counts
+  // Phase 12.2 — `auto-redacted` is the post-processing terminal state
+  // when every detection tier-routed to "accepted" (no review tray
+  // populated). It counts toward "done" alongside "ready" for ingest
+  // progress purposes — the document is finished processing.
   const totalCount = documents.length;
-  const readyCount = documents.filter((d) => d.status === "ready").length;
+  const readyCount = documents.filter(
+    (d) => d.status === "ready" || d.status === "auto-redacted"
+  ).length;
   const processingCount = documents.filter(
     (d) => d.status === "processing"
   ).length;
