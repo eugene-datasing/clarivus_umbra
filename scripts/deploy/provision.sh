@@ -54,6 +54,50 @@ az deployment group show \
   --query properties.outputs \
   --output json
 
+# ---------------------------------------------------------------------------
+# Phase 12.5.1 — bake the gpt-4o model deployment in.
+# ---------------------------------------------------------------------------
+# Bicep stands up the Azure OpenAI account but cannot create model
+# deployments inside it (model deployments are a sub-resource that
+# require quota approval and aren't covered by the cognitive-services
+# bicep type cleanly). Pre-12.5.1 this was a manual "after first
+# provision" step in docs/deployment.md — and it got missed during
+# Phase 11b, surfacing as a privacy regression in 12.5 (AI silently
+# down → pattern-only redactions). Now scripted + idempotent.
+#
+# Standard SKU + 50K TPM is the regional default for Australia East
+# on a fresh subscription. Override via UMBRA_GPT4O_SKU / CAPACITY
+# / VERSION if your subscription has GlobalStandard quota.
+# ---------------------------------------------------------------------------
+AOAI_NAME="${UMBRA_AOAI_NAME:-aoai-${UMBRA_NAME_PREFIX:-umbra-prototype}}"
+GPT4O_VERSION="${UMBRA_GPT4O_VERSION:-2024-11-20}"
+GPT4O_SKU="${UMBRA_GPT4O_SKU:-Standard}"
+GPT4O_CAPACITY="${UMBRA_GPT4O_CAPACITY:-50}"
+
+if az cognitiveservices account deployment show \
+     --name "$AOAI_NAME" \
+     --resource-group "$UMBRA_RESOURCE_GROUP" \
+     --deployment-name gpt-4o &>/dev/null; then
+  echo "[provision] gpt-4o model deployment already exists on $AOAI_NAME — skipping."
+else
+  echo "[provision] creating gpt-4o model deployment on $AOAI_NAME ($GPT4O_VERSION / $GPT4O_SKU / ${GPT4O_CAPACITY}K TPM)..."
+  if ! az cognitiveservices account deployment create \
+        --name "$AOAI_NAME" \
+        --resource-group "$UMBRA_RESOURCE_GROUP" \
+        --deployment-name gpt-4o \
+        --model-name gpt-4o \
+        --model-version "$GPT4O_VERSION" \
+        --model-format OpenAI \
+        --sku-name "$GPT4O_SKU" \
+        --sku-capacity "$GPT4O_CAPACITY" \
+        --output none; then
+    echo "[provision] WARN: gpt-4o deployment create failed. Most likely quota: try"
+    echo "[provision]       UMBRA_GPT4O_SKU=GlobalStandard if your subscription has it,"
+    echo "[provision]       or request a quota uplift via Azure Portal → Cognitive Services."
+    echo "[provision]       Pipeline will fall through to 'AI detection unavailable' until fixed."
+  fi
+fi
+
 echo ""
 echo "[provision] complete. Next:"
 echo "  1. Populate Key Vault secrets (see docs/deployment.md step 2)."
