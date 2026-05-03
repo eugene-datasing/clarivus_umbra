@@ -114,6 +114,13 @@ export interface TrayClusterOccurrence {
   page: number;
   confidence: number;
   aiExplanation: string;
+  /**
+   * Phase 12.4 — ±100-char snippet of source page text around the
+   * detection. Null when the AI emitted a paraphrase that didn't
+   * match the page text verbatim. Surfaces in the Tray expand view
+   * so reviewers can disambiguate same-text clusters across docs.
+   */
+  pageContext: string | null;
 }
 
 export interface TrayCluster {
@@ -167,6 +174,7 @@ export async function getBatchTrayClusters(
       page: d.page,
       confidence: d.confidence,
       aiExplanation: d.aiExplanation,
+      pageContext: d.pageContext,
     });
   }
 

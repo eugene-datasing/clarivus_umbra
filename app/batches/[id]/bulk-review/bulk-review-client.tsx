@@ -38,6 +38,7 @@ interface TrayOccurrence {
   page: number;
   confidence: number;
   aiExplanation: string;
+  pageContext: string | null;
 }
 
 interface TrayCluster {
@@ -209,6 +210,47 @@ function Header() {
 // Cluster row
 // ---------------------------------------------------------------------------
 
+/**
+ * Render a pageContext snippet with the cluster's text span emphasised.
+ * Falls back to the aiExplanation when no pageContext is available
+ * (AI paraphrase / normalised-punctuation captures land with null
+ * pageContext from the pipeline).
+ */
+function renderSnippet(
+  occ: TrayOccurrence,
+  clusterText: string,
+): React.ReactNode {
+  if (!occ.pageContext) {
+    return occ.aiExplanation ? (
+      occ.aiExplanation
+    ) : (
+      <span className="italic opacity-60">(no context)</span>
+    );
+  }
+
+  // Case-insensitive split on the cluster text. Keeps the matched
+  // span bold/coloured; surrounding context renders muted.
+  const lowerSnippet = occ.pageContext.toLowerCase();
+  const lowerMatch = clusterText.toLowerCase();
+  const idx = lowerSnippet.indexOf(lowerMatch);
+  if (idx === -1) {
+    // pageContext was captured but the cluster text doesn't substring
+    // match (unlikely — the writer extracted ±100 chars around the
+    // match so it must include the match). Fall back to plain render.
+    return occ.pageContext;
+  }
+  const before = occ.pageContext.slice(0, idx);
+  const matched = occ.pageContext.slice(idx, idx + clusterText.length);
+  const after = occ.pageContext.slice(idx + clusterText.length);
+  return (
+    <>
+      <span className="text-txt-secondary">{before}</span>
+      <strong className="text-txt-primary font-semibold">{matched}</strong>
+      <span className="text-txt-secondary">{after}</span>
+    </>
+  );
+}
+
 function ClusterRow({
   cluster,
   expanded,
@@ -309,28 +351,29 @@ function ClusterRow({
           <div className="text-[10px] uppercase tracking-wider font-semibold text-txt-secondary mb-2">
             Occurrences
           </div>
-          <ul className="space-y-2">
+          <ul className="space-y-2.5">
             {cluster.occurrenceList.map((occ) => (
               <li
                 key={occ.detectionId}
                 className="flex items-start gap-3 text-xs"
               >
-                <div className="font-mono text-[10px] text-txt-secondary w-32 shrink-0 truncate">
-                  {occ.documentName}
+                <div className="flex flex-col w-32 shrink-0">
+                  <span
+                    className="font-mono text-[10px] text-txt-secondary truncate"
+                    title={occ.documentName}
+                  >
+                    {occ.documentName}
+                  </span>
+                  <span className="text-[10px] text-txt-secondary opacity-70">
+                    p.{occ.page} · {occ.confidence}%
+                  </span>
                 </div>
-                <div className="text-txt-secondary w-12 shrink-0">
-                  p.{occ.page}
-                </div>
-                <div className="text-txt-secondary flex-1 truncate">
-                  {occ.aiExplanation || (
-                    <span className="italic opacity-60">
-                      (no explanation)
-                    </span>
-                  )}
+                <div className="text-[11px] leading-relaxed flex-1 line-clamp-2 italic">
+                  {renderSnippet(occ, cluster.text)}
                 </div>
                 <Link
                   href={`/batches/${batchId}/review/${occ.documentId}`}
-                  className="text-brand-primary hover:underline shrink-0"
+                  className="text-brand-primary hover:underline shrink-0 self-center text-xs"
                 >
                   Open →
                 </Link>
