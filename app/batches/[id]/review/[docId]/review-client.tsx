@@ -14,7 +14,6 @@ import {
   Edit,
   AlertCircle,
   Info,
-  Star,
   FileText,
   Shield,
   Send,
@@ -37,7 +36,6 @@ import {
   signOffDocument,
   requestChanges,
 } from "@/lib/actions/detection-actions";
-import { getDefaultGroundForType } from "@/lib/detection-type-grounds";
 import { createManualDetection, deleteManualDetection } from "@/lib/actions/manual-detection-actions";
 import ManualDetectionPopover from "@/components/review/manual-detection-popover";
 import AILearningPanel from "@/components/review/ai-learning-panel";
@@ -52,20 +50,11 @@ const PdfViewer = dynamic(() => import("@/components/review/pdf-viewer"), {
     </div>
   ),
 });
-// Phase 12.1 (Umbra v2) — LGOIMA grounds vocabulary dropped. Local
-// empty-stubs keep the surrounding ground-aware UI compiling so this
-// scope-drop commit doesn't entangle with the full Phase 12.3 review-
-// UI rework. Dropdowns render empty; citations render empty strings.
-// The ground UI surfaces are deleted entirely in Phase 12.3.
-const lgoimaGrounds: Array<{
-  id: string;
-  reference: string;
-  label: string;
-  section: "s6" | "s7" | "s17";
-  common: boolean;
-  requiresPI: boolean;
-}> = [];
-const groundLabel = (_id: string | null | undefined) => "";
+// Phase 12.3 (Umbra v2) — Per-doc review trim.
+// All LGOIMA-ground UI removed: GroundSelector component, ground state
+// fields, ground-on-accept flow, ground badges, ground citations.
+// Per-detection accept/reject + note remain as the admin override
+// surface for clusters surfaced from the Tray.
 import { cn } from "@/lib/utils";
 import { compareDetectionsByPosition } from "@/lib/review/sort-detections";
 import { computePdfSelectionBbox, findPdfPageWrapper } from "@/lib/review/pdf-selection";
@@ -83,7 +72,6 @@ type TabFilter = "all" | "personal" | "commercial" | "other";
 
 interface DetectionState {
   status: DetectionStatus;
-  appliedGround: string | null;
   type: string;
 }
 
@@ -101,17 +89,6 @@ export interface Detection {
   note: string | null;
   aiExplanation: string;
   source: string;
-  /**
-   * Phase 5 dropped suggestedGround / appliedGround / piConsideration
-   * from the Detection model. The review UI still has dead ground-
-   * picker code paths that read these fields. They're typed as
-   * optional + nullable here so the page compiles; the data layer no
-   * longer populates them, so the dead UI silently renders nothing.
-   * Phase 11 / a future UI rework can rip these out for real.
-   */
-  suggestedGround?: string | null;
-  appliedGround?: string | null;
-  piConsideration?: string | null;
 }
 
 export interface ReviewClientProps {
@@ -129,116 +106,6 @@ export interface ReviewClientProps {
   canonicalPdfTextSelectable?: boolean;
   pdfUrl?: string;
   viewerMode: "html" | "pdf";
-}
-
-/* -------------------------------------------------------------------------- */
-/*  Ground selector (inline)                                                  */
-/* -------------------------------------------------------------------------- */
-
-function GroundSelector({
-  detectionId,
-  suggestedGround,
-  appliedGround,
-  onSelect,
-  onClose,
-}: {
-  detectionId: string;
-  suggestedGround: string | null;
-  appliedGround: string | null;
-  onSelect: (detectionId: string, groundId: string) => void;
-  onClose: () => void;
-}) {
-  const s6Grounds = lgoimaGrounds.filter((g) => g.section === "s6");
-  const s7Grounds = lgoimaGrounds.filter((g) => g.section === "s7");
-  return (
-    <div className="absolute z-50 right-0 top-full mt-1 w-80 bg-surface-card border border-border rounded-card shadow-lg p-3">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold text-txt-primary uppercase tracking-wide">
-          Select Withholding Ground
-        </span>
-        <button onClick={onClose} className="text-txt-secondary hover:text-txt-primary">
-          <X size={14} />
-        </button>
-      </div>
-      {suggestedGround && (
-        <div className="mb-2 px-2 py-1.5 bg-brand-primary/5 border border-brand-primary/20 rounded-input">
-          <span className="text-[10px] uppercase tracking-wider text-brand-primary font-semibold">
-            AI Suggested
-          </span>
-        </div>
-      )}
-      <div className="space-y-0.5 max-h-72 overflow-y-auto">
-        {/* Section 6 — Conclusive */}
-        <div className="px-2 pt-2 pb-1">
-          <span className="text-[9px] font-bold text-txt-secondary uppercase tracking-widest">
-            Section 6 — Conclusive
-          </span>
-        </div>
-        {s6Grounds.map((g) => (
-          <button
-            key={g.id}
-            onClick={() => {
-              onSelect(detectionId, g.id);
-              onClose();
-            }}
-            className={cn(
-              "w-full text-left px-2 py-1.5 rounded-input text-xs hover:bg-surface-hover transition-colors flex items-center gap-2",
-              appliedGround === g.id && "bg-brand-primary/10 text-brand-primary font-medium",
-              suggestedGround === g.id && appliedGround !== g.id && "bg-amber-50"
-            )}
-          >
-            <span className="font-mono text-[10px] text-txt-secondary w-24 shrink-0 whitespace-nowrap">
-              {g.reference}
-            </span>
-            <span className="truncate">{g.label}</span>
-            {g.common && (
-              <span className="w-1.5 h-1.5 rounded-full bg-brand-primary/50 shrink-0" title="Commonly used" />
-            )}
-            {suggestedGround === g.id && (
-              <Star size={10} className="text-amber-500 ml-auto shrink-0" />
-            )}
-            {appliedGround === g.id && (
-              <Check size={10} className="text-brand-primary ml-auto shrink-0" />
-            )}
-          </button>
-        ))}
-        {/* Section 7 — Public interest test */}
-        <div className="px-2 pt-3 pb-1">
-          <span className="text-[9px] font-bold text-txt-secondary uppercase tracking-widest">
-            Section 7 — Public interest test required
-          </span>
-        </div>
-        {s7Grounds.map((g) => (
-          <button
-            key={g.id}
-            onClick={() => {
-              onSelect(detectionId, g.id);
-              onClose();
-            }}
-            className={cn(
-              "w-full text-left px-2 py-1.5 rounded-input text-xs hover:bg-surface-hover transition-colors flex items-center gap-2",
-              appliedGround === g.id && "bg-brand-primary/10 text-brand-primary font-medium",
-              suggestedGround === g.id && appliedGround !== g.id && "bg-amber-50"
-            )}
-          >
-            <span className="font-mono text-[10px] text-txt-secondary w-24 shrink-0 whitespace-nowrap">
-              {g.reference}
-            </span>
-            <span className="truncate">{g.label}</span>
-            {g.common && (
-              <span className="w-1.5 h-1.5 rounded-full bg-brand-primary/50 shrink-0" title="Commonly used" />
-            )}
-            {suggestedGround === g.id && (
-              <Star size={10} className="text-amber-500 ml-auto shrink-0" />
-            )}
-            {appliedGround === g.id && (
-              <Check size={10} className="text-brand-primary ml-auto shrink-0" />
-            )}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -338,7 +205,7 @@ export default function ReviewClient({
   const [detectionStates, setDetectionStates] = useState<Record<string, DetectionState>>(() => {
     const init: Record<string, DetectionState> = {};
     for (const d of detections) {
-      init[d.id] = { status: d.status as DetectionStatus, appliedGround: d.appliedGround ?? null, type: d.type };
+      init[d.id] = { status: d.status as DetectionStatus, type: d.type };
     }
     return init;
   });
@@ -350,7 +217,7 @@ export default function ReviewClient({
       const next = { ...prev };
       for (const d of detections) {
         if (!next[d.id]) {
-          next[d.id] = { status: d.status as DetectionStatus, appliedGround: d.appliedGround ?? null, type: d.type };
+          next[d.id] = { status: d.status as DetectionStatus, type: d.type };
           changed = true;
         }
       }
@@ -368,7 +235,6 @@ export default function ReviewClient({
   const [docStatus, setDocStatus] = useState(initialDocStatus);
   const [selectedDetectionId, setSelectedDetectionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabFilter>("all");
-  const [groundSelectorId, setGroundSelectorId] = useState<string | null>(null);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [showSignOffConfirm, setShowSignOffConfirm] = useState(false);
   const [showRequestChanges, setShowRequestChanges] = useState(false);
@@ -532,18 +398,13 @@ export default function ReviewClient({
 
   // ----- Handlers (optimistic update + server action) -----
   const handleAccept = useCallback(async (detectionId: string) => {
-    // Optimistic update
     setDetectionStates((prev) => ({
       ...prev,
       [detectionId]: { ...prev[detectionId], status: "accepted" },
     }));
-    // Open ground selector
-    setGroundSelectorId(detectionId);
-    // Persist
     try {
       await acceptDetection(detectionId);
     } catch {
-      // Revert on error
       setDetectionStates((prev) => ({
         ...prev,
         [detectionId]: { ...prev[detectionId], status: "pending" },
@@ -552,17 +413,13 @@ export default function ReviewClient({
   }, []);
 
   const handleReject = useCallback(async (detectionId: string) => {
-    // Optimistic update
     setDetectionStates((prev) => ({
       ...prev,
-      [detectionId]: { ...prev[detectionId], status: "rejected", appliedGround: null },
+      [detectionId]: { ...prev[detectionId], status: "rejected" },
     }));
-    setGroundSelectorId(null);
-    // Persist
     try {
       await rejectDetection(detectionId);
     } catch {
-      // Revert on error
       setDetectionStates((prev) => ({
         ...prev,
         [detectionId]: { ...prev[detectionId], status: "pending" },
@@ -571,19 +428,14 @@ export default function ReviewClient({
   }, []);
 
   const handleRevert = useCallback(async (detectionId: string) => {
-    // Save previous state for rollback
     const previousState = detectionStates[detectionId];
-    // Optimistic update
     setDetectionStates((prev) => ({
       ...prev,
-      [detectionId]: { ...prev[detectionId], status: "pending", appliedGround: null },
+      [detectionId]: { ...prev[detectionId], status: "pending" },
     }));
-    setGroundSelectorId(null);
-    // Persist
     try {
       await revertDetection(detectionId);
     } catch {
-      // Revert on error
       if (previousState) {
         setDetectionStates((prev) => ({
           ...prev,
@@ -591,18 +443,6 @@ export default function ReviewClient({
         }));
       }
     }
-  }, [detectionStates]);
-
-  const handleGroundSelect = useCallback(async (detectionId: string, groundId: string) => {
-    const previousGround = detectionStates[detectionId]?.appliedGround;
-    // Optimistic update
-    setDetectionStates((prev) => ({
-      ...prev,
-      [detectionId]: { ...prev[detectionId], appliedGround: groundId },
-    }));
-    // Persist — Phase 5 removed appliedGround from Detection. The
-    // local state still tracks ground until Phase 7 reworks the UI.
-    void previousGround;
   }, [detectionStates]);
 
   const handleDetectionClick = useCallback((detectionId: string) => {
@@ -756,35 +596,28 @@ export default function ReviewClient({
     [router],
   );
 
-  // ----- Handle type change with auto-ground -----
+  // ----- Handle type change -----
+  // Phase 12.3 — auto-ground assignment dropped (no LGOIMA grounds in
+  // v2). Type change now just persists the new type; the detection's
+  // status is unaffected.
   const handleTypeChange = useCallback(
     async (detectionId: string, newType: string) => {
       const state = detectionStates[detectionId];
       if (!state) return;
-
       const oldType = state.type;
-      const oldDefaultGround = getDefaultGroundForType(oldType);
-      const newDefaultGround = getDefaultGroundForType(newType);
 
-      // Auto-update ground if it's empty or matches the old type's default
-      const shouldAutoGround =
-        !state.appliedGround || state.appliedGround === oldDefaultGround;
-      const newGround = shouldAutoGround && newDefaultGround ? newDefaultGround : state.appliedGround;
-
-      // Optimistic update
       setDetectionStates((prev) => ({
         ...prev,
-        [detectionId]: { ...prev[detectionId], type: newType, appliedGround: newGround },
+        [detectionId]: { ...prev[detectionId], type: newType },
       }));
       setTypeSelectorId(null);
 
       try {
         await changeDetectionType(detectionId, newType);
       } catch {
-        // Revert on error
         setDetectionStates((prev) => ({
           ...prev,
-          [detectionId]: { ...prev[detectionId], type: oldType, appliedGround: state.appliedGround },
+          [detectionId]: { ...prev[detectionId], type: oldType },
         }));
       }
     },
@@ -792,23 +625,20 @@ export default function ReviewClient({
   );
 
   // ----- Handle accept remaining -----
+  // Phase 12.3 — accept all pending detections in this document. v1
+  // also persisted suggested grounds; v2 just flips status to accepted.
   const handleAcceptRemaining = useCallback(async () => {
     setShowAcceptRemainingConfirm(false);
     setAcceptRemainingAlert(null);
 
-    // Save previous states for rollback
     const prevStates = { ...detectionStates };
 
-    // Optimistic update: accept all pending, fill in grounds from suggested
     setDetectionStates((prev) => {
       const next = { ...prev };
       for (const d of detections) {
         const state = next[d.id];
         if (state?.status === "pending") {
-          const ground = state.appliedGround || (d.suggestedGround ? d.suggestedGround : null);
-          if (ground) {
-            next[d.id] = { ...state, status: "accepted", appliedGround: ground };
-          }
+          next[d.id] = { ...state, status: "accepted" };
         }
       }
       return next;
@@ -817,7 +647,6 @@ export default function ReviewClient({
     try {
       await acceptRemainingDetections(docId);
     } catch {
-      // Revert all on error
       setDetectionStates(prevStates);
     }
   }, [detectionStates, detections, docId]);
@@ -881,7 +710,6 @@ export default function ReviewClient({
             setShowKeyboardHints(false);
           } else if (selectedDetectionId) {
             setSelectedDetectionId(null);
-            setGroundSelectorId(null);
             setStatusAnnouncement("Detection deselected");
           }
           break;
@@ -1062,7 +890,7 @@ export default function ReviewClient({
             isRejected
               ? "Cleared — will not be redacted"
               : isAccepted
-              ? `Redacted — ${groundLabel(state?.appliedGround ?? null)}`
+              ? "Redacted"
               : `Pending review — ${det.confidence}% confidence`
           }
         >
@@ -1084,7 +912,6 @@ export default function ReviewClient({
       const isSelected = selectedDetectionId === det.id;
       const isRejected = state?.status === "rejected";
       const isAccepted = state?.status === "accepted";
-      const appliedGround = state?.appliedGround;
 
       if (isRejected) {
         return (
@@ -1100,7 +927,6 @@ export default function ReviewClient({
       }
 
       if (isAccepted) {
-        const groundRef = appliedGround ? groundLabel(appliedGround) : null;
         return (
           <span
             key={si}
@@ -1110,7 +936,7 @@ export default function ReviewClient({
               "relative cursor-pointer inline rounded-sm transition-all duration-150",
               isSelected && "ring-2 ring-brand-primary ring-offset-1"
             )}
-            title={groundRef ? `Redacted — ${groundRef}` : "Redacted"}
+            title="Redacted"
           >
             <span
               className="bg-gray-900 text-transparent select-none px-0.5 rounded-[2px]"
@@ -1118,14 +944,7 @@ export default function ReviewClient({
             >
               {seg.text}
             </span>
-            {groundRef && (
-              <span className="absolute -top-2.5 right-0 text-[8px] font-mono font-semibold text-gray-500 select-none whitespace-nowrap pointer-events-none">
-                {groundRef}
-              </span>
-            )}
-            <span className="sr-only">
-              Redacted: {seg.text}{groundRef ? ` (${groundRef})` : ""}
-            </span>
+            <span className="sr-only">Redacted: {seg.text}</span>
           </span>
         );
       }
@@ -2112,13 +1931,6 @@ export default function ReviewClient({
                       {/* Page */}
                       <td className="px-2 py-2 text-txt-secondary">p.{det.page}</td>
 
-                      {/* Ground */}
-                      <td className="px-2 py-2">
-                        <span className="font-mono text-[10px] text-txt-secondary">
-                          {groundLabel(state?.appliedGround ?? det.suggestedGround)}
-                        </span>
-                      </td>
-
                       {/* Status */}
                       <td className="px-2 py-2">
                         {isAccepted && (
@@ -2189,16 +2001,6 @@ export default function ReviewClient({
                             </>
                           )}
 
-                          {/* Inline ground selector */}
-                          {groundSelectorId === det.id && (
-                            <GroundSelector
-                              detectionId={det.id}
-                              suggestedGround={det.suggestedGround ?? null}
-                              appliedGround={detectionStates[det.id]?.appliedGround}
-                              onSelect={handleGroundSelect}
-                              onClose={() => setGroundSelectorId(null)}
-                            />
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -2416,30 +2218,6 @@ export default function ReviewClient({
                   </div>
                 )}
               </>
-            )}
-
-            {/* Public interest consideration */}
-            {det.piConsideration && (
-              <div className="mb-3">
-                <span className="text-[10px] font-semibold text-txt-secondary uppercase tracking-wider block mb-1">
-                  Public Interest Consideration
-                </span>
-                <div className="px-2.5 py-2 bg-amber-50 border border-amber-200 rounded-input">
-                  <p className="text-[10px] leading-relaxed text-amber-800">
-                    {det.piConsideration}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Suggested ground */}
-            {det.suggestedGround && (
-              <div className="text-[10px] text-txt-secondary border-t border-border pt-2 mb-2">
-                <span className="uppercase tracking-wider font-semibold">Suggested ground: </span>
-                <span className="font-mono text-brand-primary">
-                  {groundLabel(det.suggestedGround)}
-                </span>
-              </div>
             )}
 
             {/* Change History Timeline */}
