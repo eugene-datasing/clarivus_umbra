@@ -771,6 +771,44 @@ Today's DB-split work between Veil and Umbra established a precedent that Phase 
 
 **Dependencies.** All code phases (1-10) complete + green test suite.
 
+### Phase 11 retrospective (executed split: 11a / 11b)
+
+Phase 11 was executed in two slices to keep the long-running provisioning work out of the codebase-prep work:
+
+- **Phase 11a — Code/docs prep for Azure deployment.** Five commits, all merged to main before any cloud work began:
+  - `feat(infra): bicep template for Azure Australia East provisioning` — `infra/main.bicep` provisions ACR + App Service Plan B1 + Web App with SystemAssigned managed identity + alwaysOn=true, Postgres Flexible Server B1ms, Storage Account with `documents` / `archives` / `backups` containers, Key Vault in RBAC mode, Azure OpenAI (S0), Document Intelligence (S0), App Insights + Log Analytics. RBAC role assignments grant the Web App identity AcrPull on ACR, Key Vault Secrets User on KV, Storage Blob Data Contributor on Storage; deployer gets Key Vault Administrator. App settings include 8 KV-referenced secrets via `@Microsoft.KeyVault(VaultName=…;SecretName=…)`.
+  - `feat(deploy): scripts for provision/build/migrate/smoke` — six shell scripts under `scripts/deploy/` wrapping the canonical Azure CLI flows (provision, build-and-push via `az acr build`, deploy-image, migrate-db, seed, smoke).
+  - `docs(deploy): comprehensive deployment guide with cost estimate` — 9-section runbook in `docs/deployment.md`. Cost estimate ~NZ$165/month at the prototype tier.
+  - `chore(docker): HEALTHCHECK directive + generalise build-arg comment` — Dockerfile gains a HEALTHCHECK pointing at `/api/health`; Veil-era CI workflow / kv-veil-prototype references generalised.
+  - `chore(scripts): npm run deploy:* convenience targets` — `package.json` adds `deploy:provision`, `deploy:build`, `deploy:image`, `deploy:migrate`, `deploy:seed`, `deploy:smoke`, plus aggregate `deploy` chaining build → image → migrate → smoke.
+
+- **Phase 11b — Live provisioning + first deploy.** 18 commits during execution. Highlights:
+  - **Subscription split.** Provisioning happened under a fresh subscription `clarivus_umbra` (`ae3a79c2-b434-42cf-aad6-0f18b064add4`) in tenant `f153900b-…`, deliberately separated from `clarivus_veil`. Required CLI cache refresh (`az account list --refresh`) before the new sub became visible.
+  - **Provider registration.** Fresh subscription required registering 7 namespaces from `NotRegistered` to `Registered`: `Microsoft.CognitiveServices`, `Microsoft.DBforPostgreSQL`, `Microsoft.ContainerRegistry`, `Microsoft.Storage`, `Microsoft.KeyVault`, `Microsoft.Insights`, `Microsoft.OperationalInsights`. ~6.5 minutes from kick-off to all 8 (incl. pre-registered `Microsoft.Web`) settled at `Registered`. CLI version did not support `--no-wait` on `az provider register` — registration is async by default; the flag was redundant and noisy.
+  - **All 11 resources provisioned cleanly** in a single bicep deploy (`umbra-20260503-130842`). The "Failed" deployment that appeared in `az deployment group list` was Azure's auto-created Application Insights "Failure Anomalies" alert rule (a known side-effect on certain SKUs/regions); App Insights itself deployed fine.
+  - **Azure AD app registration.** Done out-of-bicep (tenant-scoped). `az ad app create --display-name umbra-prototype --sign-in-audience AzureADMyOrg` → `APP_ID=572f27ea-e39c-44b4-861d-47fca85c6d1e`. 12-month client secret captured to a `mktemp` 600-mode stash file and consumed during Key Vault secret population (never echoed to chat).
+  - **9 Key Vault secrets.** 8 populated cross-shell (DATABASE-URL via Eugene's terminal because the password env var lived only there; the other 7 from the agent shell using fetched AOAI/DI keys, the storage connection string, openssl-generated AUTH_SECRET, and the captured AD secret). NEXT-SERVER-ACTIONS-ENCRYPTION-KEY added in a follow-up after all 9 KV references resolved.
+  - **Bicep amendment mid-flight.** `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` wasn't in the original bicep app settings; added via a 4-line edit + idempotent re-provision so the canonical bicep stays the source of truth (commit `9d60ea9`).
+  - **Middleware fix.** First deploy's `/api/health` returned **HTTP 307 → /login** because `middleware.ts` had no `/api/health` in its public-paths allowlist. One-line fix landed mid-deploy (commit `674ad0b`); rebuild + redeploy returned full JSON with `status: "healthy"`, all 4 backing-service checks (DB / OpenAI / DI / app) reporting OK, both circuit breakers `closed`. This would have been Phase 10 e2e-fixme territory had the screenshot-audit specs been runnable; instead it surfaced at first live curl.
+  - **Auth.js v5 provider naming.** AAD app's redirect URI was registered as `/api/auth/callback/azure-ad` per the Block 3 commands, but NextAuth v5's `MicrosoftEntraID` provider sends to `/api/auth/callback/microsoft-entra-id`. First SSO attempt returned AADSTS50011. Two fixes: `az ad app update --web-redirect-uris` to the new path, and `NEXTAUTH_URL=https://app-umbra-prototype.azurewebsites.net` set on the Web App (also persisted in bicep, commit `e0bde02`) so invitation-email links resolve correctly even though `trustHost: true` already handles auth-callback URL discovery from the request Host.
+  - **Lockfile regeneration.** First image build failed at `npm ci` with `Missing: @emnapi/runtime@1.10.0 from lock file`. Root cause: macOS-arm64 install didn't fully resolve the wasm32-wasi platform variant of `@napi-rs/wasm-runtime` into the lockfile. Fixed by `rm package-lock.json && npm install` (commit `7d35fe4`); some patch-level drift on transitive deps, package.json unchanged.
+  - **Postgres firewall.** Bicep added `AllowAzureServices` (lets the Web App through). Eugene's local Mac IP (`202.189.167.35`) was added at migration time as `eugene-mac-20260503` to allow `prisma migrate deploy` from his laptop.
+
+**Production URL:** https://app-umbra-prototype.azurewebsites.net (Auth.js SSO via Microsoft Entra; resource group `rg-umbra-prototype` in Australia East).
+
+**Cost estimate:** ~NZ$50–75/month at prototype tier (App Service B1 Linux + Postgres Burstable B1ms + Storage Standard LRS + Key Vault Standard + Log Analytics + AOAI/DI pay-per-use). Documented in `docs/deployment.md`.
+
+**Outstanding cleanup items:**
+
+- **`.github/workflows/azure-static-web-apps-blue-bay-…yml`** — auto-pushed by Azure Portal during a brief SWA-experiment commit, fails on every push because the SWA itself was deleted. Should be removed.
+- **Postgres firewall rule** `eugene-mac-20260503` — added during 11b for live `prisma migrate deploy` from Eugene's laptop. Can be removed once migrations are routed through a deploy script that runs from inside the Azure perimeter (or kept indefinitely as a developer-laptop allow-list with stricter audit).
+
+**Lessons recorded:**
+
+- **Cross-shell secret handling.** When the agent shell can't see a user-shell env var, the cleanest pattern is a `mktemp` 600-mode stash file scoped to a single bash invocation (used for the AD client secret) — secret stays out of chat history, gets consumed and deleted in the same logical step.
+- **Bicep + manual `az` together stays clean** as long as bicep is the source of truth: any one-shot `az` change should be mirrored back into bicep before the next provision run, otherwise re-running provision silently rolls back the manual change. Phase 11b had two such mirrors: `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` app setting and `NEXTAUTH_URL`.
+- **App Service `:latest` tag pulls aren't always immediate.** Two restart cycles were sometimes needed for a fresh image to land — the 90-second pull from the build's stop-the-world to "Site started" is the dominant wait. Pin to digest or per-deploy `cr-<sha>` tag if deterministic deploys matter.
+
 ---
 
 ## Plan-level concerns
@@ -875,3 +913,614 @@ Tests:
 - `npm run test:e2e` — Playwright, all green (target: ≥ 220 e2e tests after deletions + additions).
 - `npm run lint` — clean.
 - `tsc --noEmit` — clean.
+
+---
+
+## Phase 12 — Refocus on mass PII redaction
+
+Umbra v1 deployed cleanly (Phase 11b) but inherited a curatorial,
+per-document review framing from the Veil-era LGOIMA disclosure
+workflow. The actual product job is **mass PII redaction**: take N
+documents → return N redacted PDFs with high recall on names + standard
+identifiers + a small new "sensitive-context" bucket, and reserve
+reviewer time for the genuinely uncertain calls.
+
+Phase 12 is the second major repositioning since the Veil → Umbra fork
+and is comparable in scope. Total estimate **~26-27 person-days** across
+six sub-phases.
+
+### Locked decisions (Phase 12)
+
+1. **Detection scope = strict PII only.** **KEEP**: `personal-name`,
+   `phone`, `email-addr`, `address`, `ird`, `nz-driver-licence`, `nhi`,
+   `nz-passport`, `bank-account`, `vehicle-reg`, `manual`, plus a new
+   `sensitive-context` bucket for medical / personal-circumstances
+   content (per REQ-006). **DROP**: `commercial`, `council-commercial`,
+   `negotiation`, `legal-privilege`, `confidential`, `free-frank`,
+   `harassment-risk`, `cultural-sensitivity`, `safety-concern`,
+   `law-enforcement`, `health-safety`.
+2. **Default behaviour = auto-redact at write time.** High-confidence +
+   regex matches auto-applied (`status: "accepted"`); medium-confidence
+   land in a "needs review" tray (`status: "pending"`); low-confidence
+   ignored.
+3. **Approval memory = within-batch propagation only (scope b).**
+   Approve a name once, propagate to other occurrences in the same
+   batch with disambiguation context. Cross-batch propagation
+   (scope c) deferred to v3 — the false-positive risk of name
+   collisions across unrelated batches is too high for v2.
+4. **Production strategy = in-place merge to main.** Each sub-phase
+   merges to `main` and deploys when complete; no long-lived `phase-12`
+   branch.
+5. **Legacy data = purge at 12.5.** Deployed DB has only the Ministry
+   of Demo seed (no documents → zero detection rows). Bulk
+   `DELETE FROM detections` is effectively free; do it once in 12.5
+   alongside the schema migration.
+
+---
+
+## Phase 12.0 — Investigation pass (DONE)
+
+**Goal.** Scope the mass-PII rework, identify why personal names aren't
+being caught reliably on the deployed instance, and produce a phased
+plan with file/line citations.
+
+**Scope.**
+- Read the entire detection pipeline (ai-detect.ts, patterns.ts,
+  label-adjacent.ts, entity-propagation.ts, section-marker-detect.ts,
+  process.ts).
+- Map current → target workflow for mass redaction.
+- Inventory the blast radius of dropping the 11 LGOIMA-style detection
+  types.
+- Run a one-off prompt-recall verification (current LGOIMA prompt vs a
+  stripped PII-only prompt) against three test documents to confirm
+  the prompt itself is the dominant cause of low name recall.
+
+**Outputs.**
+- `docs/umbra-v2-investigation.md` (~750 lines) — current-state
+  assessment, file-by-file blast radius, structural change map, and
+  effort estimates.
+- `docs/umbra-v2-prompt-verification.md` — verdict on hypothesis A
+  with per-document recall comparison.
+
+**Verdict.** Hypothesis A (LGOIMA-curatorial prompt suppresses
+personal names) **CONFIRMED strongly**:
+
+| Document | Current prompt recall | Stripped prompt recall | Delta |
+|---|---|---|---|
+| C-synthetic (policy memo) | 44% (4/9) | 100% (9/9) | +125% |
+| B2-witness (real fixture) | 50% (3/6) | 100% (6/6) | +50% |
+| B3-long-investigation | (10p, mixed) | (excl DOBs) | +80% |
+
+The missed names are exactly the categories the prompt's framing
+predicts: council officials, third-party professionals, and
+witness/grievance names re-typed as `harassment-risk` *sentences*
+rather than `personal-name`. **The Phase 12.1 prompt rewrite solves
+both the locked-scope reduction AND the name-recall gap as the same
+change.**
+
+**Files touched.** Two new docs in `docs/`. No code touched. The
+verification harness was a one-off `scripts/verify-prompt-recall.ts`
+that was deleted post-run (raw output preserved at
+`/tmp/verify-prompt-recall.txt` for reference).
+
+**Status.** Done. Commits in `main`.
+
+**Effort actual.** 0.5 person-day.
+
+**Dependencies.** None.
+
+---
+
+## Phase 12.1 — Detection-scope drop + AI prompt rewrite + bench re-cut
+
+**Goal.** Land the locked-scope detection-type drop AND the prompt
+rewrite together, since the prompt has to be re-cut anyway when 11
+governance/commercial types disappear. The recall-gap fix is a
+side-effect of the same change.
+
+**Scope.**
+
+*Type drops.*
+- `lib/detection-type-grounds.ts:9-32` — delete entries for the 11
+  dropped types from `DEFAULT_GROUND_FOR_TYPE`.
+- `lib/pipeline/ai-detect.ts:119-126` — remove dropped types from
+  `ALL_AI_TYPES`.
+- `lib/pipeline/ai-detect.ts:133-160` — remove the
+  `GROUND_DETECTION_TYPE_MAP` entirely (no longer needed once grounds
+  are gone).
+- `lib/data/settings.ts:70-89` `DEFAULT_DETECTION_TOGGLES` — remove the
+  10 toggles for dropped types; add a "Sensitive Context" toggle.
+- `lib/data/settings.ts:93-113` `DETECTION_TYPE_MAP` — same.
+
+*Prompt rewrite (the headline change).* `lib/pipeline/ai-detect.ts:207-395`
+gets wholesale-replaced. New `SYSTEM_PROMPT_BASE`:
+- Open with **PII-redaction framing**, not LGOIMA-disclosure framing.
+- No "withheld under LGOIMA" verbiage.
+- No `buildGroundsReference()` (delete the grounds-table builder
+  entirely).
+- No `:373-381` carve-out for council officials, no "professional
+  capacity" suppression. Council staff names ARE PII in v2.
+- Drop the `harassment-risk` siphoning instructions
+  (`:286-292, :321-323`); witness/grievance names route to
+  `personal-name` automatically.
+- Keep the DOB instruction (`:218`) — DOBs still ride under
+  `personal-name`.
+- Keep the labelled-field handling (`:293`) — works for the new
+  `sensitive-context` bucket too.
+- Add explicit guidance for the new `sensitive-context` bucket: medical
+  diagnoses, personal circumstances, individual health/safety details
+  per REQ-006.
+- Worked examples: trim from 19 to ~6, all PII-shaped (names with
+  honorifics, DOBs, labelled-field rows, addresses, sensitive-context
+  examples). Drop all 13 governance/commercial examples.
+
+*Label-adjacent retargeting.* `lib/pipeline/label-adjacent.ts:138-191` —
+employee numbers, salary bands, and ICD-10 codes currently emit
+`confidential`. Retarget to `sensitive-context`.
+
+*Entity-propagation trim.* `lib/pipeline/entity-propagation.ts:80` —
+remove `harassment-risk` from `SEED_TYPES`. Propagator becomes a
+personal-name specialist.
+
+*Files deleted.*
+- `lib/pipeline/section-marker-detect.ts` (430 LoC, free-frank only).
+- `lib/pipeline/doc-classify.ts` — classifier-routing was for the
+  governance pathway; PII-only doesn't need it. Drop the import + call
+  site in `process.ts:481-496`.
+- `lib/lgoima-grounds.ts` — vocabulary obsolete.
+- `lib/__tests__/lgoima-grounds.test.ts`.
+- `lib/pipeline/__tests__/section-marker-detect.test.ts`.
+
+*Bench re-cut.* `lib/bench/pathways.ts` currently scores across
+PII / commercial / governance pathways. v2 collapses to PII +
+sensitive-context. Re-cut pathway definitions, update fixture expected
+files (`test-fixtures/bench/A.expected.json`, B1, B2, B3, C1) — most
+are still relevant, just need the 11 governance/commercial-typed
+expected entries removed and the `harassment-risk` typed witness names
+returned to `personal-name`.
+
+*Validation + UI cleanup.* `lib/validation/schemas.ts` — re-cut detection
+type enum. `app/batches/[id]/review/[docId]/review-client.tsx` and
+`bulk-review-client.tsx` — drop `lgoimaGrounds` import + ground-dropdown
+UI, drop bulk-apply-ground panels.
+
+*Seed update.* `prisma/seed.ts` — Ministry of Demo currently has zero
+documents. No detection rows to backfill. Just confirm the seed doesn't
+reference dropped types in any helper data.
+
+*Migration: ad-hoc SQL.* `DELETE FROM detections WHERE type IN (…)`
+deferred to Phase 12.5 (production migration). Locally, `prisma migrate
+reset` clears the dev DB.
+
+**Out of scope.** Tier-routing at write time (Phase 12.2). Tray UI
+(Phase 12.3). Cross-doc approval (Phase 12.4).
+
+**Files touched.** ~20 source files (most edits small, prompt rewrite
+is the dominant volume). 5 file deletions. 2 new files (none expected
+unless the prompt grows beyond a single string).
+
+**Sequencing.**
+
+1. Type drops first (mechanical edits across the inventory).
+2. Prompt rewrite as a single dedicated commit (don't entangle with
+   other edits — prompt iteration loop will produce many small commits
+   against the bench fixtures).
+3. Bench re-cut + fixture-expected updates.
+4. UI cleanup (review-client, bulk-review-client).
+5. tsc clean → lint clean → unit tests green → bench green.
+
+**Exit criteria.**
+- `grep -rn "lgoima-grounds\|LGOIMA\|withholding ground\|free-frank\|harassment-risk\|safety-concern\|law-enforcement\|health-safety\|cultural-sensitivity\|legal-privilege\|negotiation\|council-commercial\|commercial" lib/pipeline lib/data lib/actions lib/validation lib/bench app/batches` returns matches only in test-fixture historical baselines or `docs/legacy-veil/`.
+- New v2 prompt achieves ≥80% personal-name recall on B2 and ≥90% on
+  C-synthetic (bench-measured).
+- All vitest + e2e green.
+
+**Rollback.** Per-commit revert. The prompt rewrite is the highest-risk
+single commit; revert restores the legacy prompt instantly.
+
+**Effort.** ~9 person-days. The 2-day prompt-iteration loop against
+bench fixtures is the dominant cost.
+
+**Dependencies.** Phase 12.0 (investigation locks the scope).
+
+---
+
+## Phase 12.2 — Tier-routing in pipeline + state machine
+
+**Goal.** Move from "all detections start at `pending` and need
+reviewer touch" to "high-confidence auto-accepted, medium goes to tray,
+low ignored." Single-day surgical change in `process.ts` plus state-
+machine adjustments.
+
+**Scope.**
+
+*Pipeline change (the small one).* `lib/pipeline/process.ts:884-901` —
+the per-detection `prisma.detection.create({ data: { …, status:
+"pending" }})` call. Replace static `"pending"` with a tier-routing
+helper:
+
+```ts
+const tier = bucketConfidence(det.confidence, det.source);
+const status =
+  tier === "high"   ? "accepted" :
+  tier === "medium" ? "pending"  :
+                      "rejected"; // or just skip the create
+```
+
+Pattern + label-adjacent matches default to `high` (deterministic,
+confidence 95). AI detections route by their model-emitted confidence.
+Custom-rule matches route by their rule's `confidence` field.
+
+*New helper.* `lib/pipeline/tier-routing.ts` (~30 LoC) exporting
+`bucketConfidence(confidence: number, source: string): "high" |
+"medium" | "low"`.
+
+*New settings key.* `lib/data/settings.ts` — add `AUTO_REDACT_CONFIG`
+alongside `CONFIDENCE_THRESHOLDS`:
+
+```ts
+AUTO_REDACT_CONFIG: "auto_redact_config",
+…
+export const DEFAULT_AUTO_REDACT_CONFIG = {
+  highThreshold: 85,        // ≥ this → auto-accept
+  mediumLowerBound: 50,     // ≥ this → tray; below → drop
+  enabled: true,            // master switch
+};
+```
+
+Reuse the existing `DEFAULT_CONFIDENCE_THRESHOLDS` slider from the
+setup wizard / admin Settings tab as the configuration surface.
+
+*Document state machine.* Add an `auto-redacted` short-circuit:
+- After processing, if no detections landed at `pending` (i.e. all
+  high-confidence auto-accepted, none in the tray), document goes
+  straight to `auto-redacted` (skipping `in-review` and `reviewed`).
+- If any detections are pending, document goes `ready` → reviewer-tray
+  flow per usual.
+- `recomputeDocumentStatus` (`lib/actions/detection-actions.ts:47-69`)
+  recognises `auto-redacted` and treats it as terminal (no regression
+  back to `in-review` unless an admin explicitly resets).
+
+*Batch state machine.* `recomputeBatchStatus`
+(`lib/data/batches.ts:143-200`) gets a new branch:
+- All documents `auto-redacted` (or mix of `auto-redacted` +
+  `signed-off`) → batch `auto-redacted`.
+- Existing branches (processing, ready-for-review, reviewed, exported)
+  remain.
+
+*Auto-export trigger.* When batch transitions to `auto-redacted` AND
+auto-redact-config has `autoExport: true`, fire the existing export
+action (`/api/export/[batchId]/generate`) automatically. The export
+infrastructure stays unchanged; just a new triggering call site.
+
+**Out of scope.** Tray UI (Phase 12.3). The pipeline change just
+populates the tray; the UI presents it.
+
+**Files touched.** New: `lib/pipeline/tier-routing.ts`. Modified:
+`lib/pipeline/process.ts`, `lib/data/settings.ts`,
+`lib/actions/detection-actions.ts`, `lib/data/batches.ts`. No schema
+change (states are strings).
+
+**Sequencing.**
+1. Tier-routing helper + unit tests.
+2. Pipeline write-path change.
+3. State-machine updates.
+4. Auto-export wiring.
+
+**Exit criteria.**
+- A test batch with all-deterministic-pattern PII goes
+  `processing → auto-redacted` without reviewer involvement.
+- A test batch with one ambiguous AI-flagged sentence goes
+  `processing → ready → in-review` (one row in the tray).
+- Mix-mode test batch: some docs auto-redacted, one stuck in tray —
+  batch stays `processing` until tray cleared, then goes `reviewed`.
+- All existing vitest + e2e flows still pass (state-machine additions
+  are additive).
+
+**Rollback.** Single revert restores per-detection-pending baseline.
+
+**Effort.** ~2 person-days.
+
+**Dependencies.** Phase 12.1 (so the prompt has been re-cut and
+high-confidence detections are reliably name-shaped before
+auto-acceptance kicks in).
+
+---
+
+## Phase 12.3 — Tray UI + per-doc review trim + auto-export wiring
+
+**Goal.** Replace the existing per-document review-as-default with a
+**tray-first reviewer experience**. Per-doc review remains for
+exception cases.
+
+**Scope.**
+
+*Tray UI (the major rewrite).*
+`app/batches/[id]/bulk-review/bulk-review-client.tsx` (982 LoC) becomes
+**the** reviewer entry point. Reframe as "Tray":
+- Cluster view by `(type, normalisedText)` per batch — already
+  prototyped in `bulkAcceptBySimilar`'s in-memory matching
+  (`lib/actions/detection-actions.ts:519-520`).
+- Drop the threshold slider (now an admin setting in 12.2).
+- Drop the bulk-apply-ground UI panels (no grounds in v2).
+- Each cluster shows: count, document count, occurrences breakdown,
+  surrounding-context snippet preview (when available — Phase 12.4
+  populates `pageContext`).
+- Reviewer actions: approve cluster, reject cluster, expand to
+  per-occurrence subset.
+- Empty-tray state: "Ready to export" CTA.
+
+*Per-doc review trim.*
+`app/batches/[id]/review/[docId]/review-client.tsx` (2493 LoC) —
+estimated 30-40% trim:
+- Drop ground-dropdown UI per detection (no grounds).
+- Drop LGOIMA-grouping sidebar sections.
+- Simplify per-detection accept/reject (less metadata to display).
+- Keep the canvas overlay + page navigation (still needed for
+  exception review).
+- Default landing page becomes the tray; per-doc opens only on
+  reviewer click-through from a cluster.
+
+*Sign-off rework.* Drop the per-document `signed-off` requirement when
+a document is `auto-redacted` (no detections in tray means no review
+needed). Manual sign-off still available as an admin escape hatch for
+auto-redacted-but-not-trusted batches.
+
+*Auto-export wiring* (UI side). Export-client surfaces the auto-export
+toggle from `AUTO_REDACT_CONFIG`; manual trigger remains for fallback.
+
+**Out of scope.** Cross-doc approval (Phase 12.4) — the tray clusters
+intra-batch; Phase 12.4 adds the disambiguation context that makes the
+clusters more powerful.
+
+**Files touched.** ~6 client components, all in `app/batches/[id]/`.
+No new files unless `lib/data/tray.ts` makes sense as the cluster
+query module.
+
+**Sequencing.**
+1. Tray cluster-query helper (server action returning shaped data).
+2. Tray UI rewrite (clean-slate against the existing
+   bulk-review-client structure).
+3. Per-doc review trim (mechanical removals).
+4. Sign-off conditional logic.
+5. e2e spec updates.
+
+**Exit criteria.**
+- A batch with mixed-confidence detections lands the reviewer on the
+  tray view by default.
+- Approve-cluster-of-N works in a single click; status changes
+  propagate to all N detection rows.
+- Auto-redacted-only batch surfaces an export CTA, no review steps.
+- e2e green.
+
+**Rollback.** Per-commit revert. The 982-LoC bulk-review rewrite is
+the largest single commit; revert restores the v1 LGOIMA-aware tray
+shell.
+
+**Effort.** ~5.5 person-days (3d tray rewrite + 1.5d per-doc trim + 1d
+auto-export wiring).
+
+**Dependencies.** Phase 12.2 (state machine + tier-routing populated).
+
+---
+
+## Phase 12.4 — Cross-batch approval scope (b) + smart matching
+
+**Goal.** Within-batch approval propagation with disambiguation
+context. "Approve Sarah Mitchell once → all 8 occurrences across
+3 docs in this batch transition to accepted."
+
+Scope (c) — cross-batch propagation — explicitly **deferred to v3**
+per the investigation report. Cross-batch name collisions (two
+genuinely different "Sarah Mitchell"s in unrelated batches) are a
+real false-positive class and the auto-applied redactions are
+hard to recover from once exports ship.
+
+**Scope.**
+
+*Schema migration (additive).* `prisma/schema.prisma` Detection model:
+- Add `pageContext: String?` column (~200 bytes per row, sparse — only
+  populated when bbox is available and there's surrounding text).
+- Add `@@index([type, text])` for fast clustering queries.
+
+Migration is single-file additive; no row rewrites.
+
+*Pipeline pageContext population.* `lib/pipeline/process.ts` — at bbox
+enrichment time, capture ±100 chars of page text around the detection
+into `pageContext`. Trivial: page text is already loaded.
+
+*Tray cluster query.* New server action in
+`lib/actions/detection-actions.ts`:
+```ts
+async function getTrayClusters(batchId: string) {
+  // Group pending detections by (type, normalised(text)).
+  // Return cluster rows: { type, text, count, docCount,
+  //   contextSnippets: [], detectionIds: [] }
+}
+```
+
+Reuses the existing `bulkAcceptBySimilar`
+(`detection-actions.ts:503-555`) as the worker for "approve cluster" —
+the cluster query just shapes the data; the mutation path is already
+written.
+
+*Tray UI cluster row.* "Sarah Mitchell — 8 occurrences in 3 docs"
+with snippet expansion: hover/click to preview the surrounding
+context for disambiguation. Reviewer can approve all, reject all, or
+pick a subset.
+
+**Out of scope.**
+- `ApprovedEntity` persistent allow-list (deferred — only matters
+  when reviewers are repeatedly approving the same names across
+  batches; ship without it first, add when the feedback comes).
+- Cross-batch propagation (scope c) — v3.
+- AI-driven disambiguation (separate AOAI call to compare clusters) —
+  v3.
+
+**Files touched.** Schema migration (1 file). `lib/pipeline/process.ts`
+(small edit). `lib/actions/detection-actions.ts` (new query function).
+`app/batches/[id]/bulk-review/bulk-review-client.tsx` (cluster row UI).
+
+**Sequencing.**
+1. Schema migration + idempotent re-run on dev DB.
+2. pageContext pipeline change.
+3. Cluster query.
+4. UI cluster row.
+5. e2e spec update.
+
+**Exit criteria.**
+- `prisma migrate dev --create-only` produces a clean additive
+  migration.
+- Sample batch with 3 docs naming "Helen Ferguson" 8× shows ONE
+  cluster row in the tray with `count: 8, docCount: 3`.
+- Approve cluster → all 8 rows go `pending → accepted` atomically.
+- pageContext snippets render in the UI for disambiguation.
+
+**Rollback.** Schema rollback via reverse migration. Code rollback is
+per-commit.
+
+**Effort.** ~3 person-days.
+
+**Dependencies.** Phase 12.3 (tray UI exists to host the cluster row).
+
+---
+
+## Phase 12.5 — Production migration + telemetry + reviewer retraining
+
+**Goal.** Land the v2 stack on the live deployment. Purge legacy
+detections (zero in production today, but the SQL must run as part of
+the deployment script). Refresh telemetry dashboards. Update reviewer-
+facing docs.
+
+**Scope.**
+
+*Production data migration.* Single SQL statement run via
+`scripts/deploy/migrate-db.sh` extension:
+```sql
+DELETE FROM detections
+WHERE type NOT IN (
+  'personal-name', 'phone', 'email-addr', 'address', 'ird',
+  'nz-driver-licence', 'nhi', 'nz-passport', 'bank-account',
+  'vehicle-reg', 'sensitive-context', 'manual'
+);
+```
+
+Production DB has the Ministry of Demo seed (no documents → zero
+detection rows), so the DELETE affects 0 rows. Safe by construction.
+Also re-run any schema migrations from 12.4.
+
+*Settings reset.* New `AUTO_REDACT_CONFIG` defaults applied via the
+existing setup-wizard / admin-settings UI (admins can tune post-deploy).
+
+*Telemetry refresh.* Application Insights dashboards updated for the
+new state machine: replace per-doc review-time metrics with
+tray-throughput + auto-redact-rate metrics. KQL queries shipped in
+`docs/telemetry/`.
+
+*Documentation refresh.*
+- `CLAUDE.md` — Quick Reference table updates (12 detection types,
+  `auto-redacted` state, no LGOIMA verbiage).
+- `DEMO-SCRIPT.md` — re-cut the demo flow around mass-redaction
+  framing.
+- `PRODUCT-FEATURES.md` — same.
+- `README.md` — top-level positioning refresh.
+
+*Final smoke.* Re-deploy, run the canonical smoke from
+`docs/deployment.md`, confirm:
+- Healthy `/api/health`.
+- Upload a sample doc to a fresh batch.
+- High-confidence detections auto-accepted.
+- Tray populated only with ambiguous cases.
+- Auto-export fires when tray clears.
+
+**Out of scope.** v3 features (cross-batch propagation, AI
+disambiguation, ApprovedEntity allow-list).
+
+**Files touched.** `scripts/deploy/migrate-db.sh` (extension).
+`docs/CLAUDE.md`, `docs/DEMO-SCRIPT.md`, `docs/PRODUCT-FEATURES.md`,
+`README.md`. New `docs/telemetry/` queries.
+
+**Sequencing.**
+1. Build + push v2 image (the chained `npm run deploy` command).
+2. Run migration (purge + schema additions from 12.4).
+3. Restart Web App.
+4. Smoke.
+5. Documentation push.
+
+**Exit criteria.**
+- Deployed Web App returns the v2 prompt's outputs in
+  `/api/health`-adjacent telemetry.
+- Mass-redact end-to-end works on the live demo.
+- README + CLAUDE.md describe Umbra v2, not v1.
+
+**Rollback.** Re-deploy the last v1 image tag (the `:cr-<sha>` tag from
+the v1 build). Settings rollback via admin UI; schema rollback via
+reverse migration.
+
+**Effort.** ~1 person-day.
+
+**Dependencies.** Phases 12.1 - 12.4 all merged + green test suite.
+
+---
+
+## Phase 12 — plan-level concerns
+
+### The single highest-leverage change
+
+The prompt rewrite in Phase 12.1 is the dominant single change in the
+whole programme. It solves both the locked-scope reduction and the
+name-recall gap as the same edit. Phase 12.0's verification already
+shows 50-125% recall delta on test docs; the production v2 prompt with
+`sensitive-context` guidance and bench-tuned wording should land
+similarly.
+
+### What's already mostly built
+
+`bulkAcceptBySimilar` (`lib/actions/detection-actions.ts:503-555`) is
+the core mechanism for cluster-approval. Phase 12.4 is largely UI work
+on top of an existing worker.
+
+### What's risky
+
+- **Bench re-cut is non-optional in 12.1.** Without an updated bench,
+  regression metrics post-rip are misleading or unreadable. Plan the
+  bench update into the same phase as the prompt rewrite, not as a
+  follow-up.
+- **State-machine additions in 12.2** are additive but touch hot
+  paths. Watch for stale `recomputeDocumentStatus` paths in
+  edge-case e2e specs.
+- **`pageContext` storage cost in 12.4** is small per-row but sparse
+  population matters — populate only when bbox is available, skip on
+  long-narrative placeholder rows.
+
+### What's deferred to v3
+
+- **Cross-batch propagation (scope c)** — false-positive risk is real;
+  defer until tray feedback shows reviewers are repeatedly approving
+  the same names across unrelated batches and the cost of the manual
+  step is genuinely high.
+- **`ApprovedEntity` persistent allow-list** — same trigger condition
+  as scope (c).
+- **AI-driven disambiguation** — second AOAI call to compare cluster
+  occurrences. Slower + costlier; only needed when scope (b)'s
+  surrounding-context UI proves insufficient for reviewer
+  confidence.
+
+### Total Phase 12 estimate
+
+~26-27 person-days across 6 sub-phases:
+
+| Sub-phase | Effort |
+|---|---|
+| 12.0 — Investigation | 0.5d (DONE) |
+| 12.1 — Type drop + prompt rewrite + bench re-cut | ~9d |
+| 12.2 — Tier-routing + state machine | ~2d |
+| 12.3 — Tray UI + per-doc trim + auto-export | ~5.5d |
+| 12.4 — Cross-doc approval scope (b) | ~3d |
+| 12.5 — Production migration + telemetry + docs | ~1d |
+| Test rewrites + E2E updates (across all sub-phases) | ~3d |
+| Production migration buffer | ~1d |
+| Documentation refresh buffer | ~1d |
+| **Total** | **~26-27d** |
+
+Comparable to the original Veil → Umbra fork (~22-25d).
