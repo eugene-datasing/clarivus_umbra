@@ -84,6 +84,8 @@ export default function BatchDetailClient({ batchData, documents }: BatchDetailC
   const [showAssign, setShowAssign] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
 
+  const hasSelection = selectedDocs.size > 0;
+
   const cfg = batchStatusConfig[batchData.status] ?? { label: batchData.status, color: "text-gray-600", bg: "bg-gray-100" };
   const progress = batchData.documentCount > 0
     ? Math.round((batchData.reviewedCount / batchData.documentCount) * 100)
@@ -198,6 +200,102 @@ export default function BatchDetailClient({ batchData, documents }: BatchDetailC
           <Filter className="w-4 h-4" />
           Filter
         </button>
+      </div>
+
+      {/* Phase 12.6a — persistent bulk-actions toolbar. Lives directly
+          below the search bar so it's always visible and predictable;
+          buttons disable + show helper text when no docs selected. */}
+      <div
+        className={cn(
+          "card mb-4 px-4 py-2.5 flex items-center gap-3 transition-colors",
+          hasSelection ? "border-brand-primary/40 bg-brand-50/30" : "",
+        )}
+        role="toolbar"
+        aria-label="Bulk document actions"
+      >
+        <span
+          className={cn(
+            "text-sm",
+            hasSelection ? "text-txt-primary font-medium" : "text-txt-secondary italic",
+          )}
+        >
+          {hasSelection
+            ? `${selectedDocs.size} document${selectedDocs.size > 1 ? "s" : ""} selected`
+            : "Select documents to take bulk actions"}
+        </span>
+        <div className="flex-1" />
+        <button
+          onClick={() => setShowAssign(true)}
+          disabled={!hasSelection}
+          className="btn-secondary text-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <UserPlus className="w-4 h-4" />
+          Assign Reviewer
+        </button>
+        <button
+          onClick={() =>
+            router.push(`/batches/${batchData.id}/bulk-review`)
+          }
+          disabled={!hasSelection}
+          className="btn-secondary text-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <ArrowRight className="w-4 h-4" />
+          Bulk Review
+        </button>
+        <button
+          onClick={async () => {
+            setIsExcluding(true);
+            try {
+              await bulkExcludeDocuments(Array.from(selectedDocs));
+              setSelectedDocs(new Set());
+              router.refresh();
+            } catch (e) {
+              console.error("Exclude failed:", e);
+            } finally {
+              setIsExcluding(false);
+            }
+          }}
+          disabled={!hasSelection || isExcluding}
+          className="btn-secondary text-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <XCircle className="w-4 h-4" />
+          {isExcluding ? "Excluding..." : "Mark Excluded"}
+        </button>
+        <button
+          onClick={async () => {
+            if (
+              !confirm(
+                `Permanently delete ${selectedDocs.size} document(s)? This cannot be undone.`,
+              )
+            )
+              return;
+            setIsDeleting(true);
+            try {
+              for (const docId of selectedDocs) {
+                await deleteDocument(docId);
+              }
+              setSelectedDocs(new Set());
+              router.refresh();
+            } catch (e) {
+              console.error("Delete failed:", e);
+            } finally {
+              setIsDeleting(false);
+            }
+          }}
+          disabled={!hasSelection || isDeleting}
+          className="text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-md text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Trash2 className="w-4 h-4" />
+          {isDeleting ? "Deleting..." : "Delete"}
+        </button>
+        {hasSelection && (
+          <button
+            onClick={() => setSelectedDocs(new Set())}
+            className="text-sm text-txt-secondary hover:text-txt-primary px-2"
+          >
+            Clear
+          </button>
+        )}
       </div>
 
       {/* Document Table */}
@@ -343,78 +441,6 @@ export default function BatchDetailClient({ batchData, documents }: BatchDetailC
           </tbody>
         </table>
       </div>
-
-      {/* Bulk Action Bar */}
-      {selectedDocs.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 ml-[130px] bg-brand-primary text-white rounded-card shadow-xl px-6 py-3 flex items-center gap-6 z-50">
-          <span className="text-sm font-medium">
-            {selectedDocs.size} document{selectedDocs.size > 1 ? "s" : ""} selected
-          </span>
-          <div className="h-5 w-px bg-white/30" />
-          <button
-            onClick={() => setShowAssign(!showAssign)}
-            className="text-sm hover:underline flex items-center gap-1.5"
-          >
-            <UserPlus className="w-4 h-4" />
-            Assign Reviewer
-          </button>
-          <button
-            onClick={() => router.push(`/batches/${batchData.id}/bulk-review`)}
-            className="text-sm hover:underline flex items-center gap-1.5"
-          >
-            <ArrowRight className="w-4 h-4" />
-            Bulk Review
-          </button>
-          <button
-            onClick={async () => {
-              setIsExcluding(true);
-              try {
-                await bulkExcludeDocuments(Array.from(selectedDocs));
-                setSelectedDocs(new Set());
-                router.refresh();
-              } catch (e) {
-                console.error("Exclude failed:", e);
-              } finally {
-                setIsExcluding(false);
-              }
-            }}
-            disabled={isExcluding}
-            className="text-sm hover:underline flex items-center gap-1.5"
-          >
-            <XCircle className="w-4 h-4" />
-            {isExcluding ? "Excluding..." : "Mark Excluded"}
-          </button>
-          <button
-            onClick={async () => {
-              if (!confirm(`Permanently delete ${selectedDocs.size} document(s)? This cannot be undone.`)) return;
-              setIsDeleting(true);
-              try {
-                for (const docId of selectedDocs) {
-                  await deleteDocument(docId);
-                }
-                setSelectedDocs(new Set());
-                router.refresh();
-              } catch (e) {
-                console.error("Delete failed:", e);
-              } finally {
-                setIsDeleting(false);
-              }
-            }}
-            disabled={isDeleting}
-            className="text-sm hover:underline flex items-center gap-1.5 text-red-200 hover:text-white"
-          >
-            <Trash2 className="w-4 h-4" />
-            {isDeleting ? "Deleting..." : "Delete"}
-          </button>
-          <div className="h-5 w-px bg-white/30" />
-          <button
-            onClick={() => setSelectedDocs(new Set())}
-            className="text-sm text-white/70 hover:text-white"
-          >
-            Clear
-          </button>
-        </div>
-      )}
 
       {/* Assign Reviewer Modal */}
       {showAssign && (
