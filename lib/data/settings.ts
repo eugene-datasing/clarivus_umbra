@@ -337,6 +337,15 @@ export async function setRetentionConfig(
  *   autoExportEnabled   — when a batch transitions to "auto-redacted" with
  *                          empty tray, fire the export action automatically
  *                          via the auto-export-batch pg-boss queue.
+ *   requireExportConfirmation
+ *                       — Phase 12.6b. When true (the default), an
+ *                          "auto-redacted" batch parks awaiting a human
+ *                          click on Confirm & export rather than firing
+ *                          the export job automatically. Setting this
+ *                          false restores the pre-12.6b auto-fire
+ *                          behaviour for orgs that opt out of the gate.
+ *                          Per-batch overrides live on
+ *                          Batch.requireExportConfirmation.
  *
  * Source-aware semantics live in `bucketConfidence`, not here:
  * deterministic sources (pattern / label-adjacent / custom-rule / manual)
@@ -346,12 +355,14 @@ export interface AutoRedactConfig {
   highThreshold: number;
   mediumThreshold: number;
   autoExportEnabled: boolean;
+  requireExportConfirmation: boolean;
 }
 
 export const DEFAULT_AUTO_REDACT_CONFIG: AutoRedactConfig = {
   highThreshold: 85,
   mediumThreshold: 50,
   autoExportEnabled: true,
+  requireExportConfirmation: true,
 };
 
 export async function getAutoRedactConfig(): Promise<AutoRedactConfig> {
@@ -372,7 +383,24 @@ export async function getAutoRedactConfig(): Promise<AutoRedactConfig> {
       typeof stored.autoExportEnabled === "boolean"
         ? stored.autoExportEnabled
         : DEFAULT_AUTO_REDACT_CONFIG.autoExportEnabled,
+    requireExportConfirmation:
+      typeof stored.requireExportConfirmation === "boolean"
+        ? stored.requireExportConfirmation
+        : DEFAULT_AUTO_REDACT_CONFIG.requireExportConfirmation,
   };
+}
+
+/**
+ * Phase 12.6b — resolve the effective requireExportConfirmation policy
+ * for a single batch. Per-batch override wins when non-null; otherwise
+ * the org-level setting applies. Centralised so callers can't drift.
+ */
+export function resolveRequireExportConfirmation(
+  config: AutoRedactConfig,
+  batchOverride: boolean | null | undefined,
+): boolean {
+  if (typeof batchOverride === "boolean") return batchOverride;
+  return config.requireExportConfirmation;
 }
 
 export async function setAutoRedactConfig(

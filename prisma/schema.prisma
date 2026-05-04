@@ -54,6 +54,15 @@ model Batch {
   purgedAt         DateTime?
   purgeStatus      String?
 
+  // Phase 12.6b — per-batch override of the org-level
+  // AUTO_REDACT_CONFIG.requireExportConfirmation. Null = inherit org
+  // default (itself defaulting to true). True / false = explicit
+  // override scoped to this batch only. Resolved at
+  // recomputeBatchStatus time; when truthy, an "auto-redacted"
+  // batch parks awaiting a human click instead of auto-enqueueing
+  // the export job.
+  requireExportConfirmation Boolean?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -61,14 +61,14 @@ describe("bucketConfidence — AI-derived sources tier by confidence", () => {
 
 describe("bucketConfidence — config sensitivity", () => {
   it("strict config (high=95, medium=80) reclassifies an 85-confidence ai → medium", () => {
-    const strict = { highThreshold: 95, mediumThreshold: 80, autoExportEnabled: true };
+    const strict = { highThreshold: 95, mediumThreshold: 80, autoExportEnabled: true, requireExportConfirmation: true };
     expect(bucketConfidence({ source: "ai", confidence: 85 }, strict)).toBe(
       "medium",
     );
   });
 
   it("permissive config (high=70, medium=30) reclassifies a 60-confidence ai → medium not low", () => {
-    const permissive = { highThreshold: 70, mediumThreshold: 30, autoExportEnabled: true };
+    const permissive = { highThreshold: 70, mediumThreshold: 30, autoExportEnabled: true, requireExportConfirmation: true };
     expect(
       bucketConfidence({ source: "ai", confidence: 60 }, permissive),
     ).toBe("medium");

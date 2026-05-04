@@ -87,6 +87,14 @@ need a destructive change (rename column, drop NOT NULL, change type),
 write the migration by hand or use `--create-only` and edit the SQL
 before applying.
 
+The prod `DATABASE_URL` in Key Vault carries Prisma pool tuning
+(`?sslmode=require&connection_limit=15&pool_timeout=20`). Both params
+are documented Prisma data-source options and `migrate deploy` accepts
+them today. If a future Prisma release ever errors on connection-string
+parsing, strip the pool params for the migrate step and retry with
+`?sslmode=require` only — the runtime URL keeps the tuning for the
+App Service container.
+
 ## Key environment variables
 
 Required in `.env`:
