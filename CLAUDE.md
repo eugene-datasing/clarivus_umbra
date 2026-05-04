@@ -69,6 +69,24 @@ DATABASE_URL="postgresql://umbra:umbra_dev@localhost:5434/umbra" npx tsx -e '<sc
 export PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"
 ```
 
+### Schema changes — additive migrations only
+
+Phase 12.6a onwards: schema changes get **their own additive migration**
+on top of `0001_init`. **Do not amend `prisma/migrations/<timestamp>_init/migration.sql`**.
+
+```bash
+# Edit prisma/schema.prisma (add column / index / model — no destructive renames)
+DATABASE_URL="postgresql://umbra:umbra_dev@localhost:5434/umbra" \
+  npx prisma migrate dev --name <descriptive-name>
+```
+
+Why: through Phase 12 we kept editing the init and resetting prod (and
+local) DBs on every deploy. With v2 live, prod data must survive
+deploys; `prisma migrate deploy` only forward-applies new files. If you
+need a destructive change (rename column, drop NOT NULL, change type),
+write the migration by hand or use `--create-only` and edit the SQL
+before applying.
+
 ## Key environment variables
 
 Required in `.env`:
