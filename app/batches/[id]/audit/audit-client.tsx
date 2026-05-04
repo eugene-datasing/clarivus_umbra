@@ -45,6 +45,7 @@ interface AuditClientProps {
 
 const tabs = [
   { label: "Documents", href: "" },
+  { label: "Stats", href: "stats" },
   { label: "Schedule", href: "schedule" },
   { label: "Audit Trail", href: "audit" },
   { label: "Export", href: "export" },

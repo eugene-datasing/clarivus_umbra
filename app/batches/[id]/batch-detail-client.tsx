@@ -383,6 +383,12 @@ export default function BatchDetailClient({
           Documents
         </Link>
         <Link
+          href={`/batches/${batchData.id}/stats`}
+          className="px-4 py-2.5 text-sm font-medium text-txt-secondary hover:text-txt-primary transition-colors"
+        >
+          Stats
+        </Link>
+        <Link
           href={`/batches/${batchData.id}/audit`}
           className="px-4 py-2.5 text-sm font-medium text-txt-secondary hover:text-txt-primary transition-colors"
         >
