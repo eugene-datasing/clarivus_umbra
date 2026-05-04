@@ -6,9 +6,10 @@ import { useRouter } from "next/navigation";
 import { docTypeConfig, type DocType } from "@/lib/db/mappers";
 import { formatDate, cn, confidenceColor } from "@/lib/utils";
 import { bulkExcludeDocuments, deleteDocument } from "@/lib/actions/document-actions";
+import { confirmAndExportBatch } from "@/lib/actions/batch-actions";
 import {
   FileText, Mail, Search, Filter, Upload,
-  XCircle, ChevronRight, ArrowRight, Trash2,
+  XCircle, ChevronRight, ArrowRight, Trash2, ShieldCheck,
 } from "lucide-react";
 
 const docStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
@@ -72,17 +73,26 @@ export interface DocumentRow {
 interface BatchDetailClientProps {
   batchData: BatchData;
   documents: DocumentRow[];
+  requireExportConfirmation: boolean;
 }
 
-export default function BatchDetailClient({ batchData, documents }: BatchDetailClientProps) {
+export default function BatchDetailClient({
+  batchData,
+  documents,
+  requireExportConfirmation,
+}: BatchDetailClientProps) {
   const router = useRouter();
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [isExcluding, setIsExcluding] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isConfirmingExport, setIsConfirmingExport] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   const hasSelection = selectedDocs.size > 0;
+  const showExportGate =
+    batchData.status === "auto-redacted" && requireExportConfirmation;
 
   const cfg = batchStatusConfig[batchData.status] ?? { label: batchData.status, color: "text-gray-600", bg: "bg-gray-100" };
   const progress = batchData.documentCount > 0
@@ -151,6 +161,62 @@ export default function BatchDetailClient({ batchData, documents }: BatchDetailC
           </span>
         </div>
       </div>
+
+      {/* Phase 12.6b — confirm-and-export gate banner. Visible only
+          when the batch is auto-redacted (every doc landed at zero
+          pending detections) and the org/batch policy requires a
+          human checkpoint before the export ZIP fires. */}
+      {showExportGate && (
+        <div
+          className="card mb-6 px-5 py-4 flex items-start gap-4 border-emerald-200 bg-emerald-50/40"
+          role="region"
+          aria-label="Export confirmation required"
+        >
+          <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+            <ShieldCheck className="w-5 h-5 text-emerald-700" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-heading font-semibold text-txt-primary mb-0.5">
+              Awaiting your confirmation
+            </h3>
+            <p className="text-xs text-txt-secondary">
+              All detections were high-confidence and have been auto-accepted.
+              Click <span className="font-medium">Confirm &amp; export</span> to
+              generate the redacted ZIP package.
+            </p>
+            {confirmError && (
+              <p
+                role="alert"
+                aria-live="assertive"
+                className="text-xs text-red-700 mt-2"
+              >
+                {confirmError}
+              </p>
+            )}
+          </div>
+          <button
+            onClick={async () => {
+              setConfirmError(null);
+              setIsConfirmingExport(true);
+              try {
+                await confirmAndExportBatch(batchData.id);
+                router.refresh();
+              } catch (err) {
+                setConfirmError(
+                  err instanceof Error ? err.message : "Export failed",
+                );
+              } finally {
+                setIsConfirmingExport(false);
+              }
+            }}
+            disabled={isConfirmingExport}
+            className="btn-primary text-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ShieldCheck className="w-4 h-4" />
+            {isConfirmingExport ? "Confirming..." : "Confirm & export"}
+          </button>
+        </div>
+      )}
 
       {/* Tab Navigation */}
       <div className="flex items-center gap-1 border-b border-border mb-6">
