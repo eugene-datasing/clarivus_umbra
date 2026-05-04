@@ -55,6 +55,28 @@ function getExtension(filename: string): string {
   return path.extname(filename).toLowerCase() || ".bin";
 }
 
+/**
+ * Phase 12.6a — drive the ingest step-meter via Document.processingStep
+ * and Document.processingProgress. Persists where the pipeline
+ * currently is so the UI can render a meaningful progress bar without
+ * overloading `status`. Best-effort: a write failure here must never
+ * block the pipeline.
+ */
+async function setProcessingStep(
+  docId: string,
+  step: string,
+  progress: number,
+): Promise<void> {
+  try {
+    await prisma.document.update({
+      where: { id: docId },
+      data: { processingStep: step, processingProgress: progress },
+    });
+  } catch {
+    // swallow — telemetry-only
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Main pipeline
 // ---------------------------------------------------------------------------
@@ -96,12 +118,17 @@ export async function processDocument(docId: string): Promise<void> {
 
     await prisma.document.update({
       where: { id: docId },
-      data: { processingStartedAt: new Date() },
+      data: {
+        processingStartedAt: new Date(),
+        processingStep: "starting",
+        processingProgress: 0,
+      },
     });
 
     // ------------------------------------------------------------------
     // 2. Download file from storage
     // ------------------------------------------------------------------
+    await setProcessingStep(docId, "downloading", 5);
     const ext = getExtension(doc.name);
     const storageKey =
       doc.originalPath || `${batchId}/${docId}/original${ext}`;
@@ -304,6 +331,7 @@ export async function processDocument(docId: string): Promise<void> {
       where: { id: docId },
       data: { status: "processing" },
     });
+    await setProcessingStep(docId, "extracting", 15);
 
     // ------------------------------------------------------------------
     // 4. Extract text
@@ -480,6 +508,7 @@ export async function processDocument(docId: string): Promise<void> {
     // ------------------------------------------------------------------
     // Wrap in a transaction to prevent race conditions when processing
     // is triggered concurrently (e.g. double-click).
+    await setProcessingStep(docId, "storing-pages", 30);
     await prisma.$transaction(async (tx) => {
       await tx.documentPage.deleteMany({ where: { documentId: docId } });
       await tx.documentPage.createMany({
@@ -534,6 +563,7 @@ export async function processDocument(docId: string): Promise<void> {
     // ------------------------------------------------------------------
     // 6. Pattern detection (sequential — feeds dedup texts to AI)
     // ------------------------------------------------------------------
+    await setProcessingStep(docId, "detecting-patterns", 45);
     const enabledTypes = await getEnabledDetectionTypes();
     log.info("Running pattern detection", { docId, enabledTypes: [...enabledTypes] });
     const patternStart = Date.now();
@@ -562,6 +592,7 @@ export async function processDocument(docId: string): Promise<void> {
     log.info("Dispatching label-adjacent + custom-rules + AI in parallel", {
       docId,
     });
+    await setProcessingStep(docId, "detecting-ai", 55);
     const aiStart = Date.now();
     const [labelAdjacentMatches, customRuleResult, aiResult] =
       await Promise.allSettled([
@@ -760,6 +791,7 @@ export async function processDocument(docId: string): Promise<void> {
       }
     }
 
+    await setProcessingStep(docId, "computing-bboxes", 75);
     // Enrich with coordinates BEFORE deduplication to allow multiple instances on the same page
     //
     // Long-narrative short-circuit: detection text > TEXT_SEARCH_MAX_LENGTH
@@ -920,6 +952,7 @@ export async function processDocument(docId: string): Promise<void> {
       };
     });
 
+    await setProcessingStep(docId, "writing-detections", 85);
     const allDetectionRecords =
       detectionRows.length > 0
         ? await prisma.detection.createManyAndReturn({ data: detectionRows })
@@ -1014,6 +1047,8 @@ export async function processDocument(docId: string): Promise<void> {
           status: finalDocStatus,
           processingError: null,
           processingCompletedAt: new Date(),
+          processingStep: "complete",
+          processingProgress: 100,
           extractionMs,
           patternDetectionMs,
           aiDetectionMs,

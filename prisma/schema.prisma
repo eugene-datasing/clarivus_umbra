@@ -114,6 +114,15 @@ model Document {
   aiDetectionMs         Int?
   totalProcessingMs     Int?
 
+  // Phase 12.6a — fine-grained progress for the ingest step-meter.
+  // Updated as the pipeline crosses checkpoints (download → extract →
+  // pattern → AI → bbox → write → canonical-pdf → done). Cleared back
+  // to null on retry. Coarse `status` ("processing" vs "ready") still
+  // gates UI state machines; these columns add a "where in processing"
+  // signal without overloading status.
+  processingStep     String?
+  processingProgress Int?    @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

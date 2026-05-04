@@ -85,6 +85,23 @@ const statusLabel: Record<string, { text: string; color: string }> = {
   complete: { text: "Complete", color: "text-green-600" },
 };
 
+// Phase 12.6a — humanised labels for pipeline checkpoints surfaced
+// via Document.processingStep. Keys must mirror the strings written
+// by lib/pipeline/process.ts:setProcessingStep. Unknown values fall
+// through to the raw string so a future checkpoint addition shows
+// up rather than disappears.
+const stepLabel: Record<string, string> = {
+  starting: "Starting",
+  downloading: "Downloading file",
+  extracting: "Extracting text (OCR)",
+  "storing-pages": "Storing pages",
+  "detecting-patterns": "Detecting patterns",
+  "detecting-ai": "Detecting with AI",
+  "computing-bboxes": "Calculating coordinates",
+  "writing-detections": "Writing detections",
+  complete: "Complete",
+};
+
 function formatSize(kb: number): string {
   if (kb >= 1024) return `${(kb / 1024).toFixed(1)} MB`;
   return `${kb} KB`;
@@ -583,8 +600,9 @@ export default function IngestClient({
                           />
                         </div>
                         <span className="text-xs text-txt-secondary">
-                          {item.queueStep}
-                          {(item.queueAttempt ?? 0) > 1 && ` (attempt ${item.queueAttempt})`}
+                          {stepLabel[item.queueStep] ?? item.queueStep}
+                          {item.queueProgress != null && ` (${item.queueProgress}%)`}
+                          {(item.queueAttempt ?? 0) > 1 && ` · attempt ${item.queueAttempt}`}
                         </span>
                       </div>
                     </div>

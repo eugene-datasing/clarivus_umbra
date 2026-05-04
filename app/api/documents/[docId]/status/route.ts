@@ -21,6 +21,8 @@ export async function GET(
         pageCount: true,
         detectionCount: true,
         processingError: true,
+        processingStep: true,
+        processingProgress: true,
       },
     });
 
@@ -37,6 +39,8 @@ export async function GET(
       pageCount: doc.pageCount,
       detectionCount: doc.detectionCount,
       error: doc.processingError,
+      processingStep: doc.processingStep,
+      processingProgress: doc.processingProgress,
     });
   } catch (error) {
     logger.error("Status check failed:", { error: String(error) });
