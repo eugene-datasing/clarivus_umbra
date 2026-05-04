@@ -38,6 +38,31 @@ export interface ExportProgress {
   docResults?: DocResult[];
 }
 
+/**
+ * Phase 12.6b — well-known checkpoint labels emitted by `doGenerate`
+ * via `setProgress`. Per-document stages (`Redacting: {name}` /
+ * `Verifying: {name}`) are constructed dynamically and aren't listed
+ * here. The ingest-side step-meter (and any future export-step UI)
+ * uses this list as the source of truth for what fixed stages exist
+ * and in what order.
+ *
+ * Order is meaningful: the UI maps each label to a fraction of the
+ * total bar. New stages should be inserted at the position they fire
+ * in `doGenerate`, not appended.
+ */
+export const EXPORT_STAGE_LABELS = [
+  "Preparing export",
+  "Generating redaction schedule",
+  "Generating audit timeline",
+  "Generating audit log",
+  "Assembling ZIP package",
+  "Computing integrity hash",
+  "Uploading to storage",
+  "Export complete",
+] as const;
+
+export type ExportStageLabel = (typeof EXPORT_STAGE_LABELS)[number];
+
 interface DocResult {
   docId: string;
   docName: string;
@@ -298,6 +323,15 @@ async function doGenerate(
   const sha256 = createHash("sha256").update(zipBuffer).digest("hex");
 
   // 9. Persist
+  // Phase 12.6b — explicit "Uploading to storage" checkpoint so the
+  // batch detail step-meter shows a final visible stage between the
+  // 95% integrity hash and the 100% completion (the storage.upload
+  // call below can take several seconds for large ZIPs against
+  // Azure Blob).
+  await setProgress(exportId, {
+    progress: 98,
+    currentStep: "Uploading to storage",
+  });
   const filename = `${batchData.reference}_${new Date().toISOString().split("T")[0]}.zip`;
   const storageKey = `exports/${batchId}/${exportId}/${filename}`;
   await storage.upload(storageKey, zipBuffer, "application/zip");

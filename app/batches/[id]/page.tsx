@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { getBatch } from "@/lib/data/batches";
 import { getDocumentsForCase } from "@/lib/data/documents";
+import { getLatestExportForBatch } from "@/lib/data/detections";
 import {
   getAutoRedactConfig,
   resolveRequireExportConfirmation,
@@ -18,15 +19,17 @@ export default async function BatchDetailPage({
   const { id } = await params;
   const user = await requireUser();
   await authorizeForBatch(user, id);
-  const [batchData, documents, autoRedactConfig, override] = await Promise.all([
-    getBatch(id),
-    getDocumentsForCase(id),
-    getAutoRedactConfig(),
-    prisma.batch.findUnique({
-      where: { id },
-      select: { requireExportConfirmation: true },
-    }),
-  ]);
+  const [batchData, documents, autoRedactConfig, override, latestExport] =
+    await Promise.all([
+      getBatch(id),
+      getDocumentsForCase(id),
+      getAutoRedactConfig(),
+      prisma.batch.findUnique({
+        where: { id },
+        select: { requireExportConfirmation: true },
+      }),
+      getLatestExportForBatch(id),
+    ]);
 
   if (!batchData) {
     notFound();
@@ -42,6 +45,7 @@ export default async function BatchDetailPage({
       batchData={batchData}
       documents={documents}
       requireExportConfirmation={requireExportConfirmation}
+      latestExport={latestExport}
     />
   );
 }

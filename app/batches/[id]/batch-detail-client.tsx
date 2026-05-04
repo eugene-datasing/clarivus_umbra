@@ -1,16 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { docTypeConfig, type DocType } from "@/lib/db/mappers";
 import { formatDate, cn, confidenceColor } from "@/lib/utils";
 import { bulkExcludeDocuments, deleteDocument } from "@/lib/actions/document-actions";
 import { confirmAndExportBatch } from "@/lib/actions/batch-actions";
+import type { LatestExportSummary } from "@/lib/data/detections";
 import {
   FileText, Mail, Search, Filter, Upload,
   XCircle, ChevronRight, ArrowRight, Trash2, ShieldCheck,
+  CheckCircle2, Download, Loader,
 } from "lucide-react";
+
+const exportStepLabel: Record<string, string> = {
+  "Preparing export": "Preparing export",
+  "Generating redaction schedule": "Generating redaction schedule",
+  "Generating audit timeline": "Generating audit timeline",
+  "Generating audit log": "Generating audit log",
+  "Assembling ZIP package": "Assembling ZIP package",
+  "Computing integrity hash": "Computing integrity hash",
+  "Uploading to storage": "Uploading to storage",
+  "Export complete": "Export complete",
+};
 
 const docStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
   pending: { label: "Pending", color: "text-gray-600", bg: "bg-gray-100" },
@@ -74,12 +87,23 @@ interface BatchDetailClientProps {
   batchData: BatchData;
   documents: DocumentRow[];
   requireExportConfirmation: boolean;
+  latestExport: LatestExportSummary | null;
+}
+
+interface ExportPollState {
+  status: string;
+  progress: number;
+  currentStep: string | null;
+  error: string | null;
+  filename: string | null;
+  downloadKey?: string;
 }
 
 export default function BatchDetailClient({
   batchData,
   documents,
   requireExportConfirmation,
+  latestExport,
 }: BatchDetailClientProps) {
   const router = useRouter();
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
@@ -90,9 +114,77 @@ export default function BatchDetailClient({
   const [isConfirmingExport, setIsConfirmingExport] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
 
+  // Phase 12.6b — export step-meter polling state. Seeded from
+  // latestExport server-side; advanced by polling the existing
+  // /api/export/[batchId]/[exportId]/status endpoint while the
+  // export is in flight. Drives both the inline progress bar and
+  // the completion toast.
+  const [exportState, setExportState] = useState<ExportPollState | null>(
+    latestExport
+      ? {
+          status: latestExport.status,
+          progress: latestExport.progress,
+          currentStep: latestExport.currentStep,
+          error: latestExport.error,
+          filename: latestExport.filename,
+        }
+      : null,
+  );
+  const [showCompleteToast, setShowCompleteToast] = useState(false);
+  const previousExportStatus = useRef(latestExport?.status ?? null);
+
   const hasSelection = selectedDocs.size > 0;
   const showExportGate =
     batchData.status === "auto-redacted" && requireExportConfirmation;
+  const exportInFlight =
+    exportState !== null &&
+    (exportState.status === "generating" || exportState.status === "verifying");
+  const exportFailed =
+    exportState !== null && exportState.status === "error";
+
+  // Poll the export-progress endpoint while a job is in flight.
+  // Seeded from `latestExport`; on a transition to "complete" we
+  // refresh the page so the batch.status update lands and the
+  // toast fires.
+  useEffect(() => {
+    if (!latestExport) return;
+    if (
+      exportState?.status !== "generating" &&
+      exportState?.status !== "verifying"
+    ) {
+      return;
+    }
+    const exportId = latestExport.id;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(
+          `/api/export/${batchData.id}/${exportId}/status`,
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        const next: ExportPollState = {
+          status: data.status,
+          progress: data.progress,
+          currentStep: data.currentStep,
+          error: data.error ?? null,
+          filename: data.filename ?? null,
+          downloadKey: data.downloadKey,
+        };
+        setExportState(next);
+        if (
+          previousExportStatus.current !== "complete" &&
+          next.status === "complete"
+        ) {
+          previousExportStatus.current = "complete";
+          setShowCompleteToast(true);
+          router.refresh();
+        }
+      } catch {
+        // network blips ignored — next tick retries
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [latestExport, exportState?.status, batchData.id, router]);
 
   const cfg = batchStatusConfig[batchData.status] ?? { label: batchData.status, color: "text-gray-600", bg: "bg-gray-100" };
   const progress = batchData.documentCount > 0
@@ -215,6 +307,70 @@ export default function BatchDetailClient({
             <ShieldCheck className="w-4 h-4" />
             {isConfirmingExport ? "Confirming..." : "Confirm & export"}
           </button>
+        </div>
+      )}
+
+      {/* Phase 12.6b — export step-meter. Visible while the export
+          job is in flight (status=generating|verifying). Polls the
+          existing per-export endpoint at 2s and renders the current
+          stage label + percentage. */}
+      {exportInFlight && exportState && (
+        <div
+          className="card mb-6 px-5 py-4 border-blue-200 bg-blue-50/30"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex items-center gap-3 mb-3">
+            <Loader className="w-4 h-4 text-blue-600 animate-spin" />
+            <span className="text-sm font-medium text-txt-primary">
+              Generating export package
+            </span>
+            <span className="text-xs text-txt-secondary">
+              {exportStepLabel[exportState.currentStep ?? ""] ??
+                exportState.currentStep ??
+                "Working"}
+            </span>
+            <div className="flex-1" />
+            <span className="text-xs font-mono text-txt-secondary">
+              {exportState.progress}%
+            </span>
+          </div>
+          <div
+            className="h-2 bg-gray-100 rounded-full overflow-hidden"
+            role="progressbar"
+            aria-valuenow={exportState.progress}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div
+              className="h-full bg-blue-500 rounded-full transition-all duration-500"
+              style={{ width: `${exportState.progress}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Phase 12.6b — soft error surface when the latest export
+          errored. Distinct from the in-flight banner so the colour
+          shift is unambiguous. The Export tab's existing UI owns
+          the retry button. */}
+      {exportFailed && exportState && (
+        <div
+          className="card mb-6 px-5 py-3 flex items-center gap-3 border-red-200 bg-red-50/30"
+          role="alert"
+          aria-live="assertive"
+        >
+          <XCircle className="w-4 h-4 text-red-600" />
+          <span className="text-sm text-txt-primary">
+            Export failed: {exportState.error ?? "Unknown error"}
+          </span>
+          <div className="flex-1" />
+          <Link
+            href={`/batches/${batchData.id}/export`}
+            className="text-xs text-red-700 hover:text-red-900 underline"
+          >
+            Open export page
+          </Link>
         </div>
       )}
 
@@ -498,6 +654,45 @@ export default function BatchDetailClient({
         </table>
       </div>
 
+      {/* Phase 12.6b — export-complete toast. Fires once when the
+          poll loop sees status flip to "complete". Auto-positioned
+          bottom-right with a Download CTA pointing at the existing
+          per-export download endpoint. */}
+      {showCompleteToast && exportState?.status === "complete" && latestExport && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 right-6 z-50 bg-white rounded-card shadow-xl border border-emerald-200 px-5 py-4 flex items-start gap-3 max-w-sm"
+        >
+          <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-semibold text-txt-primary mb-0.5">
+              Export ready
+            </h3>
+            <p className="text-xs text-txt-secondary mb-2">
+              {exportState.filename ?? "Redacted ZIP package"} is ready to
+              download.
+            </p>
+            <div className="flex items-center gap-3">
+              <a
+                href={`/api/export/${batchData.id}/${latestExport.id}/download`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-medium text-emerald-700 hover:text-emerald-900 inline-flex items-center gap-1"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Download ZIP
+              </a>
+              <button
+                onClick={() => setShowCompleteToast(false)}
+                className="text-xs text-txt-secondary hover:text-txt-primary"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

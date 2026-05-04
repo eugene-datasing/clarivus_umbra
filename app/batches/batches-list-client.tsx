@@ -178,7 +178,17 @@ export default function BatchesListClient({
                     </td>
                     <td className="px-4 py-3">
                       <Link href={`/batches/${b.id}`} className="block">
-                        <span className={cn("badge", cfg.bg, cfg.color)}>{cfg.label}</span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={cn("badge", cfg.bg, cfg.color)}>{cfg.label}</span>
+                          {/* Phase 12.6b — surface "Ready to download"
+                              when the export ZIP is sitting in storage
+                              waiting on a reviewer click. */}
+                          {b.status === "exported" && (
+                            <span className="badge bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              Ready to download
+                            </span>
+                          )}
+                        </div>
                       </Link>
                     </td>
                     <td className="px-4 py-3">
