@@ -5,10 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { docTypeConfig, type DocType } from "@/lib/db/mappers";
 import { formatDate, cn, confidenceColor } from "@/lib/utils";
-import { bulkExcludeDocuments, deleteDocument, bulkAssignReviewer } from "@/lib/actions/document-actions";
+import { bulkExcludeDocuments, deleteDocument } from "@/lib/actions/document-actions";
 import {
   FileText, Mail, Search, Filter, Upload,
-  XCircle, ChevronRight, ArrowRight, Trash2, UserPlus,
+  XCircle, ChevronRight, ArrowRight, Trash2,
 } from "lucide-react";
 
 const docStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
@@ -81,8 +81,6 @@ export default function BatchDetailClient({ batchData, documents }: BatchDetailC
   const [isExcluding, setIsExcluding] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [showAssign, setShowAssign] = useState(false);
-  const [isAssigning, setIsAssigning] = useState(false);
 
   const hasSelection = selectedDocs.size > 0;
 
@@ -224,14 +222,6 @@ export default function BatchDetailClient({ batchData, documents }: BatchDetailC
             : "Select documents to take bulk actions"}
         </span>
         <div className="flex-1" />
-        <button
-          onClick={() => setShowAssign(true)}
-          disabled={!hasSelection}
-          className="btn-secondary text-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <UserPlus className="w-4 h-4" />
-          Assign Reviewer
-        </button>
         <button
           onClick={() =>
             router.push(`/batches/${batchData.id}/bulk-review`)
@@ -442,53 +432,6 @@ export default function BatchDetailClient({ batchData, documents }: BatchDetailC
         </table>
       </div>
 
-      {/* Assign Reviewer Modal */}
-      {showAssign && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={() => setShowAssign(false)}>
-          <div className="bg-white rounded-card shadow-xl p-6 w-80" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-heading font-bold text-txt-primary mb-3">Assign Reviewer</h3>
-            <p className="text-sm text-txt-secondary mb-4">
-              Assign {selectedDocs.size} document{selectedDocs.size > 1 ? "s" : ""} to a reviewer.
-            </p>
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                const form = e.target as HTMLFormElement;
-                const reviewerEmail = (form.elements.namedItem("reviewerEmail") as HTMLInputElement).value;
-                if (!reviewerEmail) return;
-                setIsAssigning(true);
-                try {
-                  await bulkAssignReviewer(Array.from(selectedDocs), reviewerEmail);
-                  setShowAssign(false);
-                  setSelectedDocs(new Set());
-                  router.refresh();
-                } catch (err) {
-                  alert(err instanceof Error ? err.message : "Assignment failed");
-                } finally {
-                  setIsAssigning(false);
-                }
-              }}
-            >
-              <label className="text-sm font-medium text-txt-primary block mb-1">Reviewer email</label>
-              <input
-                name="reviewerEmail"
-                type="email"
-                placeholder="reviewer@example.com"
-                className="input-field w-full mb-4"
-                required
-              />
-              <div className="flex items-center gap-2 justify-end">
-                <button type="button" onClick={() => setShowAssign(false)} className="btn-secondary text-sm">
-                  Cancel
-                </button>
-                <button type="submit" disabled={isAssigning} className="btn-primary text-sm">
-                  {isAssigning ? "Assigning..." : "Assign"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
