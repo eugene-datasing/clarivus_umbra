@@ -508,23 +508,33 @@ export async function processDocument(docId: string): Promise<void> {
     // ------------------------------------------------------------------
     // Wrap in a transaction to prevent race conditions when processing
     // is triggered concurrently (e.g. double-click).
+    //
+    // Phase 12.6a — explicit `maxWait` and `timeout`. Default Prisma
+    // settings (maxWait=2s, timeout=5s) caused intermittent
+    // "Unable to start a transaction in the given time" errors on
+    // large multi-page DOCX files where the pool is contended. The
+    // bumped values give the pool more headroom under burst load and
+    // tolerate the slow path of a 100-page createMany.
     await setProcessingStep(docId, "storing-pages", 30);
-    await prisma.$transaction(async (tx) => {
-      await tx.documentPage.deleteMany({ where: { documentId: docId } });
-      await tx.documentPage.createMany({
-        data: extraction.pages.map((page) => ({
-          documentId: docId,
-          pageNumber: page.pageNumber,
-          text: page.text,
-          width: page.width ?? null,
-          height: page.height ?? null,
-          layoutJson: page.words
-            ? JSON.parse(JSON.stringify(page.words))
-            : null,
-        })),
-        skipDuplicates: true,
-      });
-    });
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.documentPage.deleteMany({ where: { documentId: docId } });
+        await tx.documentPage.createMany({
+          data: extraction.pages.map((page) => ({
+            documentId: docId,
+            pageNumber: page.pageNumber,
+            text: page.text,
+            width: page.width ?? null,
+            height: page.height ?? null,
+            layoutJson: page.words
+              ? JSON.parse(JSON.stringify(page.words))
+              : null,
+          })),
+          skipDuplicates: true,
+        });
+      },
+      { maxWait: 5000, timeout: 10000 },
+    );
 
     // Update document page count
     await prisma.document.update({
