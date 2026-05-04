@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/db/prisma";
-import { getAutoRedactConfig } from "@/lib/data/settings";
+import {
+  getAutoRedactConfig,
+  resolveRequireExportConfirmation,
+} from "@/lib/data/settings";
 import { getBoss, QUEUE_AUTO_EXPORT_BATCH, type AutoExportBatchPayload } from "@/lib/jobs/runner";
 import { logger } from "@/lib/logger";
 
@@ -154,7 +157,11 @@ export async function getDashboardStats() {
 export async function recomputeBatchStatus(batchId: string): Promise<string | null> {
   const batch = await prisma.batch.findUnique({
     where: { id: batchId },
-    select: { status: true, deletedAt: true },
+    select: {
+      status: true,
+      deletedAt: true,
+      requireExportConfirmation: true,
+    },
   });
   if (!batch) return null;
   if (batch.deletedAt !== null) return null;
@@ -239,14 +246,29 @@ export async function recomputeBatchStatus(batchId: string): Promise<string | nu
     // Phase 12.2 — when a batch lands in "auto-redacted" and
     // autoExportEnabled is on, enqueue an auto-export job. Fire-and-
     // forget; failures must not block the status update.
+    //
+    // Phase 12.6b — gated additionally on the resolved
+    // requireExportConfirmation policy. When the policy is true (org
+    // default), the batch parks awaiting a human click via the
+    // confirm-and-export action; the export job only fires
+    // automatically when the policy is explicitly false (org-wide
+    // opt-out or per-batch override).
     if (newStatus === "auto-redacted") {
       try {
         const config = await getAutoRedactConfig();
-        if (config.autoExportEnabled) {
+        const requireConfirmation = resolveRequireExportConfirmation(
+          config,
+          batch.requireExportConfirmation,
+        );
+        if (config.autoExportEnabled && !requireConfirmation) {
           const boss = await getBoss();
           const payload: AutoExportBatchPayload = { batchId };
           await boss.send(QUEUE_AUTO_EXPORT_BATCH, payload);
           log.info("Auto-export enqueued for batch", { batchId });
+        } else if (config.autoExportEnabled && requireConfirmation) {
+          log.info("Auto-export deferred — confirmation required", {
+            batchId,
+          });
         }
       } catch (err) {
         log.error("Failed to enqueue auto-export job", {

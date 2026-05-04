@@ -5,7 +5,7 @@ import { createAuditEntry } from "@/lib/data/audit";
 import { getNextReference } from "@/lib/data/batches";
 import { getRetentionConfig } from "@/lib/data/settings";
 import { requireUser } from "@/lib/auth/session";
-import { requireAdmin } from "@/lib/auth/authorize";
+import { requireAdmin, authorizeForBatch } from "@/lib/auth/authorize";
 import { createBatchSchema } from "@/lib/validation/schemas";
 import { getBoss, QUEUE_PURGE_BATCH, QUEUE_AUTO_EXPORT_BATCH, type AutoExportBatchPayload } from "@/lib/jobs/runner";
 import { revalidatePath } from "next/cache";
@@ -259,6 +259,65 @@ export async function retryAutoExport(batchId: string) {
     detail: jobId ? `pg-boss jobId: ${jobId}` : undefined,
   });
 
+  revalidatePath(`/batches/${batchId}/export`);
+
+  return { success: true, jobId };
+}
+
+/**
+ * Phase 12.6b — confirm-and-export gate. Reviewer-allowed (matches the
+ * manual `/api/export/[batchId]/generate` route, not the admin-only
+ * retry path) — the gate is a human checkpoint, not a privilege check.
+ *
+ * Fires when the org has `requireExportConfirmation: true` and the
+ * batch landed at "auto-redacted" without auto-firing the export. The
+ * action enqueues the same `auto-export-batch` pg-boss job the
+ * post-processing path would have used, so the downstream pipeline
+ * (runExportForBatch → generateExportPackage) stays a single shape.
+ *
+ * Errors out if the batch is not in "auto-redacted" state — the gate
+ * is meaningless before the pipeline finishes, and meaningless after
+ * an export already succeeded.
+ */
+export async function confirmAndExportBatch(batchId: string) {
+  const user = await requireUser();
+  await authorizeForBatch(user, batchId);
+
+  const batch = await prisma.batch.findUnique({
+    where: { id: batchId },
+    select: {
+      id: true,
+      reference: true,
+      status: true,
+      deletedAt: true,
+    },
+  });
+  if (!batch) throw new Error("Batch not found");
+  if (batch.deletedAt !== null) {
+    throw new Error("Cannot export a deleted batch");
+  }
+  if (batch.status !== "auto-redacted") {
+    throw new Error(
+      `Confirm-and-export only applies to auto-redacted batches; this batch is "${batch.status}"`,
+    );
+  }
+
+  const boss = await getBoss();
+  const payload: AutoExportBatchPayload = { batchId };
+  const jobId = await boss.send(QUEUE_AUTO_EXPORT_BATCH, payload);
+
+  await createAuditEntry({
+    userId: user.id,
+    userName: user.name,
+    userRole: user.role,
+    type: "export-confirmed",
+    description: `Confirmed export for batch ${batch.reference}`,
+    target: batch.reference,
+    batchId,
+    detail: jobId ? `pg-boss jobId: ${jobId}` : undefined,
+  });
+
+  revalidatePath(`/batches/${batchId}`);
   revalidatePath(`/batches/${batchId}/export`);
 
   return { success: true, jobId };
