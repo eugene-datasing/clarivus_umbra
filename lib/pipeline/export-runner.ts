@@ -15,6 +15,7 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { generateExportPackage } from "./export";
+import { EXPORT_DOCUMENT_STATUSES } from "./export-document-statuses";
 import { verifyAuditIntegrity } from "@/lib/data/audit";
 import { logger } from "@/lib/logger";
 
@@ -36,19 +37,20 @@ export interface ExportRunResult {
  * structured error code the caller can map to a user-facing message
  * or a job-retry decision.
  *
- * Document statuses that BLOCK export (the "still being processed or
- * needs review" set):
- *   - pending, processing, ready, error
- *
- * Document statuses that ALLOW export:
- *   - in-review, reviewed, signed-off, auto-redacted (Phase 12.2)
+ * Documents whose status sits outside `EXPORT_DOCUMENT_STATUSES`
+ * (pending / processing / ready / error / and any future unknown
+ * status) block the run. Excluded docs are filtered out at the
+ * findMany boundary so they never enter the consideration set.
  */
 export async function runExportForBatch(
   batchId: string,
   options: { generatedBy: string },
 ): Promise<ExportRunResult> {
+  // Phase 12.6c — drop excluded docs at the query boundary; they're
+  // out-of-scope for export by definition and shouldn't block on the
+  // status check below.
   const documents = await prisma.document.findMany({
-    where: { batchId },
+    where: { batchId, status: { not: "excluded" } },
     select: { id: true, name: true, status: true },
   });
 
@@ -60,8 +62,13 @@ export async function runExportForBatch(
     };
   }
 
-  const blockedDocs = documents.filter((d) =>
-    ["pending", "processing", "ready", "error"].includes(d.status),
+  // Phase 12.6c — switched from blocked-list to allow-list semantics
+  // (sourced from EXPORT_DOCUMENT_STATUSES, the same constant the
+  // export pipeline uses). Pre-fix this checked a hard-coded blocked
+  // list which drifted from the export query; allow-list is stricter
+  // and stays in sync via the shared const + contract test.
+  const blockedDocs = documents.filter(
+    (d) => !(EXPORT_DOCUMENT_STATUSES as readonly string[]).includes(d.status),
   );
   if (blockedDocs.length > 0) {
     return {

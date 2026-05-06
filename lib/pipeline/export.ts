@@ -25,6 +25,7 @@ import { buildRedactionSchedule } from "./redaction-schedule";
 import { buildAuditTrailPdf } from "./audit-pdf";
 import { buildAuditTimeline } from "./audit-timeline";
 import { assembleZip } from "./zip";
+import { EXPORT_DOCUMENT_STATUSES } from "./export-document-statuses";
 import { logger } from "@/lib/logger";
 
 export interface ExportProgress {
@@ -144,8 +145,17 @@ async function doGenerate(
 ) {
   const batchData = await prisma.batch.findUniqueOrThrow({ where: { id: batchId } });
 
+  // Phase 12.6c — auto-redacted is now first-class. Pre-fix this
+  // filter only included signed-off + reviewed, so pure auto-redact
+  // batches produced empty ZIPs (Phase 12.2 drift between this query
+  // and the export-runner's allow-list comment). The constant is
+  // shared with export-runner so the two stay in lock-step; a
+  // contract test guards the wiring.
   const documents = await prisma.document.findMany({
-    where: { batchId, status: { in: ["signed-off", "reviewed"] } },
+    where: {
+      batchId,
+      status: { in: [...EXPORT_DOCUMENT_STATUSES] },
+    },
     orderBy: { name: "asc" },
   });
 
