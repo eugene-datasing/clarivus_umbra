@@ -249,7 +249,7 @@ export default function BatchDetailClient({
             />
           </div>
           <span className="text-sm text-txt-secondary whitespace-nowrap">
-            {batchData.reviewedCount} / {batchData.documentCount} reviewed ({progress}%)
+            {batchData.reviewedCount} / {batchData.documentCount} complete ({progress}%)
           </span>
         </div>
       </div>
