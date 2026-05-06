@@ -28,10 +28,27 @@ export async function bulkExcludeDocuments(documentIds: string[]) {
     select: { id: true, name: true, batchId: true, status: true },
   });
 
-  const updated = await prisma.document.updateMany({
-    where: { id: { in: documentIds } },
-    data: { status: "excluded" },
-  });
+  // Phase 12.6c — count terminal docs so we can decrement
+  // Batch.reviewedCount alongside the status flip. signed-off and
+  // auto-redacted are the two "complete" states the counter tracks;
+  // excluding either of those reverses the prior increment.
+  const terminalLeaving = docs.filter(
+    (d) => d.status === "signed-off" || d.status === "auto-redacted",
+  ).length;
+
+  const [, updated] = await prisma.$transaction([
+    prisma.batch.update({
+      where: { id: firstDoc.batchId },
+      data:
+        terminalLeaving > 0
+          ? { reviewedCount: { decrement: terminalLeaving } }
+          : {},
+    }),
+    prisma.document.updateMany({
+      where: { id: { in: documentIds } },
+      data: { status: "excluded" },
+    }),
+  ]);
 
   await createAuditEntry({
     userName: user.name,
@@ -94,9 +111,16 @@ export async function deleteDocument(documentId: string) {
       batchId: true,
       originalPath: true,
       detectionCount: true,
+      status: true,
     },
   });
   if (!doc) throw new Error("Document not found");
+
+  // Phase 12.6c — if the doc was in a terminal "complete" state at
+  // delete time, reverse the prior reviewedCount increment so the
+  // batch header doesn't lock at e.g. "3 of 2 complete".
+  const wasTerminal =
+    doc.status === "signed-off" || doc.status === "auto-redacted";
 
   // Delete all related records in a transaction
   await prisma.$transaction(async (tx) => {
@@ -121,6 +145,7 @@ export async function deleteDocument(documentId: string) {
       data: {
         documentCount: { decrement: 1 },
         redactionCount: { decrement: doc.detectionCount },
+        ...(wasTerminal ? { reviewedCount: { decrement: 1 } } : {}),
       },
     });
   });

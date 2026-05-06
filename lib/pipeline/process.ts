@@ -1075,13 +1075,25 @@ export async function processDocument(docId: string): Promise<void> {
         },
       });
 
-      // 11. Update batch counters
+      // 11. Update batch counters.
+      //
+      // Phase 12.6c — when this document lands at "auto-redacted"
+      // (pure-auto path, no reviewer touch needed), bump
+      // Batch.reviewedCount alongside the redaction counter so the
+      // batch header progress bar reflects completion. The
+      // signed-off path bumps the same counter from
+      // signOffDocument; together they capture both terminal
+      // "complete" states. Pre-12.6c the counter was schema-defined
+      // but never written, so every batch read 0/N regardless.
       await tx.batch.update({
         where: { id: batchId },
         data: {
           redactionCount: {
             increment: totalDetections,
           },
+          ...(finalDocStatus === "auto-redacted"
+            ? { reviewedCount: { increment: 1 } }
+            : {}),
         },
       });
     });

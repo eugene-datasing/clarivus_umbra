@@ -189,10 +189,21 @@ export async function signOffDocument(documentId: string) {
     throw new Error(`Cannot sign off document in "${doc.status}" status`);
   }
 
-  await prisma.document.update({
-    where: { id: documentId },
-    data: { status: "signed-off" },
-  });
+  // Phase 12.6c — bump Batch.reviewedCount in the same transaction
+  // as the status flip. The denormalized counter was schema-defined
+  // pre-12.6c but never written by any code path, so the batch
+  // header progress bar always read 0/N. signed-off and auto-redacted
+  // both count as "complete" for header purposes.
+  await prisma.$transaction([
+    prisma.document.update({
+      where: { id: documentId },
+      data: { status: "signed-off" },
+    }),
+    prisma.batch.update({
+      where: { id: doc.batchId },
+      data: { reviewedCount: { increment: 1 } },
+    }),
+  ]);
 
   await createAuditEntry({
     userName: user.name,
